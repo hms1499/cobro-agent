@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Db } from "@/lib/db/client";
 import { treasuryWallets, users } from "@/lib/db/schema";
 import { createTestDb, resetDb } from "@/lib/db/testing";
-import type { ParaWallet } from "@/lib/signer/para-rest";
+import { ParaRestError, type ParaWallet } from "@/lib/signer/para-rest";
 import { ensureTreasuryWallet, upsertUser, type TreasuryWalletProvider } from "./provision";
 
 const ADDRESS = "0x2222222222222222222222222222222222222222";
@@ -14,6 +14,7 @@ function fakeProvider(overrides: Partial<TreasuryWalletProvider> = {}) {
     waitUntilReady: vi.fn(
       async (id: string): Promise<ParaWallet> => ({ id, type: "EVM", status: "ready", address: ADDRESS }),
     ),
+    findWalletByCustomId: vi.fn(async (): Promise<ParaWallet | null> => null),
     ...overrides,
   };
 }
@@ -100,5 +101,33 @@ describe("ensureTreasuryWallet", () => {
     const later = new Date("2026-10-15T12:03:00Z");
     expect(await ensureTreasuryWallet(db, user.id, provider, later)).toEqual({ status: "ready", address: ADDRESS });
     expect(provider.createWallet).toHaveBeenCalledTimes(1);
+  });
+
+  it("adopts the wallet Para already created when a dead request never stored its id", async () => {
+    const user = await upsertUser(db, session);
+    await db.insert(treasuryWallets).values({ userId: user.id, status: "creating", updatedAt: new Date("2026-10-15T11:50:00Z") });
+    const provider = fakeProvider({
+      createWallet: vi.fn(async () => {
+        throw new ParaRestError(409, "WALLET_ALREADY_EXISTS", "a wallet for this identifier and type already exists");
+      }),
+      findWalletByCustomId: vi.fn(async (): Promise<ParaWallet> => ({ id: "para-existing", type: "EVM", status: "creating" })),
+    });
+    const state = await ensureTreasuryWallet(db, user.id, provider, new Date("2026-10-15T12:00:00Z"));
+    expect(state).toEqual({ status: "ready", address: ADDRESS });
+    expect(provider.findWalletByCustomId).toHaveBeenCalledWith(user.id);
+    expect(provider.waitUntilReady).toHaveBeenCalledWith("para-existing");
+    expect(await walletRow(user.id)).toMatchObject({ status: "ready", paraWalletId: "para-existing", address: ADDRESS });
+  });
+
+  it("does not look up a wallet for other creation errors", async () => {
+    const user = await upsertUser(db, session);
+    const provider = fakeProvider({
+      createWallet: vi.fn(async () => {
+        throw new ParaRestError(500, "INTERNAL_ERROR", "boom");
+      }),
+    });
+    await expect(ensureTreasuryWallet(db, user.id, provider)).rejects.toThrow("boom");
+    expect(provider.findWalletByCustomId).not.toHaveBeenCalled();
+    expect(await walletRow(user.id)).toMatchObject({ status: "failed", paraWalletId: null });
   });
 });

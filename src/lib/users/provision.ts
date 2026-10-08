@@ -3,12 +3,14 @@ import { getAddress, type Address } from "viem";
 import type { ParaSession } from "@/lib/auth/para-jwt";
 import type { Db } from "@/lib/db/client";
 import { treasuryWallets, users, type UserRow } from "@/lib/db/schema";
-import type { ParaWallet } from "@/lib/signer/para-rest";
+import { ParaRestError, type ParaWallet } from "@/lib/signer/para-rest";
 
 /** ParaRestClient satisfies this; tests pass a fake. */
 export interface TreasuryWalletProvider {
   createWallet(userId: string): Promise<ParaWallet>;
   waitUntilReady(walletId: string): Promise<ParaWallet>;
+  /** Finds the wallet Para already holds for this user (CUSTOM_ID), used to recover from a lost wallet id. */
+  findWalletByCustomId(userId: string): Promise<ParaWallet | null>;
 }
 
 export type TreasuryState = { status: "ready"; address: Address } | { status: "creating" };
@@ -80,7 +82,7 @@ async function createOrResume(
   try {
     let walletId = existingWalletId;
     if (!walletId) {
-      walletId = (await provider.createWallet(userId)).id;
+      walletId = await createOrRecoverWalletId(provider, userId);
       await mark({ paraWalletId: walletId });
     }
     const ready = await provider.waitUntilReady(walletId);
@@ -91,5 +93,20 @@ async function createOrResume(
   } catch (error) {
     await mark({ status: "failed" });
     throw error;
+  }
+}
+
+/**
+ * If a previous request died after Para created the wallet but before we stored its id, Para answers
+ * 409 WALLET_ALREADY_EXISTS; adopt that wallet instead of failing forever.
+ */
+async function createOrRecoverWalletId(provider: TreasuryWalletProvider, userId: string): Promise<string> {
+  try {
+    return (await provider.createWallet(userId)).id;
+  } catch (error) {
+    if (!(error instanceof ParaRestError) || error.status !== 409 || error.code !== "WALLET_ALREADY_EXISTS") throw error;
+    const existing = await provider.findWalletByCustomId(userId);
+    if (!existing) throw error;
+    return existing.id;
   }
 }
