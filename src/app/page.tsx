@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { t } from "@/i18n";
 
 export default function Home() {
@@ -11,6 +12,12 @@ export default function Home() {
         {t("app.tagline")}
       </h1>
       <p className="max-w-prose text-muted-foreground">{t("home.status")}</p>
+      <Link
+        href="/agent-card.json"
+        className="w-fit rounded-sm text-primary underline underline-offset-4 transition-colors hover:text-primary/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
+        {t("home.agentCard")}
+      </Link>
     </main>
   );
 }
