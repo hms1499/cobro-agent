@@ -48,7 +48,7 @@ export function OnboardingForm({ defaultName }: { defaultName: string }) {
           ))}
         </div>
         {state.errors.localCurrency && (
-          <p id="localCurrency-error" className="text-sm text-destructive">
+          <p id="localCurrency-error" role="alert" className="text-sm text-destructive">
             {t(state.errors.localCurrency)}
           </p>
         )}

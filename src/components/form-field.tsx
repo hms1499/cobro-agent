@@ -39,7 +39,7 @@ export function FormField({
         </p>
       )}
       {error && (
-        <p id={`${id}-error`} className="flex items-start gap-1 text-sm text-destructive">
+        <p id={`${id}-error`} role="alert" className="flex items-start gap-1 text-sm text-destructive">
           <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           {t(error)}
         </p>
