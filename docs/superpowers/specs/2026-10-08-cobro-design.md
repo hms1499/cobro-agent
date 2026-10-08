@@ -252,7 +252,10 @@ exposes `version()`. USDT has no `eip712Domain()`; its version "1" comes from th
   in with email never "claims" the treasury wallet. Signing goes through
   `/v1/wallets/{id}/sign-transaction` and `/sign-typed-data`; we broadcast ourselves.
 - Guardrails: allow calls to the Textile reactor and `approve(reactor)` on the four tokens. Allow
-  token transfers (the per-user recipient check stays in code).
+  token transfers (the per-user recipient check stays in code). Spike result (2026-10-08,
+  `docs/superpowers/spikes/2026-10-11-para.md`): an active Development Guardrail was not enforced
+  for REST signing, on Celo or Ethereum. Until a re-test shows a denial, the executor's checks are
+  the only enforcement, and Guardrails are a second layer to add later.
 - To prove in the spike (§13): server-side session verification, signing on chain 42220, Guardrails on
   Celo, cost of Para environments.
 
@@ -421,7 +424,7 @@ Amounts are stored as base-10 strings of atomic units (numeric in Postgres), nev
 
 | Situation | Behaviour |
 |---|---|
-| Swap or withdrawal outside the caps or to another recipient | Rejected by the executor. Para Guardrails additionally block any call to a contract outside the allow list (§8.4) |
+| Swap or withdrawal outside the caps or to another recipient | Rejected by the executor, the only enforcement for now. Para Guardrails become a second layer once a re-test shows they deny (§8.4) |
 | Textile `no_quote`, 429 | Intent keeps waiting; back off using `retryAfterMs` |
 | Quote expired before broadcast | Discard and request a new quote; never send |
 | x402 verify/settle failure | Invoice stays open; payer sees a clear error; no double charge |
@@ -451,6 +454,8 @@ with server-side session verification; REST wallet creation with `CUSTOM_ID`; si
 transaction for chain 42220 and an EIP-712 `TakerControl`; broadcasting with the attribution suffix;
 a Guardrail on Celo that blocks a call outside the allow list. If any of these fails, use `local-key.ts`
 (AES-GCM encrypted key in the DB) and keep Para for sign-in only, or drop Para entirely if sign-in also fails.
+Outcome (2026-10-08): Para REST signer and Para email sign-in adopted; the Guardrail check failed,
+so enforcement stays in the executor (report: `docs/superpowers/spikes/2026-10-11-para.md`).
 
 ## 14. Milestones
 
