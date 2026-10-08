@@ -4,7 +4,15 @@ import { verifyTx } from "@celo/attribution-tags";
 import { CircleAlert, CircleCheck, Clock, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import type { Hex } from "viem";
-import { useConnect, useConnection, useConnectors, usePublicClient, useSwitchChain, useWriteContract } from "wagmi";
+import {
+  useConnect,
+  useConnection,
+  useConnectors,
+  useDisconnect,
+  usePublicClient,
+  useSwitchChain,
+  useWriteContract,
+} from "wagmi";
 import { celo } from "wagmi/chains";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,6 +40,7 @@ export function AgentAdmin({ appUrl, attributionCode, agentWallet, agentId }: Pr
   const connection = useConnection();
   const connectors = useConnectors();
   const { connectAsync } = useConnect();
+  const { disconnect } = useDisconnect();
   const { switchChainAsync } = useSwitchChain();
   const { writeContractAsync } = useWriteContract();
   const publicClient = usePublicClient({ chainId: celo.id });
@@ -138,10 +147,15 @@ export function AgentAdmin({ appUrl, attributionCode, agentWallet, agentId }: Pr
             </p>
           )}
           {blocker === "wrong-wallet" && (
-            <p className="flex items-center gap-2 text-destructive">
-              <CircleAlert aria-hidden="true" className="size-5" />
-              {t("admin.wrongWallet")}
-            </p>
+            <div className="flex flex-col gap-1">
+              <p className="flex items-center gap-2 text-destructive">
+                <CircleAlert aria-hidden="true" className="size-5 shrink-0" />
+                {t("admin.wrongWallet")}
+              </p>
+              <p className="font-mono text-sm break-all text-muted-foreground">
+                {t("admin.connectedAs", { address: connection.address ?? "" })}
+              </p>
+            </div>
           )}
           {phase.kind === "error" && (
             <p className="flex items-start gap-2 text-destructive" role="alert">
@@ -154,6 +168,11 @@ export function AgentAdmin({ appUrl, attributionCode, agentWallet, agentId }: Pr
         {blocker === "not-connected" && (
           <Button size="lg" className="min-h-11" onClick={connect}>
             {t("admin.connect")}
+          </Button>
+        )}
+        {blocker === "wrong-wallet" && (
+          <Button variant="outline" size="lg" className="min-h-11" onClick={() => disconnect()}>
+            {t("admin.disconnect")}
           </Button>
         )}
         {blocker === "wrong-network" && (

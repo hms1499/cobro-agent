@@ -16,6 +16,8 @@ export const en = {
   "admin.register": "Register Cobro identity",
   "admin.retry": "Try again",
   "admin.wrongWallet": "The connected wallet is not the agent wallet. Switch accounts in your wallet.",
+  "admin.connectedAs": "Connected: {address}",
+  "admin.disconnect": "Disconnect",
   "admin.signing": "Confirm the transaction in your wallet…",
   "admin.confirming": "Waiting for Celo to confirm…",
   "admin.tagFound": "Attribution tag found in the transaction",
