@@ -6,19 +6,18 @@ import {
   type HTTPAdapter,
   type HTTPProcessResult,
   type HTTPRequestContext,
-  type ProcessSettleResultResponse,
   type RouteConfig,
 } from "@x402/core/server";
+import { SettleError, type SettleResponse } from "@x402/core/types";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
 import { declareEip2612GasSponsoringExtension } from "@x402/extensions";
 import type { Address } from "viem";
 import { TOKENS } from "@/lib/chain/tokens";
 import { parseServerEnv, requireValue } from "@/lib/config/server";
 import type { PayAsset } from "@/lib/money/currencies";
-import { CELO_NETWORK } from "./network";
+import { CELO_NETWORK, PAYMENT_TIMEOUT_SECONDS } from "./network";
 
-/** How long a signed authorization stays valid for settlement. */
-export const PAYMENT_TIMEOUT_SECONDS = 300;
+export { PAYMENT_TIMEOUT_SECONDS };
 
 /** Spec §8.2: explicit asset/amount prices; Permit2 tokens also declare EIP-2612 gas sponsoring. */
 export function buildInvoiceRoute(input: {
@@ -103,9 +102,27 @@ export function requestContext(request: Request): HTTPRequestContext {
   };
 }
 
+/**
+ * What settling a verified payment came to. Only `failed` is a verdict the facilitator itself gave
+ * that no transfer happened; everything else that is not `settled` is `unknown` and must keep the
+ * invoice held, because the transfer may already be on its way.
+ */
+export type SettleOutcome =
+  | { kind: "settled"; transaction: string; payer: string | undefined; headers: Record<string, string> }
+  | { kind: "failed"; reason: string; response: { status: number; headers: Record<string, string>; body: unknown } }
+  | { kind: "unknown"; reason: string };
+
 export interface X402Exchange {
   result: HTTPProcessResult;
-  settle(): Promise<ProcessSettleResultResponse>;
+  /** Never throws for a settlement problem; throws only if the payment was not verified. */
+  settle(): Promise<SettleOutcome>;
+}
+
+const SETTLEMENT_PENDING = "settlement_pending";
+
+/** A definite failure carries the facilitator's own "no" and no transaction hash. */
+function isDefiniteFailure(failure: { errorReason?: string; transaction?: string }): boolean {
+  return !failure.transaction && failure.errorReason !== SETTLEMENT_PENDING;
 }
 
 /** Verifies (through the facilitator) without settling; the caller claims the invoice, then settles. */
@@ -113,13 +130,49 @@ export async function processX402(server: x402ResourceServer, route: RouteConfig
   const http = new x402HTTPResourceServer(server, route);
   const context = requestContext(request);
   const result = await http.processHTTPRequest(context);
+
+  const failed = (failure: SettleResponse): SettleOutcome => {
+    const reason = failure.errorReason || "settlement_failed";
+    return {
+      kind: "failed",
+      reason,
+      response: { status: 402, headers: http.createSettlementHeaders(failure), body: { error: reason } },
+    };
+  };
+
   return {
     result,
     settle: async () => {
       if (result.type !== "payment-verified") throw new Error("Only a verified payment can be settled");
-      return http.processSettlement(result.paymentPayload, result.paymentRequirements, result.declaredExtensions, {
-        request: context,
-      });
+      // Not http.processSettlement: it turns every thrown error (a gateway 502, a dropped connection)
+      // into a plain failure, and a failure would reopen the invoice while the transfer may be in flight.
+      try {
+        const response = await server.settlePayment(
+          result.paymentPayload,
+          result.paymentRequirements,
+          result.declaredExtensions,
+          { request: context },
+          undefined,
+          "after-handler",
+        );
+        if (response.success) {
+          if (!response.transaction) return { kind: "unknown", reason: "settled without a transaction hash" };
+          return { kind: "settled", transaction: response.transaction, payer: response.payer, headers: http.createSettlementHeaders(response) };
+        }
+        return isDefiniteFailure(response) ? failed(response) : { kind: "unknown", reason: response.errorReason || "settlement pending" };
+      } catch (error) {
+        if (error instanceof SettleError && isDefiniteFailure(error)) {
+          return failed({
+            success: false,
+            errorReason: error.errorReason || error.message,
+            errorMessage: error.errorMessage,
+            payer: error.payer,
+            network: error.network,
+            transaction: "",
+          });
+        }
+        return { kind: "unknown", reason: error instanceof Error ? error.message : String(error) };
+      }
     },
   };
 }

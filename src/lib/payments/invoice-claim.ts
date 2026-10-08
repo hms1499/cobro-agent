@@ -2,9 +2,13 @@ import { and, eq, lt, or } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import { invoices, payments } from "@/lib/db/schema";
 import type { PayAsset } from "@/lib/money/currencies";
+import { PAYMENT_TIMEOUT_SECONDS } from "./network";
 
-/** Longer than the facilitator timeout (60 s) plus settlement, so a live settlement is never overtaken. */
-export const SETTLING_HOLD_MS = 3 * 60 * 1000;
+/**
+ * Longer than the signed authorization stays valid on-chain (validBefore / Permit2 deadline), so after
+ * an unknown settlement outcome no second payer can be charged while the first transfer can still land.
+ */
+export const SETTLING_HOLD_MS = (PAYMENT_TIMEOUT_SECONDS + 60) * 1000;
 
 /** Spec §12 "no double charge": only the request that moves the invoice to "settling" may settle. */
 export async function claimInvoice(db: Db, invoiceId: string, now: Date): Promise<boolean> {

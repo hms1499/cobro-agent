@@ -1,4 +1,4 @@
-import type { ProcessSettleResultResponse, RouteConfig } from "@x402/core/server";
+import type { RouteConfig } from "@x402/core/server";
 import type { Address } from "viem";
 import { RatesUnavailableError } from "@/lib/fx/rates";
 import type { PublicInvoice } from "@/lib/invoices/repo";
@@ -83,20 +83,15 @@ export async function runPayFlow(deps: PayFlowDeps, input: { slug: string; asset
 
   if (!(await deps.claim(invoice.id))) return reply(409, { error: "busy" });
 
-  let settled: ProcessSettleResultResponse;
-  try {
-    settled = await settle();
-  } catch (error) {
-    console.error(`Settlement outcome unknown for invoice ${invoice.slug}:`, error instanceof Error ? error.message : error);
+  const settled = await settle();
+  if (settled.kind === "unknown") {
+    // The transfer may already be on its way: keep the hold so nobody is invited to pay twice.
+    console.error(`Settlement outcome unknown for invoice ${invoice.slug}: ${settled.reason}`);
     return reply(502, { error: "settlement_unknown" });
   }
-  if (!settled.success) {
+  if (settled.kind === "failed") {
     await deps.release(invoice.id);
-    return {
-      status: settled.response.status,
-      headers: settled.response.headers,
-      body: settled.response.body ?? { error: settled.errorReason },
-    };
+    return settled.response;
   }
 
   const payment = {

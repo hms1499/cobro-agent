@@ -22,7 +22,7 @@ const invoice = async () => (await db.select().from(invoices).where(eq(invoices.
 describe("claimInvoice", () => {
   it("lets exactly one payment hold an open invoice", async () => {
     expect(await claimInvoice(db, invoiceId, at("12:00:00"))).toBe(true);
-    expect(await invoice()).toMatchObject({ status: "settling", settlingUntil: at("12:03:00") });
+    expect(await invoice()).toMatchObject({ status: "settling", settlingUntil: at("12:06:00") });
     expect(await claimInvoice(db, invoiceId, at("12:01:00"))).toBe(false);
   });
 
@@ -33,7 +33,7 @@ describe("claimInvoice", () => {
 
   it("frees a hold that has expired", async () => {
     await claimInvoice(db, invoiceId, at("12:00:00"));
-    expect(await claimInvoice(db, invoiceId, at("12:03:01"))).toBe(true);
+    expect(await claimInvoice(db, invoiceId, at("12:06:01"))).toBe(true);
   });
 
   it("never claims a paid invoice", async () => {

@@ -1,8 +1,9 @@
-import type { HTTPProcessResult, ProcessSettleResultResponse } from "@x402/core/server";
+import type { HTTPProcessResult } from "@x402/core/server";
 import { describe, expect, it, vi } from "vitest";
 import { RatesUnavailableError } from "@/lib/fx/rates";
 import type { PublicInvoice } from "@/lib/invoices/repo";
 import { runPayFlow, type PayFlowDeps } from "./pay-flow";
+import type { SettleOutcome } from "./x402-server";
 
 const NOW = new Date("2026-10-15T12:00:00Z");
 const TX = `0x${"ab".repeat(32)}`;
@@ -29,15 +30,14 @@ const unpaid = {
   type: "payment-error",
   response: { status: 402, headers: { "PAYMENT-REQUIRED": "e30=" }, body: {} },
 } as unknown as HTTPProcessResult;
-const settledOk = { success: true, transaction: TX, payer: "0x9999", headers: { "PAYMENT-RESPONSE": "x" } } as unknown as ProcessSettleResultResponse;
-const settledFail = {
-  success: false,
-  errorReason: "insufficient_funds",
-  headers: {},
-  response: { status: 402, headers: { "PAYMENT-REQUIRED": "e30=" }, body: {} },
-} as unknown as ProcessSettleResultResponse;
+const settledOk: SettleOutcome = { kind: "settled", transaction: TX, payer: "0x9999", headers: { "PAYMENT-RESPONSE": "x" } };
+const settledFail: SettleOutcome = {
+  kind: "failed",
+  reason: "insufficient_funds",
+  response: { status: 402, headers: { "PAYMENT-REQUIRED": "e30=" }, body: { error: "insufficient_funds" } },
+};
 
-function deps(overrides: Partial<PayFlowDeps> & { result?: HTTPProcessResult; settle?: () => Promise<ProcessSettleResultResponse> } = {}) {
+function deps(overrides: Partial<PayFlowDeps> & { result?: HTTPProcessResult; settle?: () => Promise<SettleOutcome> } = {}) {
   const { result = verified, settle = async () => settledOk, ...rest } = overrides;
   const base = {
     now: () => NOW,
@@ -127,15 +127,15 @@ describe("runPayFlow: with a verified payment", () => {
     expect(d.record).not.toHaveBeenCalled();
   });
 
-  it("keeps the hold when the settlement outcome is unknown", async () => {
-    const d = deps({
-      settle: async () => {
-        throw new Error("timeout");
-      },
-    });
-    expect(await run(d)).toMatchObject({ status: 502, body: { error: "settlement_unknown" } });
-    expect(d.release).not.toHaveBeenCalled();
-  });
+  it.each(["settlement_pending", "Facilitator settle failed (502): Bad Gateway", "fetch failed"])(
+    "keeps the hold when the settlement outcome is unknown (%s)",
+    async (reason) => {
+      const d = deps({ settle: async () => ({ kind: "unknown", reason }) });
+      expect(await run(d)).toMatchObject({ status: 502, body: { error: "settlement_unknown" } });
+      expect(d.release).not.toHaveBeenCalled();
+      expect(d.record).not.toHaveBeenCalled();
+    },
+  );
 
   it("retries recording once and still reports the payment", async () => {
     const record = vi

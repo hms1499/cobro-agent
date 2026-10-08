@@ -100,9 +100,40 @@ describe("processX402", () => {
     const paid = await processX402(server, usdtRoute(), request({ "payment-signature": header }));
     expect(paid.result.type).toBe("payment-verified");
     const settled = await paid.settle();
-    expect(settled).toMatchObject({ success: true, payer });
-    expect(Object.keys(settled.headers)).toContain("PAYMENT-RESPONSE");
+    expect(settled).toMatchObject({ kind: "settled", payer, transaction: `0x${"ab".repeat(32)}` });
+    if (settled.kind === "settled") expect(Object.keys(settled.headers)).toContain("PAYMENT-RESPONSE");
     expect(facilitator.settle).toHaveBeenCalledTimes(1);
+  });
+
+  async function verifiedExchange(facilitator: ReturnType<typeof fakeFacilitator>) {
+    const server = createResourceServer(facilitator);
+    await server.initialize();
+    const first = await processX402(server, usdtRoute(), request());
+    if (first.result.type !== "payment-error") throw new Error("expected 402");
+    const { header } = await signedHeader(decodePaymentRequiredHeader(first.result.response.headers["PAYMENT-REQUIRED"]));
+    const paid = await processX402(server, usdtRoute(), request({ "payment-signature": header }));
+    expect(paid.result.type).toBe("payment-verified");
+    return paid;
+  }
+
+  it("treats a facilitator verdict of failure as definite", async () => {
+    const facilitator = fakeFacilitator();
+    facilitator.settle.mockResolvedValueOnce({ success: false, errorReason: "insufficient_funds", transaction: "", network: "eip155:42220" } as never);
+    const outcome = await (await verifiedExchange(facilitator)).settle();
+    expect(outcome).toMatchObject({ kind: "failed", reason: "insufficient_funds", response: { status: 402 } });
+  });
+
+  it("never treats a thrown facilitator error as a definite failure", async () => {
+    const facilitator = fakeFacilitator();
+    facilitator.settle.mockRejectedValueOnce(new Error("Facilitator settle failed (502): <html>Bad Gateway</html>"));
+    expect(await (await verifiedExchange(facilitator)).settle()).toMatchObject({ kind: "unknown" });
+  });
+
+  it("keeps a pending settlement that already has a transaction as unknown", async () => {
+    const facilitator = fakeFacilitator();
+    const pending = { success: false, errorReason: "settlement_pending", transaction: `0x${"cd".repeat(32)}`, network: "eip155:42220" } as never;
+    facilitator.settle.mockResolvedValueOnce(pending).mockResolvedValueOnce(pending);
+    expect(await (await verifiedExchange(facilitator)).settle()).toMatchObject({ kind: "unknown" });
   });
 
   it("does not accept a signature made for a different price", async () => {
