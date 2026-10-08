@@ -89,6 +89,7 @@ Track 4 ("Build with buy") is out of scope for the MVP.
 - Chat that turns natural language into invoice drafts (Gemini, Groq fallback).
 - ERC-8004 registration script and agent card.
 - English UI; every user-facing string in `src/i18n/en.ts`.
+- UX and visual design per §17 and `design-system/cobro/MASTER.md`.
 
 **Out of scope (only if time remains):** Spanish/Portuguese UI (`es.ts`), Telegram bot, email reminders
 to clients, a Textile maker/filler module, MiniPay mini-app packaging, Track 4/buy, wMXN, wCOP,
@@ -443,6 +444,7 @@ agent wallet's private key is never stored anywhere in the app.
 - Mainnet smoke scripts with about $1 each: ERC-8004 registration, USA₮ invoice payment, wARS invoice payment,
   one Textile swap, one withdrawal. Each ends with `verifyTx` on transactions we broadcast.
 - Dry-run on production for at least one day before live conversions.
+- UX checks from §17.3: the MASTER.md checklist per page, Lighthouse Accessibility ≥ 95 on the key pages, and a hallway test.
 
 **Para spike (first implementation task, decision by 2026-10-11).** Prove: Para email sign-in in Next.js
 with server-side session verification; REST wallet creation with `CUSTOM_ID`; signing an EIP-1559
@@ -483,3 +485,50 @@ want, and we measure it in other ways", event FAQ). The attribution tag is issue
 
 English first. All user-facing strings live in `src/i18n/en.ts` behind a `t()` helper. Spanish
 (`es.ts`) is a later task and needs no component changes.
+
+## 17. UX and visual design
+
+Track 1 gives 20% to "UX a real person can use": someone new to crypto completes the core flow end to
+end, amounts show in their own currency, and the rails stay out of the way. The visual system comes
+from the ui-ux-pro-max skill and lives in **`design-system/cobro/MASTER.md`**, the source of truth for
+tokens and component rules. Page-specific overrides go in `design-system/cobro/pages/<page>.md`.
+
+**Visual system (summary of MASTER.md):** Minimalism & Swiss style; IBM Plex Sans (IBM Plex Mono only
+for hashes and addresses); light "trust teal" palette (primary `#0F766E`, success `#15803D`, warning
+`#B45309`, error `#DC2626`), with all text pairs at WCAG AA or better; shadcn/ui with OKLCH semantic
+tokens; Lucide icons; CSS-only subtle motion that respects reduced motion. Light mode only in the MVP.
+
+### 17.1 Principles
+
+1. **Crypto stays invisible.** Default views never show gas, Permit2, nonces, raw token units or
+   addresses. Buckets are named "Spending (pesos)" and "Savings (dollars)". Hashes and addresses
+   live behind "Details".
+2. **Local currency first.** Every amount is rendered by `formatMoney`: local currency large, USD small.
+3. **One primary action per screen.**
+4. **The agent explains itself.** Every activity-feed entry has a "Why?" disclosure. The agent's state
+   (Active / Paused / Dry run) is always visible, with a prominent "Pause agent" control.
+5. **Guardrails build trust.** The UI states what the agent can do ("convert on Textile, send to your
+   wallet, at most $50 per trade") and cannot do.
+6. **Mobile-first and accessible.** 375px first; WCAG 2.2 AA; status updates announced with `aria-live`.
+
+### 17.2 Screens
+
+| Screen | Key content and behaviour |
+|---|---|
+| Landing `/` | Hero "Get paid in dollars or pesos. Your agent protects the rest."; how it works in 3 steps; trust block (guardrails, ERC-8004 identity link, on-chain receipts); "Start with email" |
+| Onboarding | 3 steps with a progress indicator and Back: (1) email sign-in, (2) pick ARS or BRL and set the spending reserve as a sentence with an input, (3) create a first invoice or skip |
+| Dashboard `/app` | Total in local currency; Spending and Savings buckets with a reserve bar; "Value protected" stat with a small trend chart (labelled, with a text summary); agent status and last action; activity feed; invoices with icon+text status chips; first-use empty state that points to "Create your first invoice" |
+| Chat `/app/chat` | Example prompt chips; the LLM draft renders as an editable invoice card; nothing is created until "Create invoice"; "Use the form instead" link always visible |
+| Rules `/app/rules` | Rules as sentences ("Keep [300,000] ARS for spending. Save the rest in dollars."); advanced settings (slippage, wait, caps) collapsed; a "If the agent ran now, it would…" preview from a dry run of the engine |
+| Payment `/pay/[slug]` | Invoice summary (from, for, amount); stepper Choose how to pay → Connect wallet → Confirm → Paid; each token shows its amount and a plain-language name ("US dollar (USA₮), recommended for US clients"); "No network fee — you only sign"; 10-minute rate countdown; explicit states for wrong network (switch to Celo), insufficient balance (amount missing, USA₮ faucet link), signing, settling, success receipt with explorer link, and error with retry |
+| Recurring `/r/[slug]` | Current period's invoice plus the list of paid periods |
+| Admin `/admin/agent` | Owner-only; connect agent wallet, register identity, see the tagged tx and its `verifyTx` result |
+
+Every data view has loading (skeleton), empty, error (with retry) and success states.
+
+### 17.3 UX verification
+
+- Pre-delivery checklist in MASTER.md for every page.
+- Lighthouse Accessibility ≥ 95 on landing, dashboard and payment page.
+- Manual pass at 375px and 1440px, keyboard-only navigation, and reduced motion.
+- Hallway test: a person new to crypto signs up and creates an invoice without help (success criterion 5).
