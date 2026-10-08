@@ -15,6 +15,8 @@ const publicEnvSchema = z.object({
     .regex(/^0x[0-9a-fA-F]{40}$/, "must be a 0x-prefixed 20-byte address")
     .transform((address) => getAddress(address)),
   NEXT_PUBLIC_AGENT_ID: z.preprocess(emptyToUndefined, z.coerce.number().int().nonnegative().optional()),
+  NEXT_PUBLIC_PARA_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  NEXT_PUBLIC_PARA_ENVIRONMENT: z.preprocess(emptyToUndefined, z.enum(["BETA", "PROD"]).default("BETA")),
 });
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;
@@ -30,5 +32,7 @@ export function readPublicEnv(): PublicEnv {
     NEXT_PUBLIC_ATTRIBUTION_CODE: process.env.NEXT_PUBLIC_ATTRIBUTION_CODE,
     NEXT_PUBLIC_AGENT_WALLET: process.env.NEXT_PUBLIC_AGENT_WALLET,
     NEXT_PUBLIC_AGENT_ID: process.env.NEXT_PUBLIC_AGENT_ID,
+    NEXT_PUBLIC_PARA_API_KEY: process.env.NEXT_PUBLIC_PARA_API_KEY,
+    NEXT_PUBLIC_PARA_ENVIRONMENT: process.env.NEXT_PUBLIC_PARA_ENVIRONMENT,
   });
 }
