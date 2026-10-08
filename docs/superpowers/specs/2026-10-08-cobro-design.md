@@ -232,7 +232,8 @@ exposes `version()`. USDT has no `eip712Domain()`; its version "1" comes from th
 ### 8.5 Attribution tags (ERC-8021)
 
 - Package `@celo/attribution-tags` (≥ 0.5.0 for `withAttribution`). Code from env `ATTRIBUTION_CODE`,
-  copied from `loops project get` after enrollment. Startup fails if the env value is missing or does
+  copied from `loops project get` after enrollment. Our entry's tag: `celo_bc3965e128ba` (issued
+  2026-10-08). The tag is public, since it appears on-chain, so `.env.example` carries it too. Startup fails if the env value is missing or does
   not match the pattern `celo_[0-9a-f]{12}`.
 - `chain/` exposes one `sendTagged()` path that appends `toDataSuffix(code)` to calldata. No other
   code path broadcasts transactions.
