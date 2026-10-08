@@ -80,6 +80,14 @@ export const en = {
   "onboarding.error.name": "Enter the name clients should see.",
   "onboarding.error.nameLong": "Use at most 60 characters.",
   "onboarding.error.currency": "Choose pesos or reais.",
+  "invoiceForm.error.client": "Enter who you are billing.",
+  "invoiceForm.error.clientLong": "Use at most 80 characters.",
+  "invoiceForm.error.description": "Say what the invoice is for.",
+  "invoiceForm.error.descriptionLong": "Use at most 200 characters.",
+  "invoiceForm.error.currency": "Choose US dollars, Argentine pesos or Brazilian reais.",
+  "invoiceForm.error.dueDate": "Enter a real date.",
+  "invoiceForm.error.duePast": "Pick today or a later date.",
+  "invoiceForm.error.repeat": "Choose how often to repeat this invoice.",
 } as const;
 
 export type MessageKey = keyof typeof en;
