@@ -66,6 +66,20 @@ export const en = {
   "settings.notSet": "Not set yet",
   "settings.signOut": "Sign out",
   "settings.signingOut": "Signing out…",
+  "onboarding.title": "Set up your account",
+  "onboarding.step": "Step {step} of {total}",
+  "onboarding.name": "Your name or business",
+  "onboarding.nameHelp": "Clients see this on your invoices.",
+  "onboarding.currency": "What do you spend in?",
+  "onboarding.reserveBefore": "Keep",
+  "onboarding.reserveAfter": "for spending. Save the rest in dollars.",
+  "onboarding.reserveLabel": "Spending reserve",
+  "onboarding.reserveHelp": "Your agent keeps this much in your currency and protects the rest from inflation. You can change it later.",
+  "onboarding.submit": "Continue",
+  "onboarding.saving": "Saving…",
+  "onboarding.error.name": "Enter the name clients should see.",
+  "onboarding.error.nameLong": "Use at most 60 characters.",
+  "onboarding.error.currency": "Choose pesos or reais.",
 } as const;
 
 export type MessageKey = keyof typeof en;
