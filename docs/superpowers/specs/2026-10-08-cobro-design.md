@@ -21,7 +21,8 @@ on a budget of $20–100 of mainnet funds and $0 for LLM usage.
 
 The MVP is done when all of the following are true on **Celo mainnet**:
 
-1. The Cobro agent has an ERC-8004 identity, and its agent card is served by the app.
+1. The Cobro agent has its own ERC-8004 identity, registered from the declared agent wallet, and its
+   agent card is served by the app.
 2. Every transaction the app broadcasts carries the team's ERC-8021 attribution code, verified with
    `verifyTx` from `@celo/attribution-tags`.
 3. At least one invoice has been paid in USA₮ through Celo's x402 facilitator and at least one in wARS or wBRL.
@@ -42,6 +43,9 @@ Stretch goal: three or more independent payers (see §14 for the definition).
   `codeFromRepo` or `codeFromHostname`.
 - The entry needs an `agent-wallet`: the public address the agent sends its transactions from. It must
   register the ERC-8004 identity. Loops scans it for the first tagged transaction in the event window.
+  Ours is `0x64ad61211c1b0b7f20b3e04b49661f30f152ae78`, the user's existing EOA (see §8.7).
+- Submission fields (from `loops project fields`): name, description, repo URL, at least one
+  screenshot, demo URL and agent wallet are required; logo and walkthrough video are optional.
 - The GitHub repo must be public at registration and still resolve at judging.
 - Code must be written during the hackathon (kick-off 2026-10-06).
 - An "independent user" is a wallet that is not ours, was not first funded by us, and had Celo activity
@@ -53,9 +57,20 @@ Stretch goal: three or more independent payers (see §14 for the definition).
 
 | Track | Prize | What Cobro shows |
 |---|---|---|
-| 1. Stable Agents: LatAm (Ripio) | $1,500 / $500 | Real wARS/wBRL received and held on mainnet; an autonomous treasury agent protecting freelancers from inflation; email sign-in usable by non-crypto people |
-| 2. Open Corridors: Textile FX | $750 / $250 | Every conversion is a Textile RFQ swap we broadcast (tagged); price-guarded execution with wait-and-retry; per-trade and portfolio P&L; RFQ volume stats |
-| 3. Open Corridors: USA₮ with x402 | $750 / $250 | US clients pay invoices in USA₮ through Celo's x402 facilitator to LatAm freelancers. Currency choice: a US-regulated dollar stablecoin for the payer, local currency or USD₮ for the payee |
+| 1. Stable Agents: LatAm (Ripio) | $1,500 / $500 | Real wARS/wBRL received and held on mainnet; an autonomous treasury agent protecting freelancers from inflation; email sign-in usable by non-crypto people; amounts shown in the user's own currency |
+| 2. Open Corridors: Textile FX | $750 / $250 | Every conversion is a Textile RFQ swap we broadcast (tagged); price-guarded execution with wait-and-retry; P&L reporting |
+| 3. Open Corridors: USA₮ with x402 | $750 / $250 | US clients pay invoices in USA₮ through Celo's x402 facilitator to LatAm freelancers; recurring invoices produce repeat payments from the same client. Currency choice: a US-regulated dollar stablecoin for the payer, local currency or USD₮ for the payee |
+
+Judging weights that shape the build (from the Loops event data):
+- Track 1 scores five equal criteria: mainnet with a real wFIAT token, real use of wFIAT and the Celo
+  stack (ERC-8004, x402, gas paid in stablecoins), agent autonomy with guardrails, UX for someone new
+  to crypto with amounts in their own currency, and LatAm impact with a named user.
+- Track 2 scores the P&L (40%) and volume (30%) of a **quoting** (maker/filler) strategy, plus
+  originality (30%), which explicitly includes "a treasury agent managing a business's own currency
+  exposure". Cobro is a taker, so it competes mainly on originality. Decision (2026-10-08): enter
+  anyway, with no maker module in the MVP; revisit a filler module only if weeks 1–3 finish early.
+- Track 3 scores real settlement, a named counterparty outside the team, repeat flow from the same
+  counterparty, and why USA₮ suits that user (25% each).
 
 Track 4 ("Build with buy") is out of scope for the MVP.
 
@@ -64,6 +79,10 @@ Track 4 ("Build with buy") is out of scope for the MVP.
 **In scope (MVP):**
 - Email sign-in (Para), personal wallet + agent-managed treasury wallet per freelancer.
 - Invoices in USD, ARS or BRL; public payment page; x402 payment in USA₮, USDT, wARS, wBRL.
+- Recurring invoices (weekly or monthly) with a stable client link.
+- Amounts shown in the freelancer's local currency first, USD second.
+- Admin page for the agent wallet: register Cobro's ERC-8004 identity and send tagged transactions
+  signed in the owner's browser wallet.
 - Treasury rules, decision engine, Textile RFQ executor, scheduled and payment-triggered runs.
 - Dashboard: balances, invoices, conversions, P&L, activity feed with explanations.
 - Withdrawal from the treasury wallet to the freelancer's personal wallet.
@@ -72,7 +91,7 @@ Track 4 ("Build with buy") is out of scope for the MVP.
 - English UI; every user-facing string in `src/i18n/en.ts`.
 
 **Out of scope (only if time remains):** Spanish/Portuguese UI (`es.ts`), Telegram bot, email reminders
-to clients, acting as a Textile maker/filler, MiniPay mini-app packaging, Track 4/buy, wMXN, wCOP,
+to clients, a Textile maker/filler module, MiniPay mini-app packaging, Track 4/buy, wMXN, wCOP,
 wPEN, wCLP, USDC payments, ERC-8004 reputation feedback.
 
 USDC is left out on purpose: Textile currently has no bid on USDC→USDT on Celo, so the agent could
@@ -95,7 +114,9 @@ Each freelancer has two wallets:
 1. **Sign-in.** Freelancer signs in with email (Para modal). On first sign-in the server creates the
    treasury wallet, default rules, and a gas drip (see §8.6).
 2. **Create invoice.** Freelancer types, for example, "Bill Acme 300 USD for the logo, due Friday", or
-   fills the form. The LLM returns a structured draft and the freelancer confirms it. Output: a link `/pay/<slug>`.
+   fills the form. The LLM returns a structured draft and the freelancer confirms it. Output: a link
+   `/pay/<slug>`. A recurring invoice ("Bill Acme 100 USD every week for maintenance") produces a
+   stable link `/r/<slug>` that always opens the current period's invoice (§9.1).
 3. **Client pays.** Client opens the link, connects a browser wallet (MetaMask, Rabby, MiniPay
    in-app browser), and picks USA₮, USDT, wARS or wBRL. The page shows the amount in that token, with
    the rate locked for 10 minutes. The client signs the x402 payment (no gas). Funds settle into the
@@ -103,7 +124,9 @@ Each freelancer has two wallets:
 4. **Agent manages funds.** After each payment and every 10 minutes, the treasury engine compares
    balances with the rules and creates, executes or waits on conversions (§8).
 5. **Dashboard and withdrawal.** Freelancer sees balances, invoices, conversions, P&L and the activity
-   feed, and can withdraw any treasury balance to the personal wallet.
+   feed, and can withdraw any treasury balance to the personal wallet. Every amount is shown in the
+   freelancer's local currency (ARS or BRL) first, with the USD value next to it, using the Textile
+   reference rate.
 
 ## 7. Architecture
 
@@ -175,7 +198,10 @@ Treasury run (after a payment, or every 10 min via GitHub Actions):
 - `/app/rules`: treasury rules.
 - `/app/invoices/new`: invoice form (also the LLM fallback).
 - `/pay/[slug]`: public payment page.
+- `/r/[slug]`: stable link of a recurring invoice; redirects to the current period's `/pay/[slug]`.
 - `/agent-card.json`: ERC-8004 registration file.
+- `/admin/agent`: owner-only page (§8.7). The agent wallet connects with a browser wallet to register
+  the identity and send tagged transactions. Access requires a connected wallet equal to `AGENT_WALLET`.
 
 ## 8. Integrations (facts checked on 2026-10-08)
 
@@ -241,19 +267,30 @@ exposes `version()`. USDT has no `eip712Domain()`; its version "1" comes from th
 
 ### 8.6 Gas
 
-Default: the operator wallet sends a small CELO drip (about 1 CELO, roughly $0.10, about 200 swaps) to each
-new treasury wallet. Treasury transactions are standard EIP-1559, signed with `sign-transaction`, so
-Guardrails apply. Paying gas in USDT (CIP-64 fee currency) is optional and only considered if Para can
-sign CIP-64 transactions without losing Guardrails.
+- **Operator wallet** (server key, §8.7): pays its own gas in USDT through Celo fee abstraction
+  (CIP-64 `feeCurrency` = the USDT fee-currency adapter, address taken from docs.celo.org/developer/fee-abstraction
+  and checked on-chain during implementation). viem's Celo chain support serializes these transactions.
+- **Treasury wallets**: default is a small CELO drip from the operator wallet (about 1 CELO, roughly $0.10,
+  enough for about 200 swaps). Treasury transactions are standard EIP-1559, signed with
+  `sign-transaction`, so Guardrails apply. The Para spike also tries CIP-64 with USDT gas; it is
+  adopted only if Guardrails still apply to it.
+
+Gas paid in stablecoins counts as "real use of the Celo stack" in Track 1.
 
 ### 8.7 ERC-8004
 
 - Identity Registry `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` (Reputation `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63`).
-- One identity for the Cobro agent, registered by the operator wallet (`OPERATOR_PRIVATE_KEY`) through
-  `register(agentURI)` with `agentURI = https://<domain>/agent-card.json`, sent through `sendTagged()`.
-- The operator wallet is the entry's Loops `agent-wallet`. Its first tagged transaction is the
-  ERC-8004 registration; its gas drips to treasury wallets are tagged CELO transfers. Treasury-wallet
-  transactions are credited through the tag in their calldata.
+- **Agent wallet** = `0x64ad61211c1b0b7f20b3e04b49661f30f152ae78` (env `AGENT_WALLET`), the user's
+  existing EOA, declared on Loops. Its key stays in the user's browser wallet and never reaches the server.
+  It already owns identity #9751 "CoinOp" from an earlier project. That identity stays untouched.
+- Cobro gets a **new** identity: `register(agentURI)` with `agentURI = https://<domain>/agent-card.json`,
+  signed by the agent wallet on `/admin/agent` (wagmi `writeContract` with `dataSuffix` = our tag).
+  This is also the agent wallet's first tagged transaction, which the Loops "Find it" check looks for.
+  After the `Registered` event, the card's `registrations` entry is filled in.
+- **Operator wallet** (`OPERATOR_PRIVATE_KEY`): a new, low-balance server key, funded from the agent
+  wallet. It sends gas drips to treasury wallets. It is not the declared agent wallet; its transactions
+  are tagged, and credit flows through the tag in calldata.
+- Treasury-wallet transactions are credited the same way (tag in calldata). This is open question 2 in §15.
 - Card: `type`, `name`, `description`, `image`, `services: [{ name: "web", endpoint }]`,
   `x402Support: true`, `active: true`, `registrations: [{ agentId, agentRegistry: "eip155:42220:0x8004A169…a432" }]`
   (filled in after the `Registered` event).
@@ -281,6 +318,18 @@ sign CIP-64 transactions without losing Guardrails.
   - A paid or cancelled invoice returns 409 and the page shows its status.
 - Browser: `@x402/fetch` `wrapFetchWithPayment` with the wagmi wallet client as signer. Spend controls
   allow exactly the quoted asset and amount.
+
+### 9.1 Recurring invoices
+
+- A `recurring_invoices` row holds the template: client name, description, amount, currency,
+  `interval` ∈ {weekly, monthly}, `next_issue_at`, `active`, and its own stable `slug`.
+- Each treasury run (§10.4) also issues due instances: for every active template with
+  `next_issue_at ≤ now`, it inserts an `invoices` row (`recurring_id` set, due 7 days after issue)
+  and advances `next_issue_at` by one interval. A unique `(recurring_id, period_start)` index makes
+  this idempotent when runs overlap.
+- `/r/<slug>` redirects to the oldest open instance, or shows "all paid" with the payment history.
+- The dashboard groups payments per template and shows repeat payers, which is the evidence for the
+  Track 3 "repeat flow from the same counterparty" criterion.
 
 ## 10. Treasury design
 
@@ -327,6 +376,9 @@ the intent is older than `maxWaitMinutes`, accept if `≤ hardMaxSlippageBps`, o
 
 ### 10.4 Executor
 
+The cron route first issues due recurring invoices (§9.1), then runs these steps for each user with
+rules enabled:
+
 1. Take a per-wallet lock (row lock with expiry) so cron and payment triggers cannot overlap.
 2. Read balances and rates and run the engine. In dry-run mode, record the decision and stop.
 3. `POST /rfq/request` with `taker` = treasury wallet and a cached `takerProof` (re-signed when older
@@ -352,7 +404,8 @@ the intent is older than `maxWaitMinutes`, accept if `≤ hardMaxSlippageBps`, o
 users            id, email, para_user_id, personal_wallet, created_at
 treasury_wallets id, user_id, address, signer_type (para|local), para_wallet_id, encrypted_key, gas_dripped_at
 rules            user_id (pk), fields of §10.1, updated_at
-invoices         id, slug, user_id, client_name, description, amount, currency, due_date, status (open|paid|cancelled), created_at, paid_at
+recurring_invoices id, slug, user_id, client_name, description, amount, currency, interval (weekly|monthly), next_issue_at, active, created_at
+invoices         id, slug, user_id, recurring_id (nullable), period_start (nullable), client_name, description, amount, currency, due_date, status (open|paid|cancelled), created_at, paid_at
 invoice_quotes   invoice_id, asset, amount_atomic, rate, expires_at  (unique invoice_id + asset)
 payments         id, invoice_id, payer, asset, amount_atomic, tx_hash, settled_at
 fx_intents       id, user_id, from_asset, to_asset, amount_atomic, reason, status (waiting|executing|filled|blocked|cancelled), created_at, deadline_at, attempts, last_slippage_bps
@@ -377,6 +430,8 @@ Amounts are stored as base-10 strings of atomic units (numeric in Postgres), nev
 
 Secrets (`PARA_API_KEY`, `X402_API_KEY`, `OPERATOR_PRIVATE_KEY`, `CRON_SECRET`, LLM keys,
 `LOCAL_KEY_ENCRYPTION_SECRET` for the fallback) live only in environment variables. The repo contains `.env.example`.
+`AGENT_WALLET` and `ATTRIBUTION_CODE` are public values and appear in `.env.example` as they are. The
+agent wallet's private key is never stored anywhere in the app.
 
 ## 13. Testing and verification
 
@@ -399,11 +454,11 @@ a Guardrail on Celo that blocks a call outside the allow list. If any of these f
 
 | Week | Work | Proof |
 |---|---|---|
-| 1 (Oct 8–14) | User: register team, get attribution code, create public repo. Scaffold app and DB, `chain/` with `sendTagged()`, Para spike, ERC-8004 registration | First tagged mainnet transaction |
-| 2 (Oct 15–21) | Invoices, payment page, x402 for USAT/USDT then wARS/wBRL | A real invoice paid on mainnet |
+| 1 (Oct 8–14) | Done: enrollment, tag `celo_bc3965e128ba`, public repo. Scaffold app and DB, `chain/` with `sendTagged()`, Para spike, `/admin/agent` and Cobro's ERC-8004 registration from the agent wallet, operator wallet funded | First tagged mainnet transaction from the agent wallet; Loops checklist "Find it" passes |
+| 2 (Oct 15–21) | Invoices (one-off and recurring), payment page, x402 for USAT/USDT then wARS/wBRL | A real invoice paid on mainnet |
 | 3 (Oct 22–28) | Treasury engine, executor, GitHub Actions cron, dashboard P&L | First autonomous Textile swap |
 | 4 (Oct 29–Nov 4) | Chat (Gemini/Groq), UX polish, user outreach (hackathon Telegram, Celo LatAm communities) | Independent payers |
-| Finish (Nov 5–8) | README, demo video, submission | Submitted Nov 8 |
+| Finish (Nov 5–8) | README, screenshots, demo video; `loops project create` draft shown to the user and confirmed only after their yes; `loops evaluate` for each targeted sponsor and fixes | Submitted Nov 8 |
 
 Independent payer: a wallet that is not ours, was not first funded by us, and had Celo activity before 2026-10-06.
 
