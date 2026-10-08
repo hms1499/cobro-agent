@@ -5,6 +5,25 @@ export const en = {
   "home.status": "Cobro is being built for the Agents on Open Rails hackathon on Celo.",
   "home.agentCard": "View the agent's ERC-8004 card",
   "admin.registeredAs": "Registered as agent #{agentId}",
+  "admin.title": "Agent wallet",
+  "admin.intro":
+    "Register Cobro's ERC-8004 identity from the agent wallet declared on Loops. Your wallet signs; no key leaves it.",
+  "admin.factWallet": "Agent wallet",
+  "admin.factCard": "Agent card",
+  "admin.factTag": "Attribution tag",
+  "admin.connect": "Connect wallet",
+  "admin.switch": "Switch to Celo",
+  "admin.register": "Register Cobro identity",
+  "admin.retry": "Try again",
+  "admin.wrongWallet": "The connected wallet is not the agent wallet. Switch accounts in your wallet.",
+  "admin.signing": "Confirm the transaction in your wallet…",
+  "admin.confirming": "Waiting for Celo to confirm…",
+  "admin.tagFound": "Attribution tag found in the transaction",
+  "admin.tagMissing": "Attribution tag missing. Stop and check the wiring before sending anything else.",
+  "admin.viewTx": "View transaction on Celoscan",
+  "admin.nextSteps": "Next: set NEXT_PUBLIC_AGENT_ID={agentId} in Vercel and .env.local, then redeploy.",
+  "admin.errorNoEvent": "The transaction did not emit a Registered event.",
+  "admin.noWallet": "No browser wallet found. Install MetaMask or Rabby, or open this page in your wallet's browser.",
 } as const;
 
 export type MessageKey = keyof typeof en;
