@@ -18,8 +18,11 @@ import { finishSetup } from "./actions";
 
 export const metadata: Metadata = { title: `${t("nav.home")} · ${t("app.name")}` };
 
-const primaryLink =
-  "inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+const linkBase =
+  "inline-flex min-h-11 items-center gap-2 rounded-lg px-4 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
+const primaryLink = `${linkBase} bg-primary text-primary-foreground hover:bg-primary/90`;
+// While setup is unfinished the banner's button is the screen's one primary action (MASTER.md "Secondary buttons").
+const secondaryLink = `${linkBase} border border-primary text-primary hover:bg-muted`;
 
 export default function AppHomePage() {
   return (
@@ -44,6 +47,7 @@ function HomeSkeleton() {
 async function Home() {
   const user = await requireUser();
   const [invoices, rates] = await Promise.all([listInvoices(getDb(), user.id), getReferenceRatesOrNull()]);
+  const newInvoiceLink = user.treasuryStatus === "ready" ? primaryLink : secondaryLink;
   return (
     <>
       <h1 className="text-2xl font-semibold">{t("app.greeting", { name: user.displayName ?? user.email ?? "" })}</h1>
@@ -54,7 +58,7 @@ async function Home() {
             {t("invoices.title")}
           </h2>
           {invoices.length > 0 && (
-            <Link href="/app/invoices/new" className={primaryLink}>
+            <Link href="/app/invoices/new" className={newInvoiceLink}>
               <Plus aria-hidden="true" className="size-4" />
               {t("invoices.new")}
             </Link>
@@ -65,7 +69,7 @@ async function Home() {
             <FileText aria-hidden="true" className="size-6 text-muted-foreground" />
             <p className="font-semibold">{t("invoices.emptyTitle")}</p>
             <p className="max-w-prose text-muted-foreground">{t("invoices.emptyBody")}</p>
-            <Link href="/app/invoices/new" className={primaryLink}>
+            <Link href="/app/invoices/new" className={newInvoiceLink}>
               <Plus aria-hidden="true" className="size-4" />
               {t("invoices.emptyAction")}
             </Link>

@@ -110,15 +110,21 @@ async function Invoice({
           <ul className="flex flex-col gap-3">
             {payments.map((payment) => (
               <li key={payment.id} className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
-                <p className="font-medium">
-                  {t("invoice.paidWith", {
-                    amount: isPayAsset(payment.asset) ? formatTokenAmount(BigInt(payment.amountAtomic), payment.asset) : payment.amountAtomic,
-                    date: formatDate(payment.settledAt),
-                  })}
-                </p>
+                <div className="flex items-start justify-between gap-4">
+                  <p className="font-medium">{t("invoice.paidOn", { date: formatDate(payment.settledAt) })}</p>
+                  <Money amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates)} />
+                </div>
                 <details className="mt-2 text-sm">
                   <summary className="min-h-11 cursor-pointer py-2 text-primary">{t("common.details")}</summary>
                   <dl className="grid gap-2">
+                    <div>
+                      <dt className="text-muted-foreground">{t("invoice.tokenAmount")}</dt>
+                      <dd>
+                        {isPayAsset(payment.asset)
+                          ? formatTokenAmount(BigInt(payment.amountAtomic), payment.asset)
+                          : payment.amountAtomic}
+                      </dd>
+                    </div>
                     <div>
                       <dt className="text-muted-foreground">{t("invoice.payer")}</dt>
                       <dd className="break-all font-mono">{payment.payer}</dd>
