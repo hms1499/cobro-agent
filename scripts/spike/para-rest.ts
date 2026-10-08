@@ -121,6 +121,29 @@ async function main() {
       const denied = error instanceof ParaRestError && error.code === "POLICY_DENIED";
       record("guardrail-blocks", denied, error instanceof Error ? error.message : String(error));
     }
+
+    // 4b. The allowed call — approve(Textile reactor) on USDT — must still be signed (not broadcast).
+    const allowedCall = encodeFunctionData({
+      abi: erc20Abi,
+      functionName: "approve",
+      args: ["0xa9AA0a64769cBed4d3B1Ceb4Df01CdE915C235b3", 1n],
+    });
+    try {
+      await para.signTransaction(wallet.id, {
+        to: TOKENS.USDT.address,
+        chainId: 42220,
+        type: 2,
+        value: "0",
+        data: allowedCall,
+        nonce: nonce + 1,
+        gasLimit: "100000",
+        maxFeePerGas: fees.maxFeePerGas.toString(),
+        maxPriorityFeePerGas: fees.maxPriorityFeePerGas.toString(),
+      });
+      record("guardrail-allows-reactor-approve", true, "approve(reactor) was signed (not broadcast)");
+    } catch (error) {
+      record("guardrail-allows-reactor-approve", false, error instanceof Error ? error.message : String(error));
+    }
   }
 
   // 5. CIP-64 (USDT gas) via sign-raw. Not broadcast: the spike wallet holds no USDT.
