@@ -24,6 +24,13 @@ export const en = {
   "admin.nextSteps": "Next: set NEXT_PUBLIC_AGENT_ID={agentId} in Vercel and .env.local, then redeploy.",
   "admin.errorNoEvent": "The transaction did not emit a Registered event.",
   "admin.noWallet": "No browser wallet found. Install MetaMask or Rabby, or open this page in your wallet's browser.",
+  "spike.title": "Para sign-in check",
+  "spike.intro": "Sign in with email, then ask the server to verify the Para session token.",
+  "spike.signIn": "Sign in with email",
+  "spike.verify": "Verify session on the server",
+  "spike.verified": "Server verified the session",
+  "spike.failed": "Server rejected the session",
+  "spike.missingKey": "Para client key is not configured. Set NEXT_PUBLIC_PARA_API_KEY and rebuild.",
 } as const;
 
 export type MessageKey = keyof typeof en;
