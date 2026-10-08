@@ -33,14 +33,22 @@ export function payErrorKey(status: number, body: unknown): MessageKey {
   return "pay.error.generic";
 }
 
-/** Wallet libraries wrap errors; walk the cause chain looking for EIP-1193 code 4001. */
+const DECLINED_MESSAGE = /user rejected|user denied|rejected the request|denied (message|transaction) signature/i;
+const CHANGED_MESSAGE = /filtered out by polic|rejected by spendControls|no payment requirements/i;
+
+/**
+ * Wallet libraries wrap errors, and @x402/fetch rethrows signing failures as
+ * `new Error("Failed to create payment payload: <message>")` with no cause, so check the
+ * cause chain (EIP-1193 code 4001) and the message text.
+ */
 export function payExceptionKind(error: unknown): "declined" | "changed" | "other" {
   let current: unknown = error;
   for (let depth = 0; depth < 6 && current; depth += 1) {
     const e = current as { name?: unknown; code?: unknown; message?: unknown; cause?: unknown };
     if (e.name === "UserRejectedRequestError" || e.code === 4001) return "declined";
-    if (typeof e.message === "string" && /rejected by (spendControls|polic)|no payment requirements/i.test(e.message)) {
-      return "changed";
+    if (typeof e.message === "string") {
+      if (DECLINED_MESSAGE.test(e.message)) return "declined";
+      if (CHANGED_MESSAGE.test(e.message)) return "changed";
     }
     current = e.cause;
   }

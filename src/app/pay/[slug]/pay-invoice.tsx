@@ -1,7 +1,7 @@
 "use client";
 
 import { CircleAlert, CircleCheck, ExternalLink, LoaderCircle } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { erc20Abi } from "viem";
 import {
   useConnect,
@@ -27,7 +27,9 @@ type Phase =
   | { kind: "signing" }
   | { kind: "settling" }
   | { kind: "paid"; txHash: string; amount: string }
-  | { kind: "error"; key: MessageKey };
+  | { kind: "error"; key: MessageKey; retryQuote?: boolean }
+  // The outcome is unknown or another payment is in flight: never offer to pay again, only a refresh.
+  | { kind: "locked"; key: MessageKey };
 
 const STEPS: MessageKey[] = ["pay.step.choose", "pay.step.connect", "pay.step.confirm", "pay.step.paid"];
 
@@ -52,6 +54,24 @@ export function PayInvoice({ slug }: { slug: string }) {
   const [quote, setQuote] = useState<QuoteResponse | null>(null);
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [phase, setPhase] = useState<Phase>({ kind: "idle" });
+  const [hasWallet, setHasWallet] = useState(true); // assume present until detection says otherwise, so nothing flashes
+  const latestQuoteRequest = useRef(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    const connector = connectors[0];
+    if (!connector) {
+      Promise.resolve().then(() => !cancelled && setHasWallet(false));
+    } else {
+      connector
+        .getProvider()
+        .then((provider) => !cancelled && setHasWallet(Boolean(provider)))
+        .catch(() => !cancelled && setHasWallet(false));
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [connectors]);
 
   const amountAtomic = quote ? BigInt(quote.amountAtomic) : undefined;
   const balance = useReadContract({
@@ -64,7 +84,7 @@ export function PayInvoice({ slug }: { slug: string }) {
   });
   const expiresAt = quote ? Date.parse(quote.expiresAt) : undefined;
   const blocker = payBlocker({
-    hasInjectedWallet: connectors.length > 0,
+    hasInjectedWallet: hasWallet,
     address: connection.address,
     chainId: connection.chainId,
     balance: balance.data,
@@ -73,9 +93,14 @@ export function PayInvoice({ slug }: { slug: string }) {
     now,
   });
   const busy = phase.kind === "signing" || phase.kind === "settling";
+  const locked = phase.kind === "locked";
+  // Once a payment is signed or its outcome is unknown, the controls follow the phase, not the wallet state.
+  const activeBlocker = busy || locked ? null : blocker;
   const amountLabel = quote && asset ? formatTokenAmount(BigInt(quote.amountAtomic), asset) : "";
 
   async function loadQuote(next: PayAsset) {
+    const request = ++latestQuoteRequest.current;
+    const stale = () => latestQuoteRequest.current !== request;
     setAsset(next);
     setQuote(null);
     setLoadingQuote(true);
@@ -83,12 +108,13 @@ export function PayInvoice({ slug }: { slug: string }) {
     try {
       const response = await fetch(`/api/pay/${slug}/quote?asset=${next}`, { cache: "no-store" });
       const body: unknown = await response.json().catch(() => null);
+      if (stale()) return;
       if (response.ok) setQuote(body as QuoteResponse);
-      else setPhase({ kind: "error", key: payErrorKey(response.status, body) });
+      else setPhase({ kind: "error", key: payErrorKey(response.status, body), retryQuote: true });
     } catch {
-      setPhase({ kind: "error", key: "pay.error.generic" });
+      if (!stale()) setPhase({ kind: "error", key: "pay.error.generic", retryQuote: true });
     } finally {
-      setLoadingQuote(false);
+      if (!stale()) setLoadingQuote(false);
     }
   }
 
@@ -101,13 +127,19 @@ export function PayInvoice({ slug }: { slug: string }) {
   }
 
   async function pay() {
-    if (!quote || !asset || !walletClient || !publicClient || blocker !== null) return;
+    if (!quote || !asset || !walletClient || !publicClient || blocker !== null || busy || locked) return;
     setPhase({ kind: "signing" });
+    let signed = false;
     try {
       const payFetch = createInvoicePayerFetch(
         toX402Signer(walletClient, publicClient),
         { asset: quote.tokenAddress, amountAtomic: BigInt(quote.amountAtomic), payTo: quote.payTo },
-        { onSigned: () => setPhase({ kind: "settling" }) },
+        {
+          onSigned: () => {
+            signed = true;
+            setPhase({ kind: "settling" });
+          },
+        },
       );
       const response = await payFetch(`/api/pay/${slug}?asset=${asset}`);
       const body: unknown = await response.json().catch(() => null);
@@ -115,9 +147,22 @@ export function PayInvoice({ slug }: { slug: string }) {
         setPhase({ kind: "paid", txHash: (body as { txHash: string }).txHash, amount: amountLabel });
         return;
       }
+      // After signing, no failure is proof that nothing was paid, so never invite a second payment.
+      if (signed || response.status === 502) {
+        setPhase({ kind: "locked", key: "pay.error.unknown" });
+        return;
+      }
+      if (response.status === 409) {
+        setPhase({ kind: "locked", key: payErrorKey(response.status, body) });
+        return;
+      }
       if (response.status === 402) await loadQuote(asset);
       setPhase({ kind: "error", key: payErrorKey(response.status, body) });
     } catch (error) {
+      if (signed) {
+        setPhase({ kind: "locked", key: "pay.error.unknown" });
+        return;
+      }
       const kind = payExceptionKind(error);
       if (kind === "changed") await loadQuote(asset);
       setPhase({
@@ -149,13 +194,13 @@ export function PayInvoice({ slug }: { slug: string }) {
     );
   }
 
-  const step = !quote ? 1 : blocker === "no-wallet" || blocker === "connect" || blocker === "switch-network" ? 2 : 3;
+  const step = !quote ? 1 : activeBlocker === "no-wallet" || activeBlocker === "connect" || activeBlocker === "switch-network" ? 2 : 3;
 
   return (
     <div className="flex flex-col gap-6">
       <Stepper current={step} />
 
-      <fieldset className="flex flex-col gap-3" disabled={busy}>
+      <fieldset className="flex flex-col gap-3" disabled={busy || locked}>
         <legend className="mb-1 text-lg font-semibold">{t("pay.choose")}</legend>
         {PAY_ASSETS.map((code) => (
           <label
@@ -191,55 +236,68 @@ export function PayInvoice({ slug }: { slug: string }) {
             <p className="text-sm text-muted-foreground">{t("pay.youPay")}</p>
             <p className="text-3xl font-semibold tracking-tight tabular-nums">{amountLabel}</p>
             <p className="text-sm text-muted-foreground">{t("pay.noFee")}</p>
-            {blocker === "expired" ? (
-              <p className="text-sm text-warning">{t("pay.expired")}</p>
-            ) : (
-              expiresAt !== undefined && (
-                <p className="text-sm text-muted-foreground tabular-nums">
-                  {t("pay.rateLocked", { time: formatCountdown(secondsLeft(expiresAt, now)) })}
-                </p>
-              )
-            )}
+            {activeBlocker === "expired" && <p className="text-sm text-warning">{t("pay.expired")}</p>}
           </>
         )}
       </section>
 
-      {quote && asset && (
-        <div className="flex flex-col gap-3">
-          {blocker === "no-wallet" && <p>{t("pay.noWallet")}</p>}
-          {blocker === "connect" && (
-            <Button size="lg" className="min-h-11" onClick={connect}>
-              {t("pay.connect")}
-            </Button>
-          )}
-          {blocker === "switch-network" && (
-            <Button size="lg" className="min-h-11" onClick={() => void switchChainAsync({ chainId: celo.id }).catch(() => {})}>
-              {t("pay.switch")}
-            </Button>
-          )}
-          {blocker === "expired" && (
-            <Button size="lg" className="min-h-11" onClick={() => void loadQuote(asset)}>
-              {t("pay.newRate")}
-            </Button>
-          )}
-          {blocker === "insufficient" && balance.data !== undefined && (
-            <p className="text-warning">{t("pay.insufficient", { balance: formatTokenAmount(balance.data, asset) })}</p>
-          )}
-          {blocker === null && (
-            <Button size="lg" className="min-h-11" onClick={pay} disabled={busy} aria-disabled={busy}>
-              {busy && <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
-              {phase.kind === "signing" ? t("pay.signing") : phase.kind === "settling" ? t("pay.settling") : t("pay.pay", { amount: amountLabel })}
-            </Button>
-          )}
-        </div>
+      {/* Outside the live region: a ticking countdown would be announced every second. */}
+      {quote && expiresAt !== undefined && activeBlocker !== "expired" && !locked && (
+        <p role="timer" aria-live="off" className="-mt-4 text-sm text-muted-foreground tabular-nums">
+          {t("pay.rateLocked", { time: formatCountdown(secondsLeft(expiresAt, now)) })}
+        </p>
+      )}
+
+      {locked ? (
+        <Button size="lg" className="min-h-11" onClick={() => window.location.reload()}>
+          {t("pay.refresh")}
+        </Button>
+      ) : (
+        quote &&
+        asset && (
+          <div className="flex flex-col gap-3">
+            {activeBlocker === "no-wallet" && <p>{t("pay.noWallet")}</p>}
+            {activeBlocker === "connect" && (
+              <Button size="lg" className="min-h-11" onClick={connect}>
+                {t("pay.connect")}
+              </Button>
+            )}
+            {activeBlocker === "switch-network" && (
+              <Button size="lg" className="min-h-11" onClick={() => void switchChainAsync({ chainId: celo.id }).catch(() => {})}>
+                {t("pay.switch")}
+              </Button>
+            )}
+            {activeBlocker === "expired" && (
+              <Button size="lg" className="min-h-11" onClick={() => void loadQuote(asset)}>
+                {t("pay.newRate")}
+              </Button>
+            )}
+            {activeBlocker === "insufficient" && balance.data !== undefined && (
+              <p className="text-warning">{t("pay.insufficient", { balance: formatTokenAmount(balance.data, asset) })}</p>
+            )}
+            {(busy || activeBlocker === null) && (
+              <Button size="lg" className="min-h-11" onClick={pay} disabled={busy} aria-disabled={busy}>
+                {busy && <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
+                {phase.kind === "signing" ? t("pay.signing") : phase.kind === "settling" ? t("pay.settling") : t("pay.pay", { amount: amountLabel })}
+              </Button>
+            )}
+          </div>
+        )
       )}
 
       <div aria-live="assertive">
-        {phase.kind === "error" && (
+        {(phase.kind === "error" || phase.kind === "locked") && (
           <p role="alert" className="flex items-start gap-2 text-destructive">
             <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
             {t(phase.key)}
           </p>
+        )}
+      </div>
+      <div>
+        {phase.kind === "error" && phase.retryQuote && asset && (
+          <Button size="lg" className="min-h-11" onClick={() => void loadQuote(asset)}>
+            {t("pay.retry")}
+          </Button>
         )}
       </div>
     </div>

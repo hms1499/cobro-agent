@@ -177,6 +177,7 @@ export const en = {
   "pay.error.connect": "We couldn't connect to your wallet. Try again.",
   "pay.error.generic": "Something went wrong. Nothing was paid. Please try again.",
   "pay.retry": "Try again",
+  "pay.refresh": "Refresh",
   "recurring.history": "See all payments for this invoice",
 } as const;
 

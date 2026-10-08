@@ -52,6 +52,21 @@ describe("payExceptionKind", () => {
     expect(payExceptionKind(new Error("All payment requirements were rejected by spendControls"))).toBe("changed");
     expect(payExceptionKind(new Error("network down"))).toBe("other");
   });
+
+  it("recognises the exact errors @x402/fetch rethrows, which carry no cause", () => {
+    expect(payExceptionKind(new Error("Failed to create payment payload: User rejected the request."))).toBe("declined");
+    expect(payExceptionKind(new Error("Failed to create payment payload: User denied message signature."))).toBe("declined");
+    expect(
+      payExceptionKind(
+        new Error("Failed to create payment payload: All payment requirements were filtered out by policies for x402 version: 2"),
+      ),
+    ).toBe("changed");
+    expect(
+      payExceptionKind(
+        new Error("Failed to create payment payload: All payment requirements were rejected by spendControls.allowedAssets maxAmountPerPayment."),
+      ),
+    ).toBe("changed");
+  });
 });
 
 describe("countdown", () => {
