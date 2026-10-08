@@ -37,7 +37,11 @@ Stretch goal: three or more independent payers (see §14 for the definition).
 - Only Celo mainnet activity counts. Testnet references in the repo are fine.
 - ERC-8004 identity is required for all tracks.
 - The attribution tag must be in calldata before the first transaction we want counted. Tags cannot be
-  added retroactively. The code is assigned when the team registers.
+  added retroactively. Loops House issues the tag at enrollment; read it with
+  `loops project get --event agents-on-open-rails` (`celo.attributionTag`). Never derive it with
+  `codeFromRepo` or `codeFromHostname`.
+- The entry needs an `agent-wallet`: the public address the agent sends its transactions from. It must
+  register the ERC-8004 identity. Loops scans it for the first tagged transaction in the event window.
 - The GitHub repo must be public at registration and still resolve at judging.
 - Code must be written during the hackathon (kick-off 2026-10-06).
 - An "independent user" is a wallet that is not ours, was not first funded by us, and had Celo activity
@@ -227,7 +231,9 @@ exposes `version()`. USDT has no `eip712Domain()`; its version "1" comes from th
 
 ### 8.5 Attribution tags (ERC-8021)
 
-- Package `@celo/attribution-tags`. Code from env `ATTRIBUTION_CODE` (assigned at hackathon registration).
+- Package `@celo/attribution-tags` (≥ 0.5.0 for `withAttribution`). Code from env `ATTRIBUTION_CODE`,
+  copied from `loops project get` after enrollment. Startup fails if the env value is missing or does
+  not match the pattern `celo_[0-9a-f]{12}`.
 - `chain/` exposes one `sendTagged()` path that appends `toDataSuffix(code)` to calldata. No other
   code path broadcasts transactions.
 - Verification: `verifyTx({ client, hash })` must return our code. This is part of the smoke tests.
@@ -244,6 +250,9 @@ sign CIP-64 transactions without losing Guardrails.
 - Identity Registry `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` (Reputation `0x8004BAa17C55a88189AE136b182e5fdA19dE9b63`).
 - One identity for the Cobro agent, registered by the operator wallet (`OPERATOR_PRIVATE_KEY`) through
   `register(agentURI)` with `agentURI = https://<domain>/agent-card.json`, sent through `sendTagged()`.
+- The operator wallet is the entry's Loops `agent-wallet`. Its first tagged transaction is the
+  ERC-8004 registration; its gas drips to treasury wallets are tagged CELO transfers. Treasury-wallet
+  transactions are credited through the tag in their calldata.
 - Card: `type`, `name`, `description`, `image`, `services: [{ name: "web", endpoint }]`,
   `x402Support: true`, `active: true`, `registrations: [{ agentId, agentRegistry: "eip155:42220:0x8004A169…a432" }]`
   (filled in after the `Registered` event).
@@ -408,8 +417,11 @@ Independent payer: a wallet that is not ours, was not first funded by us, and ha
 **Questions for the organisers** (Telegram or office hours, Thursdays 12:00 GMT):
 1. The Celo x402 facilitator does not tag settlement transactions. How are Track 3 USA₮ payments
    attributed to a team: by the `payTo` wallet?
-2. Do freelancer wallets created through Para count as valid new users?
-3. Where and when is the team's attribution code issued?
+2. Are transactions from per-user treasury wallets (not the declared `agent-wallet`) credited when
+   their calldata carries our tag?
+
+Answered: new users onboarded through Para are welcome ("Onboarding new people is exactly what we
+want, and we measure it in other ways", event FAQ). The attribution tag is issued by Loops at enrollment.
 
 ## 16. Internationalisation
 
