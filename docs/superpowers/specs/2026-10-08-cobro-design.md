@@ -226,6 +226,8 @@ exposes `version()`. USDT has no `eip712Domain()`; its version "1" comes from th
   `eip2612GasSponsoring` extension. Without it, fresh wallets get `412 permit2_allowance_required`.
 - `DynamicPrice` and `DynamicPayTo` (exported by `@x402/core`) provide per-invoice amount and recipient.
 - Known gap: the facilitator does not write attribution tags on settlement transactions yet (§15).
+- Facilitator `/supported` (checked 2026-10-08) lists `exact` on `eip155:42220` for USDC, USDT, USAT, wARS, wBRL, wCOP and only the `eip2612GasSponsoring` extension. `@x402/extensions` 2.28 has a `builder-code` (ERC-8021) extension for settlement calldata; Celo's facilitator does not list it yet, which is what question 1 in §15 is about.
+- Verified on mainnet 2026-10-09 (`docs/superpowers/smoke/2026-10-payments.md`): USD₮ settlement through the facilitator, and claim-before-settle under two simultaneous payments (one settles, the other gets 409).
 
 ### 8.3 Textile FX
 
@@ -420,6 +422,12 @@ wallet_locks     wallet_id (pk), locked_until
 
 Amounts are stored as base-10 strings of atomic units (numeric in Postgres), never as floats.
 
+Added in Plan 2:
+- `users.display_name`: shown as "From" on the payment page instead of the freelancer's email.
+- `treasury_wallets.status` (`creating|ready|failed`): wallet creation at Para is asynchronous and can be retried.
+- `recurring_invoices.anchor_day`: monthly invoices keep their day of month.
+- Invoice status `settling` with `settling_until`: a short claim taken before settlement, so two payers cannot both pay one invoice (§12 "no double charge").
+
 ## 12. Safety and error handling
 
 | Situation | Behaviour |
@@ -462,7 +470,7 @@ so enforcement stays in the executor (report: `docs/superpowers/spikes/2026-10-1
 | Week | Work | Proof |
 |---|---|---|
 | 1 (Oct 8–14) | Done: enrollment, tag `celo_bc3965e128ba`, public repo. Scaffold app and DB, `chain/` with `sendTagged()`, Para spike, `/admin/agent` and Cobro's ERC-8004 registration from the agent wallet, operator wallet funded | First tagged mainnet transaction from the agent wallet; Loops checklist "Find it" passes |
-| 2 (Oct 15–21) | Invoices (one-off and recurring), payment page, x402 for USAT/USDT then wARS/wBRL | A real invoice paid on mainnet |
+| 2 (Oct 15–21) | Done 2026-10-09: invoices (one-off and recurring), payment page, x402 for USAT/USDT and wARS/wBRL, cron route | Real invoices paid on mainnet in USD₮, including a double-payment race ([smoke results](smoke/2026-10-payments.md)); wARS and USA₮ smokes pending tokens |
 | 3 (Oct 22–28) | Treasury engine, executor, GitHub Actions cron, dashboard P&L | First autonomous Textile swap |
 | 4 (Oct 29–Nov 4) | Chat (Gemini/Groq), UX polish, user outreach (hackathon Telegram, Celo LatAm communities) | Independent payers |
 | Finish (Nov 5–8) | README, screenshots, demo video; `loops project create` draft shown to the user and confirmed only after their yes; `loops evaluate` for each targeted sponsor and fixes | Submitted Nov 8 |
@@ -476,6 +484,7 @@ Independent payer: a wallet that is not ours, was not first funded by us, and ha
 - Thin wARS liquidity (about $850/day) → small trades, `no_quote` handling, wBRL as the second corridor.
 - No existing users → outreach in week 4; the Track 2 P&L and Track 1 demo do not depend on outside users.
 - Free LLM quotas → Groq fallback, then forms; LLM is not on any money path.
+- Treasury wallets live in Para **BETA** for the hackathon (decided 2026-10-09). BETA's durability and SLA are unverified and wallets cannot move to PROD, so balances stay at a few USD and Cobro moves to Para PROD before inviting real users. If a user row is lost, the next sign-in creates a second Para wallet instead of re-adopting the first (the wallet's custom id is our user id); fix in Plan 3 before balances grow.
 
 **Questions for the organisers** (Telegram or office hours, Thursdays 12:00 GMT):
 1. The Celo x402 facilitator does not tag settlement transactions. How are Track 3 USA₮ payments
