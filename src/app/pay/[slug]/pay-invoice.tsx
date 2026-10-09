@@ -18,7 +18,7 @@ import { t, type MessageKey } from "@/i18n";
 import { PAY_ASSETS, type PayAsset } from "@/lib/money/currencies";
 import { formatTokenAmount } from "@/lib/money/format";
 import type { QuoteResponse } from "@/lib/payments/pay-flow";
-import { formatCountdown, payBlocker, payErrorKey, payExceptionKind, secondsLeft } from "@/lib/payments/pay-state";
+import { afterPayResponse, formatCountdown, payBlocker, payErrorKey, payExceptionKind, secondsLeft } from "@/lib/payments/pay-state";
 import { createInvoicePayerFetch } from "@/lib/payments/payer-client";
 import { toX402Signer } from "@/lib/payments/wallet-signer";
 
@@ -143,20 +143,17 @@ export function PayInvoice({ slug }: { slug: string }) {
       );
       const response = await payFetch(`/api/pay/${slug}?asset=${asset}`);
       const body: unknown = await response.json().catch(() => null);
-      if (response.ok) {
+      const next = afterPayResponse({ ok: response.ok, status: response.status, signed });
+      if (next === "paid") {
         setPhase({ kind: "paid", txHash: (body as { txHash: string }).txHash, amount: amountLabel });
         return;
       }
-      // After signing, no failure is proof that nothing was paid, so never invite a second payment.
-      if (signed || response.status === 502) {
-        setPhase({ kind: "locked", key: "pay.error.unknown" });
+      if (next === "locked") {
+        const unknown = response.status !== 409;
+        setPhase({ kind: "locked", key: unknown ? "pay.error.unknown" : payErrorKey(response.status, body) });
         return;
       }
-      if (response.status === 409) {
-        setPhase({ kind: "locked", key: payErrorKey(response.status, body) });
-        return;
-      }
-      if (response.status === 402) await loadQuote(asset);
+      if (next === "requote") await loadQuote(asset);
       setPhase({ kind: "error", key: payErrorKey(response.status, body) });
     } catch (error) {
       if (signed) {

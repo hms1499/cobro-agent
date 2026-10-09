@@ -55,10 +55,19 @@ describe("parseFiatInput", () => {
     expect(parseFiatInput("007.10")).toEqual({ ok: true, value: "7.10" });
   });
 
+  it("reads a lone comma followed by one or two digits as the cents mark (es-AR/pt-BR keypads)", () => {
+    expect(parseFiatInput("1500,50")).toEqual({ ok: true, value: "1500.50" });
+    expect(parseFiatInput("1,5")).toEqual({ ok: true, value: "1.50" });
+    expect(parseFiatInput(" 0,01 ")).toEqual({ ok: true, value: "0.01" });
+    expect(parseFiatInput("0,00")).toEqual({ ok: false, error: "range" });
+  });
+
   it("refuses separators that could mean two different numbers", () => {
     expect(parseFiatInput("1,500.50")).toEqual({ ok: false, error: "format" });
     expect(parseFiatInput("1.500,50")).toEqual({ ok: false, error: "format" });
-    expect(parseFiatInput("1500,50")).toEqual({ ok: false, error: "format" });
+    expect(parseFiatInput("1,500")).toEqual({ ok: false, error: "format" });
+    expect(parseFiatInput("1,005")).toEqual({ ok: false, error: "format" });
+    expect(parseFiatInput("1,50,5")).toEqual({ ok: false, error: "format" });
     expect(parseFiatInput("1 500")).toEqual({ ok: false, error: "format" });
     expect(parseFiatInput("$300")).toEqual({ ok: false, error: "format" });
   });

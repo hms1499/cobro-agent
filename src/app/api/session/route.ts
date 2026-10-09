@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { isTrustedJsonPost } from "@/lib/auth/csrf";
 import { verifyParaJwt, type ParaSession } from "@/lib/auth/para-jwt";
 import { SESSION_COOKIE, sessionCookieOptions, signSession } from "@/lib/auth/session";
 import { parseServerEnv, requireValue } from "@/lib/config/server";
@@ -9,6 +10,8 @@ import { loadAppUser } from "@/lib/users/queries";
 
 /** Exchanges a Para session JWT for our own session cookie and provisions the user. */
 export async function POST(request: Request) {
+  // Without this, another site could sign a freelancer into the attacker's account (login CSRF).
+  if (!isTrustedJsonPost(request)) return Response.json({ error: "forbidden" }, { status: 403 });
   const body = (await request.json().catch(() => null)) as { token?: unknown } | null;
   if (!body || typeof body.token !== "string") return Response.json({ error: "token_required" }, { status: 400 });
 

@@ -24,6 +24,19 @@ export function payBlocker(input: {
   return null;
 }
 
+/**
+ * What the payment page shows after `/api/pay` answers. The server returns 402 only when nothing
+ * moved (verification failed before the claim, or the facilitator definitely failed and the hold was
+ * released), so a 402 asks for a fresh confirmation (spec §9). After signing, any other failure is
+ * not proof that nothing was paid, so the page never invites a second payment.
+ */
+export function afterPayResponse(input: { ok: boolean; status: number; signed: boolean }): "paid" | "requote" | "locked" | "error" {
+  if (input.ok) return "paid";
+  if (input.status === 402) return "requote";
+  if (input.signed || input.status === 502 || input.status === 409) return "locked";
+  return "error";
+}
+
 export function payErrorKey(status: number, body: unknown): MessageKey {
   const error = typeof body === "object" && body !== null && "error" in body ? String(body.error) : "";
   if (status === 409) return error === "busy" ? "pay.error.busy" : "pay.error.closed";

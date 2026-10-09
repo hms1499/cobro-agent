@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCountdown, payBlocker, payErrorKey, payExceptionKind, secondsLeft } from "./pay-state";
+import { afterPayResponse, formatCountdown, payBlocker, payErrorKey, payExceptionKind, secondsLeft } from "./pay-state";
 
 const ready = {
   hasInjectedWallet: true,
@@ -38,6 +38,29 @@ describe("payErrorKey", () => {
     expect(payErrorKey(502, { error: "settlement_unknown" })).toBe("pay.error.unknown");
     expect(payErrorKey(402, {})).toBe("pay.error.rejected");
     expect(payErrorKey(500, null)).toBe("pay.error.generic");
+  });
+});
+
+describe("afterPayResponse", () => {
+  it("shows success for any OK response", () => {
+    expect(afterPayResponse({ ok: true, status: 200, signed: true })).toBe("paid");
+  });
+
+  it("asks for a fresh confirmation on 402 even after signing, because the server returns 402 only when nothing moved", () => {
+    expect(afterPayResponse({ ok: false, status: 402, signed: true })).toBe("requote");
+    expect(afterPayResponse({ ok: false, status: 402, signed: false })).toBe("requote");
+  });
+
+  it("never invites a second payment after signing when the outcome is not a 402", () => {
+    expect(afterPayResponse({ ok: false, status: 502, signed: true })).toBe("locked");
+    expect(afterPayResponse({ ok: false, status: 500, signed: true })).toBe("locked");
+    expect(afterPayResponse({ ok: false, status: 409, signed: true })).toBe("locked");
+  });
+
+  it("locks on 502 and 409 before signing, and shows a retryable error otherwise", () => {
+    expect(afterPayResponse({ ok: false, status: 502, signed: false })).toBe("locked");
+    expect(afterPayResponse({ ok: false, status: 409, signed: false })).toBe("locked");
+    expect(afterPayResponse({ ok: false, status: 503, signed: false })).toBe("error");
   });
 });
 
