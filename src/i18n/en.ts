@@ -179,6 +179,11 @@ export const en = {
   "pay.retry": "Try again",
   "pay.refresh": "Refresh",
   "recurring.history": "See all payments for this invoice",
+  "recurring.title": "Invoices from {name}",
+  "recurring.allPaid": "Every invoice so far is paid. Thank you!",
+  "recurring.period": "Period from {date}",
+  "recurring.paidOn": "Paid on {date}",
+  "recurring.none": "No invoices have been issued yet.",
 } as const;
 
 export type MessageKey = keyof typeof en;

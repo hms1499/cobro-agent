@@ -1,0 +1,24 @@
+name: Treasury cron
+
+# Vercel Hobby crons run once a day, so GitHub Actions calls the route every 10 minutes (spec §7.1).
+# Scheduled workflows run only from the default branch (main).
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the cron route
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.APP_URL || 'https://cobro-agent.vercel.app' }}
+        run: |
+          curl --fail-with-body --silent --show-error --max-time 120 \
+            -X POST -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${APP_URL}/api/cron/treasury"
