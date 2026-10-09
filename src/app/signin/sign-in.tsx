@@ -33,7 +33,8 @@ export function SignIn() {
       const { next } = (await response.json()) as { next: string };
       router.replace(next === "/app" ? safeNext(searchParams.get("next")) : next);
     } catch {
-      started.current = false;
+      // Keep `started` set: the effect below runs on every render, so clearing it here would retry
+      // in a tight loop. "Try again" calls createSession directly.
       setPhase("error");
     }
   }
