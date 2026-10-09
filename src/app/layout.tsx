@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 import { t } from "@/i18n";
+// Para's modal stylesheet carries its own Tailwind preflight in the same cascade layers as ours.
+// Loading it first lets our base rules (IBM Plex font, border colour) win where the two overlap.
+import "@getpara/react-sdk/styles.css";
 import "./globals.css";
 
 const plexSans = IBM_Plex_Sans({

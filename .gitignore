@@ -27,3 +27,5 @@ next-env.d.ts
 coverage/
 .playwright-mcp/
 *.log
+.env*
+!.env.example

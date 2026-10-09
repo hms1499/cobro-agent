@@ -20,6 +20,12 @@ const serverEnvSchema = z.object({
     emptyToUndefined,
     z.url().default("https://api.beta.getpara.com/.well-known/jwks.json"),
   ),
+  DATABASE_URL: z.preprocess(emptyToUndefined, z.url().optional()),
+  SESSION_SECRET: z.preprocess(emptyToUndefined, z.string().min(32, "must be at least 32 characters").optional()),
+  X402_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+  X402_FACILITATOR_URL: z.preprocess(emptyToUndefined, z.url().default("https://api.x402.celo.org")),
+  CRON_SECRET: z.preprocess(emptyToUndefined, z.string().min(32, "must be at least 32 characters").optional()),
+  TEXTILE_API_URL: z.preprocess(emptyToUndefined, z.url().default("https://api.textilecredit.com")),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

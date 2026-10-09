@@ -77,3 +77,47 @@ describe("requireValue", () => {
     expect(() => requireValue(undefined, "PARA_API_KEY")).toThrow("PARA_API_KEY is not set");
   });
 });
+
+describe("Plan 2 server variables", () => {
+  it("defaults the facilitator and Textile URLs", () => {
+    const env = parseServerEnv({});
+    expect(env.X402_FACILITATOR_URL).toBe("https://api.x402.celo.org");
+    expect(env.TEXTILE_API_URL).toBe("https://api.textilecredit.com");
+    expect(env.DATABASE_URL).toBeUndefined();
+    expect(env.SESSION_SECRET).toBeUndefined();
+  });
+
+  it("accepts a Neon connection string", () => {
+    const url = "postgresql://cobro:pw@ep-cool-name-123456-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require";
+    expect(parseServerEnv({ DATABASE_URL: url }).DATABASE_URL).toBe(url);
+  });
+
+  it("rejects a short session secret without echoing it", () => {
+    let message = "";
+    try {
+      parseServerEnv({ SESSION_SECRET: "short-secret-value" });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toMatch(/SESSION_SECRET/);
+    expect(message).not.toContain("short-secret-value");
+  });
+
+  it("rejects a short cron secret", () => {
+    expect(() => parseServerEnv({ CRON_SECRET: "abc" })).toThrow(/CRON_SECRET/);
+  });
+});
+
+describe("Para public variables", () => {
+  it("defaults the Para environment to BETA and leaves the key unset", () => {
+    const env = parsePublicEnv(validPublic);
+    expect(env.NEXT_PUBLIC_PARA_ENVIRONMENT).toBe("BETA");
+    expect(env.NEXT_PUBLIC_PARA_API_KEY).toBeUndefined();
+  });
+
+  it("rejects an unknown Para environment", () => {
+    expect(() => parsePublicEnv({ ...validPublic, NEXT_PUBLIC_PARA_ENVIRONMENT: "STAGING" })).toThrow(
+      /NEXT_PUBLIC_PARA_ENVIRONMENT/,
+    );
+  });
+});

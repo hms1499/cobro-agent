@@ -65,6 +65,13 @@ export class ParaRestClient {
     });
   }
 
+  /** Looks up the EVM wallet created for a CUSTOM_ID (GET /v1/wallets filters), or null when none exists. */
+  async findWalletByCustomId(userId: string): Promise<ParaWallet | null> {
+    const query = new URLSearchParams({ userIdentifier: userId, userIdentifierType: "CUSTOM_ID", type: "EVM", limit: "1" });
+    const result = await this.request<{ data?: ParaWallet[] }>("GET", `/v1/wallets?${query}`);
+    return result.data?.[0] ?? null;
+  }
+
   getWallet(walletId: string): Promise<ParaWallet> {
     return this.request<ParaWallet>("GET", `/v1/wallets/${encodeURIComponent(walletId)}`);
   }

@@ -28,6 +28,24 @@ describe("ParaRestClient", () => {
     expect(headers["X-Request-Id"]).toMatch(/^[0-9a-f-]{36}$/);
   });
 
+  it("finds the wallet created for a custom id", async () => {
+    const { client, fetchMock } = clientWith(
+      jsonResponse(200, { data: [{ id: "w1", type: "EVM", status: "creating" }], pagination: {} }),
+      jsonResponse(200, { data: [], pagination: {} }),
+    );
+    expect((await client.findWalletByCustomId("user-42"))?.id).toBe("w1");
+    const [url, init] = fetchMock.mock.calls[0];
+    const parsed = new URL(String(url));
+    expect(parsed.pathname).toBe("/v1/wallets");
+    expect(Object.fromEntries(parsed.searchParams)).toMatchObject({
+      userIdentifier: "user-42",
+      userIdentifierType: "CUSTOM_ID",
+      type: "EVM",
+    });
+    expect(init?.method).toBe("GET");
+    expect(await client.findWalletByCustomId("nobody")).toBeNull();
+  });
+
   it("polls until the wallet is ready", async () => {
     const { client, fetchMock } = clientWith(
       jsonResponse(200, { id: "w1", type: "EVM", status: "creating" }),
