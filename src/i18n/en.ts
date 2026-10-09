@@ -107,7 +107,7 @@ export const en = {
   "invoiceForm.client": "Who are you billing?",
   "invoiceForm.description": "What is it for?",
   "invoiceForm.amount": "Amount",
-  "invoiceForm.amountHelp": "Digits and a dot for cents, for example 1500.50.",
+  "invoiceForm.amountHelp": "Digits only, with a dot or comma before the cents, for example 1500.50.",
   "invoiceForm.currency": "Currency",
   "invoiceForm.dueDate": "Due date (optional)",
   "invoiceForm.repeat": "Repeat",
