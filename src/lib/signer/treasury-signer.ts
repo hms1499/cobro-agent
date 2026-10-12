@@ -2,6 +2,7 @@
 import type { Address, Hex, TypedDataDefinition } from "viem";
 import { privateKeyToAccount, sign } from "viem/accounts";
 import type { ParaRestClient, ParaTypedData } from "./para-rest";
+import { TreasuryPolicyError } from "@/lib/chain/treasury-tx";
 import { rawSignatureToParts, toJsonSafe } from "./signature";
 
 export interface DigestSignature {
@@ -21,6 +22,20 @@ export interface TreasurySigner {
   signTypedData(data: TypedDataDefinition): Promise<Hex>;
 }
 
+/** Only Textile's taker proof may be signed as typed data; anything else (e.g. EIP-3009) could move funds. */
+function assertTakerControl(data: TypedDataDefinition): void {
+  const { primaryType, domain } = data as { primaryType?: string; domain?: { name?: string; chainId?: number | bigint | string } };
+  let chainOk = false;
+  try {
+    chainOk = domain?.chainId !== undefined && BigInt(domain.chainId) === 42220n;
+  } catch {
+    chainOk = false;
+  }
+  if (primaryType !== "TakerControl" || domain?.name !== "Textile Taker Control" || !chainOk) {
+    throw new TreasuryPolicyError("the treasury signs only Textile TakerControl typed data on Celo");
+  }
+}
+
 export function paraTreasurySigner(
   client: Pick<ParaRestClient, "signRaw" | "signTypedData">,
   wallet: { id: string; address: Address },
@@ -31,6 +46,7 @@ export function paraTreasurySigner(
       return rawSignatureToParts(await client.signRaw(wallet.id, digest));
     },
     async signTypedData(data) {
+      assertTakerControl(data);
       const { domain, types, primaryType, message } = data as unknown as ParaTypedData & {
         types: Record<string, readonly { name: string; type: string }[]>;
       };
@@ -53,6 +69,9 @@ export function localKeyTreasurySigner(privateKey: Hex): TreasurySigner {
       const { r, s, yParity } = await sign({ hash: digest, privateKey });
       return { r, s, yParity: yParity === 1 ? 1 : 0 };
     },
-    signTypedData: (data) => account.signTypedData(data),
+    signTypedData: async (data) => {
+      assertTakerControl(data);
+      return account.signTypedData(data);
+    },
   };
 }

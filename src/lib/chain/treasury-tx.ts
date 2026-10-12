@@ -34,6 +34,10 @@ export class TreasuryPolicyError extends Error {
   }
 }
 
+declare const guarded: unique symbol;
+/** A call that only `encodeTreasuryCall` can produce; `signTreasuryTx` accepts nothing else. */
+export type GuardedCall = { readonly to: Address; readonly data: Hex } & { readonly [guarded]: true };
+
 export type TreasuryCall =
   | { kind: "approve"; asset: PayAsset; spender: Address; amount: bigint }
   | { kind: "swap"; to: Address; data: Hex; value: bigint; chainId: number }
@@ -51,7 +55,13 @@ const isAllowed = (policy: TreasuryPolicy, address: Address) =>
  * Spec §6.1 and §12: what a treasury wallet may sign. Para Guardrails were not enforced in the spike
  * (check 4), so this guard is the enforcement; every treasury transaction is encoded here.
  */
-export function encodeTreasuryCall(call: TreasuryCall, policy: TreasuryPolicy): { to: Address; data: Hex } {
+export function encodeTreasuryCall(call: TreasuryCall, policy: TreasuryPolicy): GuardedCall {
+  return brand(encodeUnchecked(call, policy));
+}
+
+const brand = (call: { to: Address; data: Hex }) => call as GuardedCall;
+
+function encodeUnchecked(call: TreasuryCall, policy: TreasuryPolicy): { to: Address; data: Hex } {
   switch (call.kind) {
     case "approve":
       if (!isAllowed(policy, call.spender)) throw new TreasuryPolicyError(`approve(${call.spender}) is not allowed`);
@@ -93,7 +103,7 @@ export interface SignedTreasuryTx {
  */
 export async function signTreasuryTx(
   deps: { client: TreasuryTxClient; signer: TreasurySigner; attributionCode: string },
-  call: { to: Address; data: Hex },
+  call: GuardedCall,
   feeToken: GasToken,
 ): Promise<SignedTreasuryTx> {
   const feeCurrency = TOKENS[feeToken].feeCurrency;
