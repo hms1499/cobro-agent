@@ -3,6 +3,16 @@ import { z } from "zod";
 import { FEE_TOKENS } from "@/lib/chain/tokens";
 import { emptyToUndefined, parseOrThrow } from "./parse";
 
+/** "true" / "false" only, so a typo never silently turns live trading on. */
+const flag = (fallback: "true" | "false") =>
+  z.preprocess(
+    emptyToUndefined,
+    z
+      .enum(["true", "false"])
+      .default(fallback)
+      .transform((value) => value === "true"),
+  );
+
 const serverEnvSchema = z.object({
   CELO_RPC_URL: z.preprocess(emptyToUndefined, z.url().default("https://forno.celo.org")),
   OPERATOR_PRIVATE_KEY: z.preprocess(
@@ -26,6 +36,8 @@ const serverEnvSchema = z.object({
   X402_FACILITATOR_URL: z.preprocess(emptyToUndefined, z.url().default("https://api.x402.celo.org")),
   CRON_SECRET: z.preprocess(emptyToUndefined, z.string().min(32, "must be at least 32 characters").optional()),
   TEXTILE_API_URL: z.preprocess(emptyToUndefined, z.url().default("https://api.textilecredit.com")),
+  TREASURY_ENABLED: flag("false"),
+  TREASURY_DRY_RUN: flag("true"),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
