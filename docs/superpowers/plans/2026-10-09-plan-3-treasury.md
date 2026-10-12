@@ -2507,6 +2507,7 @@ git add src/lib/treasury/repo.ts src/lib/treasury/repo.test.ts
 git commit -m "feat(treasury): repository for locks, intents, trades, events and treasury transactions
 
 Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
 
 ---
 
