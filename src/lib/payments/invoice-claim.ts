@@ -1,4 +1,4 @@
-import { and, eq, lt, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
 import { invoices, payments } from "@/lib/db/schema";
 import type { PayAsset } from "@/lib/money/currencies";
@@ -16,10 +16,8 @@ export async function claimInvoice(db: Db, invoiceId: string, now: Date): Promis
     .update(invoices)
     .set({ status: "settling", settlingUntil: new Date(now.getTime() + SETTLING_HOLD_MS) })
     .where(
-      and(
-        eq(invoices.id, invoiceId),
-        or(eq(invoices.status, "open"), and(eq(invoices.status, "settling"), lt(invoices.settlingUntil, now))),
-      ),
+      // A "settling" invoice stays busy until the reconciler resolves it (Plan 3 Task 16).
+      and(eq(invoices.id, invoiceId), eq(invoices.status, "open")),
     )
     .returning({ id: invoices.id });
   return claimed.length === 1;
@@ -52,4 +50,58 @@ export async function recordPayment(
       .onConflictDoNothing({ target: payments.txHash });
     await tx.update(invoices).set({ status: "paid", paidAt: p.now, settlingUntil: null }).where(eq(invoices.id, p.invoiceId));
   });
+}
+
+const GUARD_LOST = Symbol("reconcile guard lost");
+
+/**
+ * Reconcile path only: reopen the invoice only if it is still held by the claim we read.
+ * Returns false when it moved on (a newer claim, or paid) in the meantime.
+ */
+export async function releaseSettling(db: Db, invoiceId: string, settlingUntil: Date): Promise<boolean> {
+  const released = await db
+    .update(invoices)
+    .set({ status: "open", settlingUntil: null })
+    .where(and(eq(invoices.id, invoiceId), eq(invoices.status, "settling"), eq(invoices.settlingUntil, settlingUntil)))
+    .returning({ id: invoices.id });
+  return released.length === 1;
+}
+
+/**
+ * Reconcile path only: mark the invoice paid only if it is still held by the claim we read, and only
+ * if this call inserted the payment row. "moved" = the invoice changed; "duplicate" = the transfer was
+ * already recorded. Nothing is written in either case.
+ */
+export async function recordReconciledPayment(
+  db: Db,
+  p: { invoiceId: string; settlingUntil: Date; payer: string; asset: PayAsset; amountAtomic: bigint; txHash: string; now: Date },
+): Promise<"recorded" | "moved" | "duplicate"> {
+  try {
+    return await db.transaction(async (tx) => {
+      const moved = await tx
+        .update(invoices)
+        .set({ status: "paid", paidAt: p.now, settlingUntil: null })
+        .where(and(eq(invoices.id, p.invoiceId), eq(invoices.status, "settling"), eq(invoices.settlingUntil, p.settlingUntil)))
+        .returning({ id: invoices.id });
+      if (moved.length === 0) return "moved" as const;
+      const inserted = await tx
+        .insert(payments)
+        .values({
+          invoiceId: p.invoiceId,
+          payer: p.payer,
+          asset: p.asset,
+          amountAtomic: p.amountAtomic.toString(),
+          txHash: p.txHash,
+          settledAt: p.now,
+          ratesSnapshot: null,
+        })
+        .onConflictDoNothing({ target: payments.txHash })
+        .returning({ id: payments.id });
+      if (inserted.length === 0) throw GUARD_LOST;
+      return "recorded" as const;
+    });
+  } catch (error) {
+    if (error === GUARD_LOST) return "duplicate";
+    throw error;
+  }
 }

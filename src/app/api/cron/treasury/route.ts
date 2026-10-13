@@ -3,7 +3,7 @@ import { parseServerEnv } from "@/lib/config/server";
 import { isAuthorizedCron } from "@/lib/cron/auth";
 import { getDb } from "@/lib/db/client";
 import { issueDueRecurring } from "@/lib/invoices/repo";
-import { logTransferFinder, reconcileSettlements } from "@/lib/payments/reconcile";
+import { logTransferFinder, reconcileSettlements, type ReconcileResult } from "@/lib/payments/reconcile";
 import { runTreasuries, runTreasuryForUser, summarizeRuns } from "@/lib/treasury/executor";
 import { liveExecutorDeps } from "@/lib/treasury/live";
 import { listTreasuryUsers } from "@/lib/treasury/repo";
@@ -15,14 +15,14 @@ const START_BUDGET_MS = 180_000;
 
 /** Called every 10 minutes by .github/workflows/treasury-cron.yml (spec §7.1, §10.4). */
 export async function POST(request: Request) {
-  if (!isAuthorizedCron(request.headers.get("authorization"), parseServerEnv().CRON_SECRET)) {
+  const env = parseServerEnv();
+  if (!isAuthorizedCron(request.headers.get("authorization"), env.CRON_SECRET)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
   const started = Date.now();
   const db = getDb();
-  const env = parseServerEnv();
   const issued = await issueDueRecurring(db, new Date());
-  let reconciled: { recorded: number; reopened: number } | "error";
+  let reconciled: ReconcileResult | "error";
   try {
     reconciled = await reconcileSettlements(db, logTransferFinder(createCeloPublicClient(env.CELO_RPC_URL)), new Date());
   } catch (error) {

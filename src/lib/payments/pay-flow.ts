@@ -49,7 +49,8 @@ export async function preparePayment(
   const invoice = await deps.findInvoice(input.slug);
   if (!invoice) return fail(404, { error: "not_found" });
   if (invoice.status === "paid" || invoice.status === "cancelled") return fail(409, { error: "closed", status: invoice.status });
-  if (invoice.status === "settling" && invoice.settlingUntil && invoice.settlingUntil > deps.now()) {
+  // Even past its hold, "settling" stays busy until the reconciler resolves it, and before any quote is locked.
+  if (invoice.status === "settling") {
     return fail(409, { error: "busy" });
   }
   const payTo = invoice.payTo;
