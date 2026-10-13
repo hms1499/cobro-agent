@@ -175,7 +175,23 @@ export async function logEvent(
 }
 
 export async function listEvents(db: Db, userId: string, limit = 20): Promise<AgentEventRow[]> {
-  return db.select().from(agentEvents).where(eq(agentEvents.userId, userId)).orderBy(desc(agentEvents.createdAt)).limit(limit);
+  return db
+    .select()
+    .from(agentEvents)
+    .where(eq(agentEvents.userId, userId))
+    .orderBy(desc(agentEvents.createdAt), desc(agentEvents.id))
+    .limit(limit);
+}
+
+/** The user's most recent event of `type`; ties on createdAt are broken by id so the answer is stable. */
+export async function lastEvent(db: Db, userId: string, type: AgentEventType): Promise<AgentEventRow | null> {
+  const [row] = await db
+    .select()
+    .from(agentEvents)
+    .where(and(eq(agentEvents.userId, userId), eq(agentEvents.type, type)))
+    .orderBy(desc(agentEvents.createdAt), desc(agentEvents.id))
+    .limit(1);
+  return row ?? null;
 }
 
 export async function recordTreasuryTx(db: Db, row: typeof treasuryTxs.$inferInsert): Promise<void> {

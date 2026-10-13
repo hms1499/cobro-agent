@@ -9,6 +9,7 @@ import {
   acquireWalletLock,
   filledUsdWad24h,
   insertTrade,
+  lastEvent,
   listEvents,
   listTreasuryUsers,
   loadTreasuryContext,
@@ -113,6 +114,20 @@ describe("events and treasury transactions", () => {
     await logEvent(db, user.id, "dry_run", { amount: "1" }, NOW);
     await logEvent(db, user.id, "converted", { amount: "2" }, minutes(5));
     expect((await listEvents(db, user.id)).map((e) => e.type)).toEqual(["converted", "dry_run"]);
+  });
+
+  it("finds the last event of one type, newest first and then by id", async () => {
+    const user = await seedFreelancer(db);
+    expect(await lastEvent(db, user.id, "dry_run")).toBeNull();
+    await logEvent(db, user.id, "dry_run", { n: 1 }, NOW);
+    await logEvent(db, user.id, "dry_run", { n: 2 }, minutes(5));
+    await logEvent(db, user.id, "converted", { n: 3 }, minutes(10));
+    expect((await lastEvent(db, user.id, "dry_run"))?.data).toEqual({ n: 2 });
+    await logEvent(db, user.id, "dry_run", { n: 4 }, minutes(20));
+    await logEvent(db, user.id, "dry_run", { n: 5 }, minutes(20));
+    const tied = await listEvents(db, user.id);
+    const highestId = tied.filter((e) => e.createdAt.getTime() === minutes(20).getTime()).map((e) => e.id).sort().at(-1);
+    expect((await lastEvent(db, user.id, "dry_run"))?.id).toBe(highestId);
   });
 
   it("keeps transactions pending until settled, in nonce order", async () => {
