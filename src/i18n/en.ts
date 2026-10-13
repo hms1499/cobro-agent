@@ -208,6 +208,7 @@ export const en = {
   "withdraw.error.busy": "Your agent is busy with another transaction. Try again in a minute.",
   "withdraw.error.insufficient": "That is more than is available now. Refresh and try again.",
   "withdraw.error.needs_gas": "Your agent can't pay the network fee right now. Try again tomorrow.",
+  "withdraw.error.unconfirmed": "We couldn't confirm the withdrawal. Check your wallet before trying again.",
   "withdraw.error.failed": "The network rejected the withdrawal, so no money moved. Try again.",
 } as const;
 

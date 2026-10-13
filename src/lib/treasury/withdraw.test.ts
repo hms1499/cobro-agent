@@ -121,4 +121,19 @@ describe("withdraw", () => {
     expect(await withdraw(d, user.id, { asset: "USDT", amount: 1n })).toEqual({ ok: false, error: "busy" });
     expect(signed).toHaveLength(0);
   });
+
+  it("reports unconfirmed, not failed, when signing or the network throws", async () => {
+    const user = await freelancerWithWallet();
+    const a = deps({ USDT: 2_000_000n });
+    a.deps.signTx = vi.fn(async () => {
+      throw new Error("para down");
+    });
+    expect(await withdraw(a.deps, user.id, { asset: "USDT", amount: 1_000_000n })).toEqual({ ok: false, error: "unconfirmed" });
+
+    const b = deps({ USDT: 2_000_000n });
+    b.deps.chain.sendRaw = async () => {
+      throw new Error("rpc 500");
+    };
+    expect(await withdraw(b.deps, user.id, { asset: "USDT", amount: 1_000_000n })).toEqual({ ok: false, error: "unconfirmed" });
+  });
 });

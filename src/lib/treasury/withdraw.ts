@@ -48,11 +48,21 @@ export function parseWithdrawForm(
   return { ok: true, data: { asset, amount } };
 }
 
-export type WithdrawError = "not_ready" | "no_personal_wallet" | "busy" | "insufficient" | "needs_gas" | "failed";
+export type WithdrawError = "not_ready" | "no_personal_wallet" | "busy" | "insufficient" | "needs_gas" | "failed" | "unconfirmed";
 export type WithdrawResult = { ok: true; txHash: Hex; pending: boolean } | { ok: false; error: WithdrawError };
 
 /** Spec §6.2 flow 5: treasury → the freelancer's own wallet, never anywhere else (encodeTreasuryCall). */
 export async function withdraw(deps: ExecutorDeps, userId: string, input: WithdrawInput): Promise<WithdrawResult> {
+  try {
+    return await withdrawUnguarded(deps, userId, input);
+  } catch (error) {
+    // Signing or the RPC failed, possibly after the transaction was stored and broadcast: money may have moved.
+    console.error(`Withdrawal for ${userId} ended with an error:`, error);
+    return { ok: false, error: "unconfirmed" };
+  }
+}
+
+async function withdrawUnguarded(deps: ExecutorDeps, userId: string, input: WithdrawInput): Promise<WithdrawResult> {
   const ctx = await loadTreasuryContext(deps.db, userId);
   if (!ctx) return { ok: false, error: "not_ready" };
   const personalWallet = ctx.personalWallet;
