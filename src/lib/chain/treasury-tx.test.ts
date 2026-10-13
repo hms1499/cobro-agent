@@ -1,15 +1,32 @@
 // src/lib/chain/treasury-tx.test.ts
-import { custom, decodeFunctionData, erc20Abi, fromRlp, keccak256, recoverAddress, type Address, type Hex } from "viem";
+import {
+  custom,
+  decodeFunctionData,
+  erc20Abi,
+  fromRlp,
+  hexToBigInt,
+  HttpRequestError,
+  InternalRpcError,
+  InvalidInputRpcError,
+  keccak256,
+  numberToHex,
+  recoverAddress,
+  RpcRequestError,
+  TimeoutError,
+  type Address,
+  type Hex,
+} from "viem";
 import { generatePrivateKey } from "viem/accounts";
 import { parseTransaction, serializeTransaction } from "viem/celo";
 import { describe, expect, it } from "vitest";
-import { localKeyTreasurySigner } from "@/lib/signer/treasury-signer";
+import { localKeyTreasurySigner, type TreasurySigner } from "@/lib/signer/treasury-signer";
 import { attributionSuffix } from "./attribution";
 import { createCeloPublicClient } from "./clients";
 import { TOKENS } from "./tokens";
 import {
   encodeTreasuryCall,
   GAS_FLOOR_ATOMIC,
+  isNodeRejection,
   pickGasToken,
   signTreasuryTx,
   TEXTILE_REACTOR,
@@ -19,6 +36,7 @@ import {
 const CODE = "celo_bc3965e128ba";
 const PERSONAL: Address = "0x3333333333333333333333333333333333333333";
 const STRANGER: Address = "0x000000000000000000000000000000000000dEaD";
+const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
 const POLICY = { allowedSpenders: [TEXTILE_REACTOR], personalWallet: PERSONAL };
 
 describe("pickGasToken", () => {
@@ -65,7 +83,7 @@ describe("encodeTreasuryCall", () => {
 });
 
 /** A node that answers just what signTreasuryTx asks, and records the calls. */
-function fakeChain() {
+function fakeChain(over: { gasPrice?: Hex; tip?: Hex } = {}) {
   const calls: { method: string; params: unknown }[] = [];
   const transport = custom({
     async request({ method, params }) {
@@ -78,9 +96,9 @@ function fakeChain() {
         case "eth_estimateGas":
           return "0x186a0";
         case "eth_gasPrice":
-          return "0x4a817c800";
+          return over.gasPrice ?? "0x4a817c800";
         case "eth_maxPriorityFeePerGas":
-          return "0x3b9aca00";
+          return over.tip ?? "0x3b9aca00";
         default:
           throw new Error(`unexpected RPC ${method}`);
       }
@@ -127,5 +145,72 @@ describe("signTreasuryTx", () => {
     const estimate = calls.find((c) => c.method === "eth_estimateGas")!.params as [{ feeCurrency: string }];
     expect(estimate[0].feeCurrency.toLowerCase()).toBe(TOKENS.USDT.feeCurrency!.toLowerCase());
     expect(calls.find((c) => c.method === "eth_gasPrice")!.params).toEqual([TOKENS.USDT.feeCurrency]);
+  });
+
+  /** The signature parts and the signer they recover to, read back from the raw bytes. */
+  async function signatureOf(raw: Hex) {
+    const [yParity, r, s] = (fromRlp(`0x${raw.slice(4)}`, "hex") as Hex[]).slice(-3);
+    const unsigned = { ...(parseTransaction(raw) as object), type: "cip64" } as Parameters<typeof serializeTransaction>[0];
+    const signature = { r, s, yParity: yParity === "0x" ? 0 : 1 };
+    return { s: hexToBigInt(s), recovered: await recoverAddress({ hash: keccak256(serializeTransaction(unsigned)), signature }) };
+  }
+  const call = () => encodeTreasuryCall({ kind: "approve", asset: "WARS", spender: TEXTILE_REACTOR, amount: 5n }, POLICY);
+
+  it("normalises a high-s signature (EIP-2), which still recovers to the treasury wallet", async () => {
+    const local = localKeyTreasurySigner(generatePrivateKey());
+    // An MPC signer may return either of the two valid signatures; this one returns the high-s twin.
+    const returned: bigint[] = [];
+    const highS: TreasurySigner = {
+      ...local,
+      async signDigest(digest) {
+        const sig = await local.signDigest(digest);
+        const s = SECP256K1_N - hexToBigInt(sig.s);
+        returned.push(s);
+        return { r: sig.r, s: numberToHex(s, { size: 32 }), yParity: sig.yParity === 0 ? 1 : 0 };
+      },
+    };
+    const signed = await signTreasuryTx({ client: fakeChain().client, signer: highS, attributionCode: CODE }, call(), "USDT");
+    expect(returned[0] > SECP256K1_N / 2n).toBe(true);
+    const { s, recovered } = await signatureOf(signed.raw);
+    expect(s).toBe(SECP256K1_N - returned[0]);
+    expect(recovered).toBe(local.address);
+    expect(signed.hash).toBe(keccak256(signed.raw));
+  });
+
+  it("refuses a signature that does not recover to the treasury wallet", async () => {
+    const other = localKeyTreasurySigner(generatePrivateKey());
+    const wrong: TreasurySigner = { ...localKeyTreasurySigner(generatePrivateKey()), signDigest: (digest) => other.signDigest(digest) };
+    await expect(signTreasuryTx({ client: fakeChain().client, signer: wrong, attributionCode: CODE }, call(), "USDT")).rejects.toThrow(
+      /does not recover/,
+    );
+  });
+
+  it("never offers a priority fee above the max fee", async () => {
+    // gasPrice 1 gwei → max fee 2 gwei; the node suggests a 5 gwei tip.
+    const { client } = fakeChain({ gasPrice: "0x3b9aca00", tip: "0x12a05f200" });
+    const signer = localKeyTreasurySigner(generatePrivateKey());
+    const signed = await signTreasuryTx({ client, signer, attributionCode: CODE }, call(), "USDT");
+    const tx = parseTransaction(signed.raw) as unknown as { maxFeePerGas: bigint; maxPriorityFeePerGas: bigint };
+    expect(tx).toMatchObject({ maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 2_000_000_000n });
+  });
+});
+
+describe("isNodeRejection", () => {
+  const url = "http://unused";
+  const body = { method: "eth_sendRawTransaction" };
+  const rpc = (code: number, message: string) => new RpcRequestError({ body, error: { code, message }, url });
+
+  it("is true only when the node answered and refused the bytes", () => {
+    expect(isNodeRejection(new InvalidInputRpcError(rpc(-32000, "invalid sender")))).toBe(true);
+    expect(isNodeRejection(rpc(-32000, "nonce too low"))).toBe(true);
+    expect(isNodeRejection(rpc(-32602, "rlp: expected input list"))).toBe(true);
+  });
+
+  it("is false when the bytes may have reached the node", () => {
+    expect(isNodeRejection(new HttpRequestError({ body, url, status: 502 }))).toBe(false);
+    expect(isNodeRejection(new TimeoutError({ body, url }))).toBe(false);
+    expect(isNodeRejection(new InternalRpcError(rpc(-32603, "internal error")))).toBe(false);
+    expect(isNodeRejection(rpc(-32005, "rate limited"))).toBe(false);
+    expect(isNodeRejection(new Error("fetch failed"))).toBe(false);
   });
 });

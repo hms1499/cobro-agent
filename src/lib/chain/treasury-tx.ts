@@ -1,7 +1,19 @@
 // src/lib/chain/treasury-tx.ts
-import { encodeFunctionData, erc20Abi, getAddress, isAddressEqual, keccak256, type Address, type Hex } from "viem";
+import {
+  BaseError,
+  encodeFunctionData,
+  erc20Abi,
+  getAddress,
+  isAddressEqual,
+  keccak256,
+  recoverAddress,
+  RpcRequestError,
+  type Address,
+  type Hex,
+} from "viem";
 import { serializeTransaction } from "viem/celo";
 import type { PayAsset } from "@/lib/money/currencies";
+import { toLowS } from "@/lib/signer/signature";
 import type { TreasurySigner } from "@/lib/signer/treasury-signer";
 import { tagCalldata } from "./attribution";
 import type { createCeloPublicClient } from "./clients";
@@ -118,6 +130,7 @@ export async function signTreasuryTx(
     rpc({ method: "eth_gasPrice", params: [feeCurrency] }).then(BigInt),
     rpc({ method: "eth_maxPriorityFeePerGas", params: [feeCurrency] }).then(BigInt),
   ]);
+  const maxFeePerGas = gasPrice * 2n;
   const tx = {
     type: "cip64" as const,
     chainId: 42220,
@@ -126,11 +139,33 @@ export async function signTreasuryTx(
     data,
     value: 0n,
     gas: (gas * 12n) / 10n,
-    maxFeePerGas: gasPrice * 2n,
-    maxPriorityFeePerGas: tip,
+    maxFeePerGas,
+    // A node may suggest a tip above our fee cap; such a transaction would be refused.
+    maxPriorityFeePerGas: tip < maxFeePerGas ? tip : maxFeePerGas,
     feeCurrency,
   };
-  const signature = await deps.signer.signDigest(keccak256(serializeTransaction(tx)));
+  const digest = keccak256(serializeTransaction(tx));
+  // Para signs a raw digest: normalise s (EIP-2) and check the signer before anything is stored.
+  const signature = toLowS(await deps.signer.signDigest(digest));
+  const recovered = await recoverAddress({ hash: digest, signature });
+  if (!isAddressEqual(recovered, from)) {
+    throw new Error(`The treasury signature does not recover to ${from} (got ${recovered})`);
+  }
   const raw = serializeTransaction(tx, signature);
   return { hash: keccak256(raw), raw, nonce, feeToken };
+}
+
+/**
+ * JSON-RPC codes with which a node refuses a raw transaction it validated: -32000 (geth's invalid
+ * sender, nonce too low, underpriced, insufficient funds, …), -32602 (undecodable) and -32003
+ * (rejected). Internal errors, rate limits, HTTP failures and timeouts are not refusals: the bytes may
+ * have reached the node.
+ */
+const REFUSAL_CODES = new Set([-32000, -32602, -32003]);
+
+/** True when the node answered eth_sendRawTransaction and refused the bytes, so they hold no nonce. */
+export function isNodeRejection(error: unknown): boolean {
+  if (!(error instanceof BaseError)) return false;
+  const answer = error.walk((e) => e instanceof RpcRequestError);
+  return answer instanceof RpcRequestError && REFUSAL_CODES.has(answer.code);
 }
