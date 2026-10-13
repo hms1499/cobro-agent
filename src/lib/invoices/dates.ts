@@ -14,3 +14,8 @@ export function formatDate(value: Date | string, locale = "en-US"): string {
   const date = typeof value === "string" ? new Date(`${value}T00:00:00Z`) : value;
   return new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeZone: "UTC" }).format(date);
 }
+
+/** "Oct 15, 2026, 3:04 PM UTC" for activity timestamps. The server renders it, so it says UTC. */
+export function formatDateTime(value: Date, locale = "en-US"): string {
+  return `${new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(value)} UTC`;
+}

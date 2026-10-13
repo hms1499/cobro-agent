@@ -15,6 +15,9 @@ import { listInvoices } from "@/lib/invoices/repo";
 import { displayAmount } from "@/lib/money/display";
 import type { AppUser } from "@/lib/users/queries";
 import { finishSetup } from "./actions";
+import { ActivityFeed } from "./activity-feed";
+import { Conversions } from "./conversions";
+import { RepeatClients } from "./repeat-clients";
 
 export const metadata: Metadata = { title: `${t("nav.home")} · ${t("app.name")}` };
 
@@ -107,6 +110,15 @@ async function Home() {
           </ul>
         )}
       </section>
+      <Suspense fallback={<Skeleton className="h-24 w-full" />}>
+        <RepeatClients user={user} />
+      </Suspense>
+      <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+        <ActivityFeed user={user} />
+      </Suspense>
+      <Suspense fallback={<Skeleton className="h-24 w-full" />}>
+        <Conversions user={user} />
+      </Suspense>
     </>
   );
 }
