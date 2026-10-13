@@ -1,13 +1,13 @@
 "use client";
 
-import { House, Settings } from "lucide-react";
+import { Bot, House, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { t, type MessageKey } from "@/i18n";
 
-// Plan 3 adds "Agent" (rules) between these, as MASTER.md lists: Home, Invoices, Agent, Settings.
 const ITEMS: { href: string; label: MessageKey; icon: typeof House }[] = [
   { href: "/app", label: "nav.home", icon: House },
+  { href: "/app/rules", label: "nav.agent", icon: Bot },
   { href: "/app/settings", label: "nav.settings", icon: Settings },
 ];
 
