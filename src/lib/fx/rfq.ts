@@ -105,7 +105,12 @@ const noQuoteSchema = z.object({
   data: z.object({
     status: z.literal("no_quote"),
     reason: z.string().optional(),
-    retryAfterMs: z.number().int().nonnegative().optional(),
+    // Read leniently: a null or fractional hint must not turn a real no-quote into malformed_response.
+    retryAfterMs: z
+      .number()
+      .nonnegative()
+      .nullish()
+      .transform((ms) => (ms == null ? null : Math.ceil(ms))),
   }),
 });
 

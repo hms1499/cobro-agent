@@ -95,6 +95,12 @@ describe("TextileRfqClient.request", () => {
     });
   });
 
+  it("reads a null or fractional retry hint as a no-quote, not a malformed response", async () => {
+    const noQuote = (retryAfterMs: unknown) => client(fakeFetch(200, { data: { status: "no_quote", reason: "busy", retryAfterMs } }));
+    expect(await request(noQuote(null))).toEqual({ status: "no_quote", reason: "busy", retryAfterMs: null });
+    expect(await request(noQuote(1500.2))).toEqual({ status: "no_quote", reason: "busy", retryAfterMs: 1501 });
+  });
+
   it("turns an error envelope into a TextileError with the stable reason", async () => {
     const body = { error: { code: "unauthorized", message: "proof is stale", details: { reason: "proof_of_control_stale" } } };
     await expect(request(client(fakeFetch(401, body)))).rejects.toMatchObject({
