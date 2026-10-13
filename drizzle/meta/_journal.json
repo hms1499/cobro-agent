@@ -8,6 +8,20 @@
       "when": 1791466064484,
       "tag": "0000_opposite_vulture",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791812237148,
+      "tag": "0001_spicy_millenium_guard",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791873910395,
+      "tag": "0002_tx_status_failed",
+      "breakpoints": true
     }
   ]
 }

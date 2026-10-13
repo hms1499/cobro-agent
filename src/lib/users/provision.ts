@@ -7,10 +7,10 @@ import { ParaRestError, type ParaWallet } from "@/lib/signer/para-rest";
 
 /** ParaRestClient satisfies this; tests pass a fake. */
 export interface TreasuryWalletProvider {
-  createWallet(userId: string): Promise<ParaWallet>;
+  createWallet(customId: string): Promise<ParaWallet>;
   waitUntilReady(walletId: string): Promise<ParaWallet>;
-  /** Finds the wallet Para already holds for this user (CUSTOM_ID), used to recover from a lost wallet id. */
-  findWalletByCustomId(userId: string): Promise<ParaWallet | null>;
+  /** Finds the wallet Para already holds for this custom id (adopted after a lost row or a lost wallet id). */
+  findWalletByCustomId(customId: string): Promise<ParaWallet | null>;
 }
 
 export type TreasuryState = { status: "ready"; address: Address } | { status: "creating" };
@@ -34,8 +34,9 @@ export async function upsertUser(db: Db, session: ParaSession): Promise<UserRow>
 }
 
 /**
- * Spec §6.2 flow 1: one app-owned Para wallet per user (CUSTOM_ID = our user id, so email sign-in
- * never claims it). The row is inserted first as a claim, so concurrent sign-ins create one wallet.
+ * Spec §6.2 flow 1: one app-owned Para wallet per user. Its CUSTOM_ID is the Para user id (§15), so
+ * email sign-in never claims it and a lost users row re-adopts it instead of orphaning its funds.
+ * The row is inserted first as a claim, so concurrent sign-ins create one wallet.
  */
 export async function ensureTreasuryWallet(
   db: Db,
@@ -82,7 +83,7 @@ async function createOrResume(
   try {
     let walletId = existingWalletId;
     if (!walletId) {
-      walletId = await createOrRecoverWalletId(provider, userId);
+      walletId = await adoptOrCreateWalletId(provider, await customIdFor(db, userId));
       await mark({ paraWalletId: walletId });
     }
     const ready = await provider.waitUntilReady(walletId);
@@ -96,17 +97,29 @@ async function createOrResume(
   }
 }
 
+export function treasuryCustomId(paraUserId: string): string {
+  return `para:${paraUserId}`;
+}
+
+async function customIdFor(db: Db, userId: string): Promise<string> {
+  const [row] = await db.select({ paraUserId: users.paraUserId }).from(users).where(eq(users.id, userId));
+  if (!row) throw new Error(`User ${userId} not found`);
+  return treasuryCustomId(row.paraUserId);
+}
+
 /**
- * If a previous request died after Para created the wallet but before we stored its id, Para answers
- * 409 WALLET_ALREADY_EXISTS; adopt that wallet instead of failing forever.
+ * Adopt first: the wallet may exist from an earlier users row (§15). If Para still answers 409
+ * WALLET_ALREADY_EXISTS (a race with another request), look it up once more.
  */
-async function createOrRecoverWalletId(provider: TreasuryWalletProvider, userId: string): Promise<string> {
+async function adoptOrCreateWalletId(provider: TreasuryWalletProvider, customId: string): Promise<string> {
+  const existing = await provider.findWalletByCustomId(customId);
+  if (existing) return existing.id;
   try {
-    return (await provider.createWallet(userId)).id;
+    return (await provider.createWallet(customId)).id;
   } catch (error) {
     if (!(error instanceof ParaRestError) || error.status !== 409 || error.code !== "WALLET_ALREADY_EXISTS") throw error;
-    const existing = await provider.findWalletByCustomId(userId);
-    if (!existing) throw error;
-    return existing.id;
+    const created = await provider.findWalletByCustomId(customId);
+    if (!created) throw error;
+    return created.id;
   }
 }

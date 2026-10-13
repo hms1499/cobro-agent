@@ -15,6 +15,11 @@ import { listInvoices } from "@/lib/invoices/repo";
 import { displayAmount } from "@/lib/money/display";
 import type { AppUser } from "@/lib/users/queries";
 import { finishSetup } from "./actions";
+import { ActivityFeed } from "./activity-feed";
+import { AgentStatus } from "./agent-status";
+import { Conversions } from "./conversions";
+import { RepeatClients } from "./repeat-clients";
+import { TreasurySummary } from "./treasury-summary";
 
 export const metadata: Metadata = { title: `${t("nav.home")} · ${t("app.name")}` };
 
@@ -52,6 +57,12 @@ async function Home() {
     <>
       <h1 className="text-2xl font-semibold">{t("app.greeting", { name: user.displayName ?? user.email ?? "" })}</h1>
       <SetupBanner status={user.treasuryStatus} />
+      <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+        <AgentStatus user={user} />
+      </Suspense>
+      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
+        <TreasurySummary user={user} />
+      </Suspense>
       <section aria-labelledby="invoices-heading" className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-4">
           <h2 id="invoices-heading" className="text-lg font-semibold">
@@ -107,6 +118,15 @@ async function Home() {
           </ul>
         )}
       </section>
+      <Suspense fallback={<Skeleton className="h-24 w-full" />}>
+        <RepeatClients user={user} />
+      </Suspense>
+      <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+        <ActivityFeed user={user} />
+      </Suspense>
+      <Suspense fallback={<Skeleton className="h-24 w-full" />}>
+        <Conversions user={user} />
+      </Suspense>
     </>
   );
 }

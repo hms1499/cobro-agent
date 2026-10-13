@@ -1,0 +1,64 @@
+import { eq } from "drizzle-orm";
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { t } from "@/i18n";
+import { requireUser } from "@/lib/auth/current-user";
+import { getDb } from "@/lib/db/client";
+import { rules, type RulesRow } from "@/lib/db/schema";
+import { getReferenceRates } from "@/lib/fx/rates";
+import { decide } from "@/lib/treasury/engine";
+import { engineInput } from "@/lib/treasury/executor";
+import { describeDecision } from "@/lib/treasury/explain";
+import { liveExecutorDeps } from "@/lib/treasury/live";
+import { rulesFormValues } from "@/lib/treasury/rules-form";
+import type { AppUser } from "@/lib/users/queries";
+import { RulesForm } from "./rules-form";
+
+export const metadata: Metadata = { title: `${t("rules.title")} · ${t("app.name")}` };
+
+export default function RulesPage() {
+  return (
+    <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
+      <h1 className="text-2xl font-semibold">{t("rules.title")}</h1>
+      <p className="max-w-prose text-muted-foreground">{t("rules.intro")}</p>
+      <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+        <Rules />
+      </Suspense>
+    </main>
+  );
+}
+
+async function Rules() {
+  const user = await requireUser();
+  const [row] = await getDb().select().from(rules).where(eq(rules.userId, user.id));
+  if (!row) redirect("/app/onboarding");
+  return (
+    <>
+      <Suspense fallback={<Skeleton className="h-16 w-full" />}>
+        <Preview user={user} row={row} />
+      </Suspense>
+      <RulesForm currency={row.localCurrency} values={rulesFormValues(row)} />
+    </>
+  );
+}
+
+/** "If the agent ran now, it would…": the engine on live balances. It sends no RFQ and signs nothing. */
+async function Preview({ user, row }: { user: AppUser; row: RulesRow }) {
+  if (!user.treasuryAddress) return null;
+  let text: string;
+  try {
+    const [balances, rates] = await Promise.all([liveExecutorDeps().chain.readBalances(user.treasuryAddress), getReferenceRates()]);
+    const input = await engineInput(getDb(), { userId: user.id, rules: row }, balances, rates, new Date());
+    text = describeDecision(decide(input), { local: row.localCurrency, rates });
+  } catch (error) {
+    console.error("Rules preview failed:", error instanceof Error ? error.message : error);
+    return <p className="text-muted-foreground">{t("rules.previewUnavailable")}</p>;
+  }
+  return (
+    <p role="status" className="rounded-xl bg-muted p-4">
+      <span className="font-medium">{t("rules.preview")}</span> {text}
+    </p>
+  );
+}

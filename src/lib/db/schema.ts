@@ -1,8 +1,10 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
@@ -21,6 +23,12 @@ export const invoiceStatus = pgEnum("invoice_status", ["open", "settling", "paid
 export const recurringInterval = pgEnum("recurring_interval", ["weekly", "monthly"]);
 export const walletStatus = pgEnum("wallet_status", ["creating", "ready", "failed"]);
 export const signerType = pgEnum("signer_type", ["para", "local"]);
+export const intentStatus = pgEnum("intent_status", ["waiting", "executing", "filled", "blocked", "cancelled"]);
+export const intentReason = pgEnum("intent_reason", ["save_excess", "save_other", "top_up", "hub_route"]);
+export const tradeStatus = pgEnum("trade_status", ["no_quote", "rejected", "expired", "broadcast", "filled", "failed"]);
+export const txKind = pgEnum("tx_kind", ["approve", "swap", "withdraw"]);
+/** `failed`: never mined — the node refused the bytes, or they were dropped (another nonce won, or unknown past the grace period). */
+export const txStatus = pgEnum("tx_status", ["pending", "success", "reverted", "failed"]);
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 /** Token amounts in atomic units (up to uint256), returned by drizzle as base-10 strings. */
@@ -144,10 +152,131 @@ export const payments = pgTable(
     asset: payAsset("asset").notNull(),
     amountAtomic: atomic("amount_atomic").notNull(),
     txHash: text("tx_hash").notNull().unique(),
+    /** Textile reference rates (local units per USD, decimal strings) when the payment settled; P&L input (spec §10.5). */
+    ratesSnapshot: jsonb("rates_snapshot").$type<Record<string, string>>(),
     settledAt: timestamp("settled_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("payments_invoice_idx").on(t.invoiceId)],
 );
+
+/** Spec §10.2: at most one open (waiting or executing) intent per user. */
+export const fxIntents = pgTable(
+  "fx_intents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    fromAsset: payAsset("from_asset").notNull(),
+    toAsset: payAsset("to_asset").notNull(),
+    amountAtomic: atomic("amount_atomic").notNull(),
+    reason: intentReason("reason").notNull(),
+    status: intentStatus("status").notNull().default("waiting"),
+    attempts: integer("attempts").notNull().default(0),
+    lastSlippageBps: integer("last_slippage_bps"),
+    /** Textile asked us to wait (retryAfterMs) or an RFQ just failed; no new RFQ before this time. */
+    retryAfter: timestamp("retry_after", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("fx_intents_one_open_uq").on(t.userId).where(sql`status in ('waiting', 'executing')`)],
+);
+
+/** One row per RFQ we sent, whatever came of it (spec §10.5 volume: requested, quoted, filled). */
+export const fxTrades = pgTable(
+  "fx_trades",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    intentId: uuid("intent_id").references(() => fxIntents.id, { onDelete: "set null" }),
+    rfqId: text("rfq_id"),
+    /** Textile's ownership proof for submit/cancel/status; returned once by /rfq/request. */
+    claimToken: text("claim_token"),
+    sellAsset: payAsset("sell_asset").notNull(),
+    buyAsset: payAsset("buy_asset").notNull(),
+    /** takerPays once quoted, the requested amount otherwise. */
+    sellAmount: atomic("sell_amount").notNull(),
+    buyAmount: atomic("buy_amount"),
+    feeAmount: atomic("fee_amount"),
+    slippageBps: integer("slippage_bps"),
+    notionalUsdCents: integer("notional_usd_cents").notNull().default(0),
+    status: tradeStatus("status").notNull(),
+    detail: text("detail"),
+    swapTxHash: text("swap_tx_hash").unique(),
+    createdAt: createdAt(),
+    filledAt: timestamp("filled_at", { withTimezone: true }),
+  },
+  (t) => [index("fx_trades_user_created_idx").on(t.userId, t.createdAt)],
+);
+
+/** Every transaction a treasury wallet signed, stored before broadcast so it can be re-sent or settled (spec §10.4 step 7). */
+export const treasuryTxs = pgTable(
+  "treasury_txs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: txKind("kind").notNull(),
+    nonce: integer("nonce").notNull(),
+    hash: text("hash").notNull().unique(),
+    raw: text("raw").notNull(),
+    feeToken: text("fee_token").notNull(),
+    status: txStatus("status").notNull().default("pending"),
+    /** Withdrawals only: what was sent, where, and its USD value then. */
+    asset: payAsset("asset"),
+    amountAtomic: atomic("amount_atomic"),
+    toAddress: text("to_address"),
+    usdCents: integer("usd_cents"),
+    createdAt: createdAt(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+  },
+  (t) => [index("treasury_txs_user_status_idx").on(t.userId, t.status)],
+);
+
+export const AGENT_EVENT_TYPES = [
+  "dry_run",
+  "converted",
+  "waiting",
+  "no_quote",
+  "blocked",
+  "policy_rejected",
+  "swap_failed",
+  "gas_dripped",
+  "needs_gas",
+  "withdrawn",
+  "withdraw_failed",
+  "paused",
+  "resumed",
+  "payment_reconciled",
+] as const;
+export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];
+
+/** The activity feed (spec §17.1 principle 4). Text comes from en.ts templates at display time. */
+export const agentEvents = pgTable(
+  "agent_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: text("type").$type<AgentEventType>().notNull(),
+    data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: createdAt(),
+  },
+  (t) => [index("agent_events_user_created_idx").on(t.userId, t.createdAt)],
+);
+
+/** Spec §10.4 step 1: one treasury run per wallet at a time; a crashed holder's lock expires. */
+export const walletLocks = pgTable("wallet_locks", {
+  walletId: uuid("wallet_id")
+    .primaryKey()
+    .references(() => treasuryWallets.id, { onDelete: "cascade" }),
+  holder: uuid("holder").notNull(),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }).notNull(),
+});
 
 export type UserRow = typeof users.$inferSelect;
 export type TreasuryWalletRow = typeof treasuryWallets.$inferSelect;
@@ -158,3 +287,10 @@ export type InvoiceQuoteRow = typeof invoiceQuotes.$inferSelect;
 export type PaymentRow = typeof payments.$inferSelect;
 export type InvoiceStatus = (typeof invoiceStatus.enumValues)[number];
 export type RecurringInterval = (typeof recurringInterval.enumValues)[number];
+export type FxIntentRow = typeof fxIntents.$inferSelect;
+export type FxTradeRow = typeof fxTrades.$inferSelect;
+export type TreasuryTxRow = typeof treasuryTxs.$inferSelect;
+export type AgentEventRow = typeof agentEvents.$inferSelect;
+export type IntentReason = (typeof intentReason.enumValues)[number];
+export type TradeStatus = (typeof tradeStatus.enumValues)[number];
+export type TxKind = (typeof txKind.enumValues)[number];

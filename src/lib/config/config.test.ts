@@ -121,3 +121,21 @@ describe("Para public variables", () => {
     );
   });
 });
+
+describe("treasury switches", () => {
+  it("defaults to off and dry run", () => {
+    const env = parseServerEnv({});
+    expect(env.TREASURY_ENABLED).toBe(false);
+    expect(env.TREASURY_DRY_RUN).toBe(true);
+  });
+
+  it("reads true and false", () => {
+    const env = parseServerEnv({ TREASURY_ENABLED: "true", TREASURY_DRY_RUN: "false" });
+    expect(env.TREASURY_ENABLED).toBe(true);
+    expect(env.TREASURY_DRY_RUN).toBe(false);
+  });
+
+  it("names the variable on anything else", () => {
+    expect(() => parseServerEnv({ TREASURY_DRY_RUN: "yes" })).toThrow(/TREASURY_DRY_RUN/);
+  });
+});

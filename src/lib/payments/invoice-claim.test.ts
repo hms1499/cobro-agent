@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db/client";
 import { invoices, payments } from "@/lib/db/schema";
 import { createTestDb, resetDb, seedFreelancer, seedInvoice } from "@/lib/db/testing";
-import { claimInvoice, recordPayment, releaseInvoice } from "./invoice-claim";
+import { claimInvoice, recordPayment, recordReconciledPayment, releaseInvoice, releaseSettling } from "./invoice-claim";
 
 let db: Db;
 let invoiceId: string;
@@ -31,9 +31,9 @@ describe("claimInvoice", () => {
     expect(results.filter(Boolean)).toHaveLength(1);
   });
 
-  it("frees a hold that has expired", async () => {
+  it("keeps an expired hold busy until the reconciler resolves it", async () => {
     await claimInvoice(db, invoiceId, at("12:00:00"));
-    expect(await claimInvoice(db, invoiceId, at("12:06:01"))).toBe(true);
+    expect(await claimInvoice(db, invoiceId, at("12:06:01"))).toBe(false);
   });
 
   it("never claims a paid invoice", async () => {
@@ -71,5 +71,48 @@ describe("recordPayment", () => {
     const rows = await db.select().from(payments).where(eq(payments.invoiceId, invoiceId));
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ asset: "USDT", amountAtomic: "300000000" });
+  });
+
+  it("keeps the reference rates the payment arrived at, for the P&L", async () => {
+    await recordPayment(db, {
+      invoiceId,
+      payer: "0x9999999999999999999999999999999999999999",
+      asset: "USDT",
+      amountAtomic: 1n,
+      txHash: `0x${"cd".repeat(32)}`,
+      now: at("12:00:20"),
+      ratesSnapshot: { ARS: "1600", BRL: "5" },
+    });
+    const [row] = await db.select().from(payments).where(eq(payments.invoiceId, invoiceId));
+    expect(row.ratesSnapshot).toEqual({ ARS: "1600", BRL: "5" });
+  });
+});
+
+describe("reconcile guards", () => {
+  const until = at("12:06:00");
+  const base = () => ({ invoiceId, settlingUntil: until, payer: "0xabc", asset: "USDT" as const, amountAtomic: 5n, txHash: "0x01", now: at("12:30:00") });
+
+  it("releases only the claim that was read", async () => {
+    await claimInvoice(db, invoiceId, at("12:00:00"));
+    expect(await releaseSettling(db, invoiceId, at("12:07:00"))).toBe(false);
+    expect((await invoice()).status).toBe("settling");
+    expect(await releaseSettling(db, invoiceId, until)).toBe(true);
+  });
+
+  it("does not mark paid, or insert, when the claim moved", async () => {
+    await claimInvoice(db, invoiceId, at("12:00:00"));
+    expect(await recordReconciledPayment(db, { ...base(), settlingUntil: at("12:07:00") })).toBe("moved");
+    expect((await invoice()).status).toBe("settling");
+    expect(await db.select().from(payments)).toHaveLength(0);
+  });
+
+  it("never marks paid without a payment row when the transfer is already recorded", async () => {
+    await claimInvoice(db, invoiceId, at("12:00:00"));
+    const other = await seedInvoice(db, (await invoice()).userId, { status: "paid" });
+    await db.insert(payments).values({ invoiceId: other.id, payer: "0xabc", asset: "USDT", amountAtomic: "5", txHash: "0x01" });
+    expect(await recordReconciledPayment(db, base())).toBe("duplicate");
+    expect(await invoice()).toMatchObject({ status: "settling", settlingUntil: until });
+    expect(await recordReconciledPayment(db, { ...base(), txHash: "0x02" })).toBe("recorded");
+    expect((await invoice()).status).toBe("paid");
   });
 });

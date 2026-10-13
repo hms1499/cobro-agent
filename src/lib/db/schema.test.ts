@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "./client";
-import { invoiceQuotes, payments, recurringInvoices, rules } from "./schema";
+import { fxIntents, invoiceQuotes, payments, recurringInvoices, rules } from "./schema";
 import { createTestDb, resetDb, seedFreelancer, seedInvoice as seedInvoiceIn } from "./testing";
 
 let db: Db;
@@ -62,5 +62,23 @@ describe("schema", () => {
     const periodStart = new Date("2026-10-08T00:00:00Z");
     await seedInvoice(user.id, { recurringId: template.id, periodStart });
     await expect(seedInvoice(user.id, { recurringId: template.id, periodStart })).rejects.toThrow();
+  });
+});
+
+describe("treasury tables", () => {
+  it("allows one open intent per user and keeps closed ones", async () => {
+    const user = await seedFreelancer(db);
+    const intent = {
+      userId: user.id,
+      fromAsset: "WARS",
+      toAsset: "USDT",
+      amountAtomic: "1000",
+      reason: "save_excess",
+    } as const;
+    await db.insert(fxIntents).values({ ...intent, status: "filled" });
+    await db.insert(fxIntents).values({ ...intent, status: "cancelled" });
+    const [open] = await db.insert(fxIntents).values(intent).returning();
+    expect(open).toMatchObject({ status: "waiting", attempts: 0, retryAfter: null });
+    await expect(db.insert(fxIntents).values({ ...intent, status: "executing" })).rejects.toThrow();
   });
 });

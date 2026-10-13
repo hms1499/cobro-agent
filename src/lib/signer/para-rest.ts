@@ -57,17 +57,17 @@ export class ParaRestClient {
     this.fetchImpl = options.fetch ?? fetch;
   }
 
-  createWallet(userId: string): Promise<ParaWallet> {
+  createWallet(customId: string): Promise<ParaWallet> {
     return this.request<ParaWallet>("POST", "/v1/wallets", {
       type: "EVM",
-      userIdentifier: userId,
+      userIdentifier: customId,
       userIdentifierType: "CUSTOM_ID",
     });
   }
 
   /** Looks up the EVM wallet created for a CUSTOM_ID (GET /v1/wallets filters), or null when none exists. */
-  async findWalletByCustomId(userId: string): Promise<ParaWallet | null> {
-    const query = new URLSearchParams({ userIdentifier: userId, userIdentifierType: "CUSTOM_ID", type: "EVM", limit: "1" });
+  async findWalletByCustomId(customId: string): Promise<ParaWallet | null> {
+    const query = new URLSearchParams({ userIdentifier: customId, userIdentifierType: "CUSTOM_ID", type: "EVM", limit: "1" });
     const result = await this.request<{ data?: ParaWallet[] }>("GET", `/v1/wallets?${query}`);
     return result.data?.[0] ?? null;
   }

@@ -1,7 +1,12 @@
+import { after } from "next/server";
 import { getDb } from "@/lib/db/client";
 import { invoicePaymentDeps } from "@/lib/payments/deps";
 import { runPayFlow } from "@/lib/payments/pay-flow";
 import { getResourceServer, processX402 } from "@/lib/payments/x402-server";
+import { runTreasuryAfterPayment } from "@/lib/treasury/live";
+
+/** Settlement takes seconds; the treasury run scheduled by after() shares this budget (spec §7.3). */
+export const maxDuration = 300;
 
 export async function GET(request: Request, ctx: RouteContext<"/api/pay/[slug]">) {
   const { slug } = await ctx.params;
@@ -16,5 +21,6 @@ export async function GET(request: Request, ctx: RouteContext<"/api/pay/[slug]">
     { ...invoicePaymentDeps(getDb()), process: (route) => processX402(server, route, request) },
     { slug, asset: new URL(request.url).searchParams.get("asset") },
   );
+  if (response.status === 200) after(() => runTreasuryAfterPayment(slug));
   return Response.json(response.body, { status: response.status, headers: response.headers });
 }

@@ -68,12 +68,15 @@ describe("runPayFlow: before payment", () => {
     expect(await run(settling)).toMatchObject({ status: 409, body: { error: "busy" } });
   });
 
-  it("treats an expired settling hold as open", async () => {
+  it("keeps an expired settling hold busy and does not touch its quotes", async () => {
+    const quote = vi.fn();
     const stale = deps({
       findInvoice: async () => ({ ...invoice, status: "settling", settlingUntil: new Date("2026-10-15T11:59:00Z") }),
+      quote,
       result: unpaid,
     });
-    expect((await run(stale)).status).toBe(402);
+    expect(await run(stale)).toMatchObject({ status: 409, body: { error: "busy" } });
+    expect(quote).not.toHaveBeenCalled();
   });
 
   it("explains a missing wallet or missing rates", async () => {
