@@ -155,16 +155,31 @@ describe("runTreasuryForUser: switches and dry run", () => {
     const user = await freelancer();
     const { deps, state } = harness({ WARS: pesos(3_200n), ...gas }, { dryRun: true });
     await runTreasuryForUser(deps, user.id);
-    state.balances.WARS = pesos(4_800n);
+    // Paid in reais now: the decision becomes "save the other currency" (another pair and reason).
+    state.balances.WBRL = pesos(10n);
     // Each cron run happens later than the one before; the last event is the newest one.
     deps.now = () => new Date(NOW.getTime() + 600_000);
     await runTreasuryForUser(deps, user.id);
     deps.now = () => new Date(NOW.getTime() + 1_200_000);
     await runTreasuryForUser(deps, user.id);
     const events = await db.select().from(agentEvents).where(eq(agentEvents.userId, user.id)).orderBy(agentEvents.createdAt);
-    expect(events.map((e) => [e.type, e.data.amount])).toEqual([
-      ["dry_run", pesos(3_200n).toString()],
-      ["dry_run", pesos(4_800n).toString()],
+    expect(events.map((e) => [e.type, e.data.from, e.data.reason, e.data.amount])).toEqual([
+      ["dry_run", "WARS", "save_excess", pesos(3_200n).toString()],
+      ["dry_run", "WBRL", "save_other", pesos(10n).toString()],
+    ]);
+  });
+
+  it("records one dry-run event while only the rates move", async () => {
+    const user = await freelancer();
+    // US$100 of wARS, capped at US$50 a trade: the amount sold and its dollar value both follow the rate.
+    const { deps } = harness({ WARS: pesos(160_000n), ...gas }, { dryRun: true });
+    await runTreasuryForUser(deps, user.id);
+    deps.rates = async () => ({ ...RATES, perUsd: { ...RATES.perUsd, ARS: parseDecimal("1450", 18) } });
+    deps.now = () => new Date(NOW.getTime() + 600_000);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("dry_run");
+    const events = await db.select().from(agentEvents).where(eq(agentEvents.userId, user.id));
+    expect(events.map((e) => [e.type, e.data.from, e.data.to, e.data.reason, e.data.amount, e.data.usdCents])).toEqual([
+      ["dry_run", "WARS", "USDT", "save_excess", pesos(80_000n).toString(), 5_000],
     ]);
   });
 

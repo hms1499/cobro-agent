@@ -128,17 +128,13 @@ function decisionData(d: ConvertDecision) {
   return { from: d.from, to: d.to, amount: d.amount.toString(), usdCents: cents(d.usdWad), reason: d.reason };
 }
 
-/** JSON with object keys sorted, so data read back from jsonb (which reorders keys) compares equal. */
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (value !== null && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return `{${Object.keys(record)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value) ?? "null";
+/**
+ * What a dry-run event is deduplicated on: the pair and the reason. The amount and its dollar value
+ * follow the reference rates (top-ups and capped trades are sized by them), so comparing those would
+ * log a new event on nearly every cron run.
+ */
+function dryRunKey(data: Record<string, unknown>): string {
+  return JSON.stringify([data.from, data.to, data.reason]);
 }
 
 /**
@@ -238,7 +234,7 @@ async function runLocked(deps: ExecutorDeps, ctx: TreasuryContext, result: Resul
 }
 
 /**
- * Spec §10.3 in dry run: record what would be done, once per distinct decision, and keep no intent.
+ * Spec §10.3 in dry run: record what would be done, once per pair and reason, and keep no intent.
  * A stored intent would age while nothing trades, and the first live run would then treat it as past
  * the wait deadline and accept a price up to the hard limit at once.
  */
@@ -251,7 +247,7 @@ async function dryRun(
   for (const id of [plan.cancel, plan.keep]) if (id) await cancelIntent(deps.db, id, deps.now());
   const data = decisionData(plan.decision);
   const last = await lastEvent(deps.db, ctx.userId, "dry_run");
-  if (!last || stableJson(last.data) !== stableJson(data)) await logEvent(deps.db, ctx.userId, "dry_run", data, deps.now());
+  if (!last || dryRunKey(last.data) !== dryRunKey(data)) await logEvent(deps.db, ctx.userId, "dry_run", data, deps.now());
   return result("dry_run");
 }
 
