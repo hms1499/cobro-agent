@@ -21,6 +21,7 @@ describe("loadAppUser", () => {
       displayName: "Ana Diseño",
       treasuryStatus: "ready",
       treasuryAddress: TEST_TREASURY,
+      personalWallet: null,
       localCurrency: "BRL",
     });
   });

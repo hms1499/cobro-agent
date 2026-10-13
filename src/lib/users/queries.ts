@@ -10,6 +10,8 @@ export interface AppUser {
   displayName: string | null;
   treasuryStatus: "missing" | "creating" | "ready" | "failed";
   treasuryAddress: Address | null;
+  /** The freelancer's own Para wallet, the only withdrawal destination (spec §6.1). */
+  personalWallet: Address | null;
   /** Null until onboarding (Task 7) creates the rules row. */
   localCurrency: LocalCurrency | null;
 }
@@ -29,6 +31,7 @@ export async function loadAppUser(db: Db, userId: string): Promise<AppUser | nul
     displayName: row.user.displayName,
     treasuryStatus: row.wallet?.status ?? "missing",
     treasuryAddress: ready ? getAddress(row.wallet!.address!) : null,
+    personalWallet: row.user.personalWallet ? getAddress(row.user.personalWallet) : null,
     localCurrency: row.localCurrency ?? null,
   };
 }
