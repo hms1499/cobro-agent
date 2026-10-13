@@ -53,6 +53,7 @@ import {
   tradeBySwapHash,
   updateIntent,
   updateTrade,
+  usersWithPendingTxs,
   type TreasuryContext,
 } from "./repo";
 import { atomicForUsdWad, dollarsToWad, usdWad } from "./value";
@@ -64,10 +65,23 @@ export interface ExecutorChain {
   receipt(hash: Hex): Promise<"success" | "reverted" | null>;
   /** How many transactions from `owner` are mined (the next nonce). */
   confirmedNonce(owner: Address): Promise<number>;
-  /** Sends signed bytes; bytes the node already knows are not an error. */
+  /** Whether the node knows the transaction at all (in its pool or mined). */
+  knownTx(hash: Hex): Promise<boolean>;
+  /**
+   * Sends signed bytes; bytes the node already knows are not an error. Throws TxRejectedError when the
+   * node refused them outright (so they hold no nonce); any other error leaves the outcome unknown.
+   */
   sendRaw(raw: Hex): Promise<void>;
   /** Waits a bounded time; null when no receipt arrived. */
   waitForReceipt(hash: Hex): Promise<"success" | "reverted" | null>;
+}
+
+/** The node answered and refused the signed bytes (bad signature, nonce already used, …): they can never land as sent. */
+export class TxRejectedError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "TxRejectedError";
+  }
 }
 
 export interface ExecutorDeps {
@@ -109,6 +123,8 @@ export interface RunResult {
 const EXPIRY_MARGIN_MS = 5_000;
 /** Back-off after an RFQ error with no retry hint, or after a refused quote. */
 const RETRY_AFTER_ERROR_MS = 10 * 60_000;
+/** A pending transaction the node neither knows nor accepts again is given up after this long. */
+const DROP_AFTER_MS = 30 * 60_000;
 
 const cents = (wad: bigint) => Number(wad / 10n ** 16n);
 const maxBig = (a: bigint, b: bigint) => (a > b ? a : b);
@@ -201,7 +217,7 @@ type Result = (outcome: RunOutcome, detail?: string) => RunResult;
 
 async function runLocked(deps: ExecutorDeps, ctx: TreasuryContext, result: Result): Promise<RunResult> {
   // Nothing new until every earlier transaction from this wallet has an outcome (spec §12).
-  if ((await reconcilePending(deps, ctx)) > 0) return result("pending_tx");
+  if ((await reconcilePending(deps, ctx)).stillPending > 0) return result("pending_tx");
 
   let rates: ReferenceRates;
   try {
@@ -226,11 +242,27 @@ async function runLocked(deps: ExecutorDeps, ctx: TreasuryContext, result: Resul
 
   const { feeToken } = await ensureFeeToken(deps, ctx, balances, { asset: d.from, amount: d.amount });
   if (!feeToken) {
-    if (intent.attempts === 0) await logEvent(deps.db, ctx.userId, "needs_gas", {}, deps.now());
+    await logOncePerIntent(deps, ctx.userId, intent.id, "needs_gas", {});
     await updateIntent(deps.db, intent.id, { attempts: intent.attempts + 1 }, deps.now());
     return result("needs_gas");
   }
   return trade(deps, ctx, intent, d, feeToken, rates, result);
+}
+
+/**
+ * waiting, no_quote and needs_gas repeat on every run while an intent waits; each is told once per
+ * intent. The intent id in the event's data is what the next run compares.
+ */
+async function logOncePerIntent(
+  deps: Pick<ExecutorDeps, "db" | "now">,
+  userId: string,
+  intentId: string,
+  type: "waiting" | "no_quote" | "needs_gas",
+  data: Record<string, unknown>,
+): Promise<void> {
+  const last = await lastEvent(deps.db, userId, type);
+  if (last?.data.intentId === intentId) return;
+  await logEvent(deps.db, userId, type, { ...data, intentId }, deps.now());
 }
 
 /**
@@ -275,7 +307,6 @@ async function trade(
 ): Promise<RunResult> {
   const signer = deps.signer(ctx);
   const attempts = intent.attempts + 1;
-  const firstAttempt = intent.attempts === 0;
 
   // Spec §10.4 step 3, with a fresh taker proof each time (Textile accepts one for 60 s).
   let outcome: RfqOutcome;
@@ -347,15 +378,11 @@ async function trade(
   if (verdict === "wait") {
     await refuse("rejected", "price", slippage);
     await updateIntent(deps.db, intent.id, { attempts, lastSlippageBps: slippage }, deps.now());
-    if (firstAttempt) {
-      await logEvent(
-        deps.db,
-        ctx.userId,
-        "waiting",
-        { ...decisionData(d), slippageBps: slippage, limitBps: ctx.rules.maxSlippageBps },
-        deps.now(),
-      );
-    }
+    await logOncePerIntent(deps, ctx.userId, intent.id, "waiting", {
+      ...decisionData(d),
+      slippageBps: slippage,
+      limitBps: ctx.rules.maxSlippageBps,
+    });
     return result("waiting", "price");
   }
 
@@ -370,9 +397,13 @@ async function trade(
     for (const amount of d.from === "USDT" && allowance > 0n ? [0n, target] : [target]) {
       const call = encodeTreasuryCall({ kind: "approve", asset: d.from, spender: q.spender, amount }, policy);
       const sent = await sendTreasuryTx(deps, ctx, signer, "approve", call, feeToken);
+      if (sent.status) await settleTreasuryTx(deps.db, sent.hash, sent.status === "rejected" ? "failed" : sent.status, deps.now());
       if (sent.status !== "success") {
         await refuse("rejected", `approve_${sent.status ?? "pending"}`, slippage);
         await updateIntent(deps.db, intent.id, { status: "waiting" }, deps.now());
+        if (sent.status === "rejected") {
+          await logEvent(deps.db, ctx.userId, "swap_failed", { ...decisionData(d), detail: "approve_rejected" }, deps.now());
+        }
         return sent.status === null ? result("pending_tx", "approve") : result("failed", "approve");
       }
     }
@@ -397,7 +428,11 @@ async function trade(
       swapTxHash: signed.hash,
     });
   });
-  await deps.chain.sendRaw(signed.raw);
+  if (!(await broadcast(deps, signed.hash, signed.raw))) {
+    await settleSwap(deps, ctx.userId, signed.hash, "failed", "rejected");
+    await deps.rfq.cancel(q.rfqId, q.claimToken).catch((error) => console.error(`Textile cancel ${q.rfqId} failed:`, error));
+    return result("failed", "swap_rejected");
+  }
   const status = await deps.chain.waitForReceipt(signed.hash);
   if (status === null) return result("pending_tx", "swap");
   await settleSwap(deps, ctx.userId, signed.hash, status);
@@ -429,11 +464,30 @@ async function noQuote(
     { attempts: intent.attempts + 1, retryAfter: retryAfterMs ? new Date(now.getTime() + retryAfterMs) : null },
     now,
   );
-  if (intent.attempts === 0) await logEvent(deps.db, ctx.userId, "no_quote", { ...decisionData(d), detail: reason }, now);
+  await logOncePerIntent(deps, ctx.userId, intent.id, "no_quote", { ...decisionData(d), detail: reason });
   return result("no_quote", reason);
 }
 
-/** Signs, stores, broadcasts and waits for one treasury transaction. Shared with withdrawals. */
+/**
+ * The first broadcast of freshly stored bytes. False when the node refused them outright: their nonce
+ * was never used, so the caller marks them failed at once (balances are always re-read from chain).
+ * Any other error is rethrown and the transaction stays pending for reconcilePending.
+ */
+async function broadcast(deps: Pick<ExecutorDeps, "chain">, hash: Hex, raw: Hex): Promise<boolean> {
+  try {
+    await deps.chain.sendRaw(raw);
+    return true;
+  } catch (error) {
+    if (!(error instanceof TxRejectedError)) throw error;
+    console.error(`The node refused treasury transaction ${hash}:`, error.message);
+    return false;
+  }
+}
+
+/**
+ * Signs, stores, broadcasts and waits for one treasury transaction. Shared with withdrawals. The
+ * caller settles the stored row from the status: "rejected" means the node refused the bytes.
+ */
 export async function sendTreasuryTx(
   deps: Pick<ExecutorDeps, "db" | "now" | "chain" | "signTx">,
   ctx: TreasuryContext,
@@ -442,7 +496,7 @@ export async function sendTreasuryTx(
   call: GuardedCall,
   feeToken: GasToken,
   extra: Pick<typeof treasuryTxs.$inferInsert, "asset" | "amountAtomic" | "toAddress" | "usdCents"> = {},
-): Promise<{ hash: Hex; status: "success" | "reverted" | null }> {
+): Promise<{ hash: Hex; status: "success" | "reverted" | "rejected" | null }> {
   const signed = await deps.signTx(signer, call, feeToken);
   await recordTreasuryTx(deps.db, {
     userId: ctx.userId,
@@ -453,88 +507,174 @@ export async function sendTreasuryTx(
     feeToken,
     ...extra,
   });
-  await deps.chain.sendRaw(signed.raw);
-  const status = await deps.chain.waitForReceipt(signed.hash);
-  if (status) await settleTreasuryTx(deps.db, signed.hash, status, deps.now());
-  return { hash: signed.hash, status };
+  if (!(await broadcast(deps, signed.hash, signed.raw))) return { hash: signed.hash, status: "rejected" };
+  return { hash: signed.hash, status: await deps.chain.waitForReceipt(signed.hash) };
 }
 
+/** success and reverted were mined; failed never was (refused, or dropped). */
+export type TxOutcome = "success" | "reverted" | "failed";
+
+/** What an event says about a settled transaction: its hash once mined, else why it never was. */
+function outcomeData(hash: string, status: TxOutcome, detail: string | undefined) {
+  if (status === "failed") return { detail: detail ?? "dropped" };
+  return status === "reverted" ? { txHash: hash, detail: "reverted" } : { txHash: hash };
+}
+
+/** Settles a swap's transaction, trade, intent and event in one database transaction; Textile is told after it commits. */
 export async function settleSwap(
   deps: Pick<ExecutorDeps, "db" | "now" | "rfq">,
   userId: string,
   hash: string,
-  status: "success" | "reverted",
+  status: TxOutcome,
+  detail?: string,
 ): Promise<void> {
-  await settleTreasuryTx(deps.db, hash, status, deps.now());
-  const trade = await tradeBySwapHash(deps.db, hash);
-  if (!trade) return;
-  const intent = trade.intentId ? await intentById(deps.db, trade.intentId) : null;
-  const data = {
-    from: trade.sellAsset,
-    to: trade.buyAsset,
-    amount: trade.sellAmount,
-    buyAmount: trade.buyAmount,
-    slippageBps: trade.slippageBps,
-    reason: intent?.reason ?? null,
-    txHash: hash,
-  };
-  if (status === "success") {
-    await updateTrade(deps.db, trade.id, { status: "filled", filledAt: deps.now() });
-    if (intent) await updateIntent(deps.db, intent.id, { status: "filled" }, deps.now());
-    if (trade.rfqId && trade.claimToken) {
-      await deps.rfq
-        .submit(trade.rfqId, trade.claimToken, hash as Hex)
-        .catch((error) => console.error(`Textile submit ${trade.rfqId} failed:`, error));
+  const now = deps.now();
+  const trade = await deps.db.transaction(async (db) => {
+    await settleTreasuryTx(db, hash, status, now);
+    const trade = await tradeBySwapHash(db, hash);
+    if (!trade) return null;
+    const intent = trade.intentId ? await intentById(db, trade.intentId) : null;
+    const data = {
+      from: trade.sellAsset,
+      to: trade.buyAsset,
+      amount: trade.sellAmount,
+      buyAmount: trade.buyAmount,
+      slippageBps: trade.slippageBps,
+      reason: intent?.reason ?? null,
+      ...outcomeData(hash, status, detail),
+    };
+    if (status === "success") {
+      await updateTrade(db, trade.id, { status: "filled", filledAt: now });
+      if (intent) await updateIntent(db, intent.id, { status: "filled" }, now);
+      await logEvent(db, userId, "converted", data, now);
+    } else {
+      await updateTrade(db, trade.id, { status: "failed", detail: data.detail });
+      if (intent?.status === "executing") await updateIntent(db, intent.id, { status: "waiting" }, now);
+      await logEvent(db, userId, "swap_failed", data, now);
     }
-    await logEvent(deps.db, userId, "converted", data, deps.now());
-  } else {
-    await updateTrade(deps.db, trade.id, { status: "failed", detail: "reverted" });
-    if (intent?.status === "executing") await updateIntent(deps.db, intent.id, { status: "waiting" }, deps.now());
-    await logEvent(deps.db, userId, "swap_failed", data, deps.now());
+    return trade;
+  });
+  if (status === "success" && trade?.rfqId && trade.claimToken) {
+    await deps.rfq
+      .submit(trade.rfqId, trade.claimToken, hash as Hex)
+      .catch((error) => console.error(`Textile submit ${trade.rfqId} failed:`, error));
   }
 }
 
+/** Settles a withdrawal's transaction and its event together. */
 export async function settleWithdrawal(
   deps: Pick<ExecutorDeps, "db" | "now">,
   tx: Pick<TreasuryTxRow, "userId" | "hash" | "asset" | "amountAtomic">,
-  status: "success" | "reverted",
+  status: TxOutcome,
+  detail?: string,
 ): Promise<void> {
-  await settleTreasuryTx(deps.db, tx.hash, status, deps.now());
-  await logEvent(
-    deps.db,
-    tx.userId,
-    status === "success" ? "withdrawn" : "withdraw_failed",
-    { asset: tx.asset, amount: tx.amountAtomic, txHash: tx.hash },
-    deps.now(),
-  );
+  const now = deps.now();
+  await deps.db.transaction(async (db) => {
+    await settleTreasuryTx(db, tx.hash, status, now);
+    await logEvent(
+      db,
+      tx.userId,
+      status === "success" ? "withdrawn" : "withdraw_failed",
+      { asset: tx.asset, amount: tx.amountAtomic, ...outcomeData(tx.hash, status, detail) },
+      now,
+    );
+  });
+}
+
+async function settlePending(deps: Pick<ExecutorDeps, "db" | "now" | "rfq">, tx: TreasuryTxRow, status: TxOutcome): Promise<void> {
+  if (tx.kind === "swap") return settleSwap(deps, tx.userId, tx.hash, status);
+  if (tx.kind === "withdraw") return settleWithdrawal(deps, tx, status);
+  const now = deps.now();
+  await deps.db.transaction(async (db) => {
+    await settleTreasuryTx(db, tx.hash, status, now);
+    // An approval is part of a conversion; one that never landed is told as a failed conversion.
+    if (status === "failed") await logEvent(db, tx.userId, "swap_failed", { detail: "approve_dropped" }, now);
+  });
+}
+
+/**
+ * What became of one pending transaction: mined (its receipt), dropped ("failed"), or still unknown
+ * (null, after re-sending the identical stored bytes).
+ */
+async function pendingOutcome(
+  deps: Pick<ExecutorDeps, "now" | "chain">,
+  address: Address,
+  tx: TreasuryTxRow,
+): Promise<TxOutcome | null> {
+  const hash = tx.hash as Hex;
+  const status = await deps.chain.receipt(hash);
+  if (status) return status;
+  if ((await deps.chain.confirmedNonce(address)) > tx.nonce) {
+    // Mined between the two reads, or replaced. RPC backends can disagree for a moment, so one the
+    // node still knows stays pending this run rather than being called dropped.
+    const again = await deps.chain.receipt(hash);
+    if (again) return again;
+    return (await deps.chain.knownTx(hash)) ? null : "failed";
+  }
+  try {
+    await deps.chain.sendRaw(tx.raw as Hex);
+    return null;
+  } catch (error) {
+    console.error(`Re-sending ${tx.hash} failed:`, error);
+  }
+  // Neither accepted again nor known: after a grace period it will never land, and it would block
+  // the wallet forever.
+  if (deps.now().getTime() - tx.createdAt.getTime() <= DROP_AFTER_MS) return null;
+  return (await deps.chain.knownTx(hash)) ? null : "failed";
 }
 
 /**
  * Spec §10.4 step 7: settle every pending transaction by its receipt. One with no receipt whose
- * nonce a later transaction already used can never land and counts as failed; otherwise the
- * identical signed bytes are sent again. Returns how many are still pending.
+ * nonce a later transaction already used can never land and counts as dropped; otherwise the
+ * identical signed bytes are sent again, until the node has neither accepted nor known them for
+ * DROP_AFTER_MS. Callers hold the wallet lock.
  */
 export async function reconcilePending(
   deps: Pick<ExecutorDeps, "db" | "now" | "chain" | "rfq">,
-  ctx: TreasuryContext,
-): Promise<number> {
-  let stillPending = 0;
+  ctx: Pick<TreasuryContext, "userId" | "address">,
+): Promise<{ settled: number; stillPending: number }> {
+  const counts = { settled: 0, stillPending: 0 };
   for (const tx of await pendingTreasuryTxs(deps.db, ctx.userId)) {
-    let status = await deps.chain.receipt(tx.hash as Hex);
-    if (status === null && (await deps.chain.confirmedNonce(ctx.address)) > tx.nonce) {
-      // Mined between the two reads, or replaced: ask once more before calling it failed.
-      status = (await deps.chain.receipt(tx.hash as Hex)) ?? "reverted";
-    }
+    const status = await pendingOutcome(deps, ctx.address, tx);
     if (status === null) {
-      await deps.chain.sendRaw(tx.raw as Hex).catch((error) => console.error(`Re-sending ${tx.hash} failed:`, error));
-      stillPending += 1;
+      counts.stillPending += 1;
       continue;
     }
-    if (tx.kind === "swap") await settleSwap(deps, ctx.userId, tx.hash, status);
-    else if (tx.kind === "withdraw") await settleWithdrawal(deps, tx, status);
-    else await settleTreasuryTx(deps.db, tx.hash, status, deps.now());
+    await settlePending(deps, tx, status);
+    counts.settled += 1;
   }
-  return stillPending;
+  return counts;
+}
+
+/**
+ * Settles every wallet's pending transactions whatever the switches say: a paused agent or the
+ * global switch off must not strand a withdrawal, or a swap Textile was never told about. Signs and
+ * trades nothing (receipts, the stored bytes re-sent, settlement). A wallet another run holds is
+ * left to that run.
+ */
+export async function reconcileWallets(
+  deps: Pick<ExecutorDeps, "db" | "now" | "chain" | "rfq">,
+): Promise<{ settled: number; stillPending: number; errors: number }> {
+  const totals = { settled: 0, stillPending: 0, errors: 0 };
+  for (const userId of await usersWithPendingTxs(deps.db)) {
+    try {
+      const ctx = await loadTreasuryContext(deps.db, userId);
+      if (!ctx) continue;
+      const holder = crypto.randomUUID();
+      if (!(await acquireWalletLock(deps.db, ctx.walletId, holder, deps.now()))) continue;
+      try {
+        const { settled, stillPending } = await reconcilePending(deps, ctx);
+        totals.settled += settled;
+        totals.stillPending += stillPending;
+      } finally {
+        await releaseWalletLock(deps.db, ctx.walletId, holder);
+      }
+    } catch (error) {
+      console.error(`Reconciling the treasury of ${userId} failed:`, error);
+      totals.errors += 1;
+    }
+  }
+  return totals;
 }
 
 /** Runs wallets one after another; a failure never stops the others. Stops starting new ones after `deadline`. */

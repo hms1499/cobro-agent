@@ -27,7 +27,8 @@ export const intentStatus = pgEnum("intent_status", ["waiting", "executing", "fi
 export const intentReason = pgEnum("intent_reason", ["save_excess", "save_other", "top_up", "hub_route"]);
 export const tradeStatus = pgEnum("trade_status", ["no_quote", "rejected", "expired", "broadcast", "filled", "failed"]);
 export const txKind = pgEnum("tx_kind", ["approve", "swap", "withdraw"]);
-export const txStatus = pgEnum("tx_status", ["pending", "success", "reverted"]);
+/** `failed`: never mined — the node refused the bytes, or they were dropped (another nonce won, or unknown past the grace period). */
+export const txStatus = pgEnum("tx_status", ["pending", "success", "reverted", "failed"]);
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 /** Token amounts in atomic units (up to uint256), returned by drizzle as base-10 strings. */

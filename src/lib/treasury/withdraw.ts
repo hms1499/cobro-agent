@@ -70,7 +70,7 @@ async function withdrawUnguarded(deps: ExecutorDeps, userId: string, input: With
   const holder = crypto.randomUUID();
   if (!(await acquireWalletLock(deps.db, ctx.walletId, holder, deps.now()))) return { ok: false, error: "busy" };
   try {
-    if ((await reconcilePending(deps, ctx)) > 0) return { ok: false, error: "busy" };
+    if ((await reconcilePending(deps, ctx)).stillPending > 0) return { ok: false, error: "busy" };
     const balances = await deps.chain.readBalances(ctx.address);
     if (input.amount <= 0n || input.amount > withdrawableAmount(input.asset, balances)) return { ok: false, error: "insufficient" };
 
@@ -89,7 +89,10 @@ async function withdrawUnguarded(deps: ExecutorDeps, userId: string, input: With
     const sent = await sendTreasuryTx(deps, ctx, deps.signer(ctx), "withdraw", call, feeToken, extra);
     // A missing receipt is settled (and announced) by the next run's reconciliation.
     if (sent.status === null) return { ok: true, txHash: sent.hash, pending: true };
-    await settleWithdrawal(deps, { userId: ctx.userId, hash: sent.hash, asset: input.asset, amountAtomic: extra.amountAtomic }, sent.status);
+    const row = { userId: ctx.userId, hash: sent.hash, asset: input.asset, amountAtomic: extra.amountAtomic };
+    // Refused by the node: nothing was sent, so this is a plain failure, not "unconfirmed".
+    if (sent.status === "rejected") await settleWithdrawal(deps, row, "failed", "rejected");
+    else await settleWithdrawal(deps, row, sent.status);
     return sent.status === "success" ? { ok: true, txHash: sent.hash, pending: false } : { ok: false, error: "failed" };
   } finally {
     await releaseWalletLock(deps.db, ctx.walletId, holder);

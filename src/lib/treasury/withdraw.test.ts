@@ -1,5 +1,5 @@
 // src/lib/treasury/withdraw.test.ts
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { decodeFunctionData, erc20Abi, getAddress, type Address, type Hex } from "viem";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { TOKENS } from "@/lib/chain/tokens";
@@ -9,7 +9,7 @@ import { agentEvents, treasuryTxs, treasuryWallets, users } from "@/lib/db/schem
 import { createTestDb, resetDb, seedFreelancer, TEST_TREASURY } from "@/lib/db/testing";
 import { parseDecimal } from "@/lib/money/decimal";
 import type { TreasuryBalances } from "./balances";
-import type { ExecutorDeps } from "./executor";
+import { TxRejectedError, type ExecutorDeps } from "./executor";
 import { acquireWalletLock } from "./repo";
 import { parseWithdrawForm, withdraw, withdrawableAmount } from "./withdraw";
 
@@ -67,6 +67,7 @@ function deps(balances: Partial<TreasuryBalances>) {
       allowance: async () => 0n,
       receipt: async () => null,
       confirmedNonce: async () => 0,
+      knownTx: async () => false,
       sendRaw: async () => {},
       waitForReceipt: async () => "success",
     },
@@ -135,5 +136,39 @@ describe("withdraw", () => {
       throw new Error("rpc 500");
     };
     expect(await withdraw(b.deps, user.id, { asset: "USDT", amount: 1_000_000n })).toEqual({ ok: false, error: "unconfirmed" });
+  });
+
+  it("marks a withdrawal the node refuses as failed at once, says so, and does not block the next one", async () => {
+    const user = await freelancerWithWallet();
+    const a = deps({ USDT: 2_000_000n });
+    a.deps.chain.sendRaw = async () => {
+      throw new TxRejectedError("invalid sender");
+    };
+    expect(await withdraw(a.deps, user.id, { asset: "USDT", amount: 1_000_000n })).toEqual({ ok: false, error: "failed" });
+    const [tx] = await db.select().from(treasuryTxs);
+    expect(tx.status).toBe("failed");
+    expect((await db.select().from(agentEvents)).map((e) => [e.type, e.data.detail])).toEqual([["withdraw_failed", "rejected"]]);
+
+    const b = deps({ USDT: 2_000_000n });
+    b.deps.signTx = vi.fn(async (_signer, _call, feeToken) => ({ hash: `0x${"78".repeat(32)}` as Hex, raw: "0x78" as Hex, nonce: 1, feeToken }));
+    expect(await withdraw(b.deps, user.id, { asset: "USDT", amount: 1_000_000n })).toMatchObject({ ok: true, pending: false });
+  });
+
+  it("leaves the withdrawal pending, not settled without its event, when the settlement cannot be written", async () => {
+    const user = await freelancerWithWallet();
+    await db.execute(sql`CREATE OR REPLACE FUNCTION fail_event() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'event insert failed'; END $$ LANGUAGE plpgsql`);
+    await db.execute(sql`CREATE TRIGGER fail_event BEFORE INSERT ON agent_events FOR EACH ROW EXECUTE FUNCTION fail_event()`);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await withdraw(deps({ USDT: 2_000_000n }).deps, user.id, { asset: "USDT", amount: 1_000_000n })).toEqual({
+        ok: false,
+        error: "unconfirmed",
+      });
+    } finally {
+      logged.mockRestore();
+      await db.execute(sql`DROP TRIGGER fail_event ON agent_events`);
+    }
+    // Still pending, so the next reconciliation settles it and announces it.
+    expect((await db.select().from(treasuryTxs))[0].status).toBe("pending");
   });
 });

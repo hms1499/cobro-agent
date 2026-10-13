@@ -1,8 +1,13 @@
 // src/lib/treasury/live.ts
 import { eq } from "drizzle-orm";
-import { erc20Abi, TransactionReceiptNotFoundError, WaitForTransactionReceiptTimeoutError } from "viem";
+import {
+  erc20Abi,
+  TransactionNotFoundError,
+  TransactionReceiptNotFoundError,
+  WaitForTransactionReceiptTimeoutError,
+} from "viem";
 import { createCeloPublicClient } from "@/lib/chain/clients";
-import { signTreasuryTx, TEXTILE_REACTOR } from "@/lib/chain/treasury-tx";
+import { isNodeRejection, signTreasuryTx, TEXTILE_REACTOR } from "@/lib/chain/treasury-tx";
 import { readPublicEnv } from "@/lib/config/public";
 import { parseServerEnv, requireValue } from "@/lib/config/server";
 import { getDb } from "@/lib/db/client";
@@ -12,7 +17,7 @@ import { TextileRfqClient } from "@/lib/fx/rfq";
 import { paraTreasurySigner } from "@/lib/signer/treasury-signer";
 import { paraRestClient } from "@/lib/users/para";
 import { erc20Balance, readTreasuryBalances } from "./balances";
-import { runTreasuryForUser, type ExecutorDeps } from "./executor";
+import { runTreasuryForUser, TxRejectedError, type ExecutorDeps } from "./executor";
 import { operatorDripper } from "./gas";
 
 /** One run is an RFQ (up to 75 s) plus up to 3 receipt waits; it must fit the 300 s wallet lock, which is never renewed. */
@@ -45,11 +50,23 @@ export function liveExecutorDeps(): ExecutorDeps {
         }
       },
       confirmedNonce: (owner) => client.getTransactionCount({ address: owner, blockTag: "latest" }),
+      async knownTx(hash) {
+        try {
+          await client.getTransaction({ hash });
+          return true;
+        } catch (error) {
+          if (error instanceof TransactionNotFoundError) return false;
+          throw error;
+        }
+      },
       async sendRaw(raw) {
         try {
           await client.sendRawTransaction({ serializedTransaction: raw });
         } catch (error) {
-          if (!/already known|known transaction/i.test(error instanceof Error ? error.message : String(error))) throw error;
+          const message = error instanceof Error ? error.message : String(error);
+          if (/already known|known transaction/i.test(message)) return;
+          if (isNodeRejection(error)) throw new TxRejectedError(message, { cause: error });
+          throw error;
         }
       },
       async waitForReceipt(hash) {

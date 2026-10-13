@@ -4,7 +4,7 @@ import { isAuthorizedCron } from "@/lib/cron/auth";
 import { getDb } from "@/lib/db/client";
 import { issueDueRecurring } from "@/lib/invoices/repo";
 import { logTransferFinder, reconcileSettlements, type ReconcileResult } from "@/lib/payments/reconcile";
-import { runTreasuries, runTreasuryForUser, summarizeRuns } from "@/lib/treasury/executor";
+import { reconcileWallets, runTreasuries, runTreasuryForUser, summarizeRuns } from "@/lib/treasury/executor";
 import { liveExecutorDeps } from "@/lib/treasury/live";
 import { listTreasuryUsers } from "@/lib/treasury/repo";
 
@@ -29,11 +29,19 @@ export async function POST(request: Request) {
     console.error("Settlement reconciliation failed:", error);
     reconciled = "error";
   }
-  if (!env.TREASURY_ENABLED) return Response.json({ issued, reconciled, treasury: "disabled" });
+  // Transactions already sent are settled whatever the switches say; this signs and trades nothing.
+  let pending: Awaited<ReturnType<typeof reconcileWallets>> | "error";
+  try {
+    pending = await reconcileWallets(liveExecutorDeps());
+  } catch (error) {
+    console.error("Treasury reconciliation failed:", error);
+    pending = "error";
+  }
+  if (!env.TREASURY_ENABLED) return Response.json({ issued, reconciled, pending, treasury: "disabled" });
 
   const deps = liveExecutorDeps();
   const results = await runTreasuries(await listTreasuryUsers(db), (userId) => runTreasuryForUser(deps, userId), {
     deadline: started + START_BUDGET_MS,
   });
-  return Response.json({ issued, reconciled, treasury: summarizeRuns(results) });
+  return Response.json({ issued, reconciled, pending, treasury: summarizeRuns(results) });
 }

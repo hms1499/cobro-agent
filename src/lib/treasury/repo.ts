@@ -206,7 +206,22 @@ export async function pendingTreasuryTxs(db: Db, userId: string): Promise<Treasu
     .orderBy(asc(treasuryTxs.nonce));
 }
 
-export async function settleTreasuryTx(db: Db, hash: string, status: "success" | "reverted", now: Date): Promise<void> {
+/** The users with a treasury transaction still pending, whatever their switches say. */
+export async function usersWithPendingTxs(db: Db): Promise<string[]> {
+  const rows = await db
+    .selectDistinct({ userId: treasuryTxs.userId })
+    .from(treasuryTxs)
+    .where(eq(treasuryTxs.status, "pending"))
+    .orderBy(asc(treasuryTxs.userId));
+  return rows.map((row) => row.userId);
+}
+
+export async function settleTreasuryTx(
+  db: Db,
+  hash: string,
+  status: "success" | "reverted" | "failed",
+  now: Date,
+): Promise<void> {
   await db
     .update(treasuryTxs)
     .set({ status, confirmedAt: now })

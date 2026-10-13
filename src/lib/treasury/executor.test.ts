@@ -1,5 +1,5 @@
 // src/lib/treasury/executor.test.ts
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { decodeFunctionData, erc20Abi, getAddress, type Address, type Hex } from "viem";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { TOKENS } from "@/lib/chain/tokens";
@@ -11,7 +11,15 @@ import type { ReferenceRates } from "@/lib/fx/rates";
 import { TextileError, type FirmQuote, type RfqOutcome } from "@/lib/fx/rfq";
 import { parseDecimal } from "@/lib/money/decimal";
 import type { TreasuryBalances } from "./balances";
-import { engineInput, runTreasuries, runTreasuryForUser, summarizeRuns, type ExecutorDeps } from "./executor";
+import {
+  engineInput,
+  reconcileWallets,
+  runTreasuries,
+  runTreasuryForUser,
+  summarizeRuns,
+  TxRejectedError,
+  type ExecutorDeps,
+} from "./executor";
 import { acquireWalletLock, loadTreasuryContext } from "./repo";
 
 let db: Db;
@@ -58,6 +66,10 @@ function harness(balances: Partial<TreasuryBalances>, over: { dryRun?: boolean; 
     receipts: new Map<string, "success" | "reverted" | null>(),
     confirmedNonce: 0,
     sent: [] as Hex[],
+    /** Hashes the node knows (pending or mined). */
+    known: new Set<string>(),
+    /** Raw bytes the node refuses outright. */
+    refused: new Set<string>(),
   };
   const signed: { to: Address; data: Hex; feeToken: GasToken }[] = [];
   const deps: ExecutorDeps = {
@@ -70,7 +82,9 @@ function harness(balances: Partial<TreasuryBalances>, over: { dryRun?: boolean; 
       allowance: async () => state.allowance,
       receipt: async (hash) => state.receipts.get(hash) ?? null,
       confirmedNonce: async () => state.confirmedNonce,
+      knownTx: async (hash) => state.known.has(hash),
       sendRaw: async (raw) => {
+        if (state.refused.has(raw)) throw new TxRejectedError("invalid sender");
         state.sent.push(raw);
       },
       waitForReceipt: async (hash) => (state.receipts.has(hash) ? (state.receipts.get(hash) ?? null) : "success"),
@@ -106,6 +120,20 @@ const eventTypes = async (userId: string) =>
 const tradesOf = (userId: string) => db.select().from(fxTrades).where(eq(fxTrades.userId, userId));
 const intentsOf = (userId: string) => db.select().from(fxIntents).where(eq(fxIntents.userId, userId));
 const gas = { USDT: 1_000_000n };
+const rawOf = (n: number) => `0x${"ab".repeat(n)}` as Hex;
+const txByHash = async (hash: Hex) => (await db.select().from(treasuryTxs).where(eq(treasuryTxs.hash, hash)))[0];
+const eventsOf = (userId: string) => db.select().from(agentEvents).where(eq(agentEvents.userId, userId)).orderBy(agentEvents.createdAt);
+
+/** Makes every agent_events insert fail, to show a settlement's writes commit together or not at all. */
+async function withFailingEvents(run: () => Promise<void>) {
+  await db.execute(sql`CREATE OR REPLACE FUNCTION fail_event() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'event insert failed'; END $$ LANGUAGE plpgsql`);
+  await db.execute(sql`CREATE TRIGGER fail_event BEFORE INSERT ON agent_events FOR EACH ROW EXECUTE FUNCTION fail_event()`);
+  try {
+    await run();
+  } finally {
+    await db.execute(sql`DROP TRIGGER fail_event ON agent_events`);
+  }
+}
 
 describe("runTreasuryForUser: switches and dry run", () => {
   it("does nothing while the global switch is off", async () => {
@@ -353,12 +381,12 @@ describe("runTreasuryForUser: price and quote checks", () => {
 });
 
 describe("runTreasuryForUser: unknown outcomes (spec §10.4 step 7)", () => {
-  async function pendingSwap(userId: string) {
+  async function pendingSwap(userId: string, createdAt = NOW) {
     const [intent] = await db
       .insert(fxIntents)
       .values({ userId, fromAsset: "WARS", toAsset: "USDT", amountAtomic: "1", reason: "save_excess", status: "executing" })
       .returning();
-    await db.insert(treasuryTxs).values({ userId, kind: "swap", nonce: 7, hash: hashOf(99), raw: "0xabab", feeToken: "USDT" });
+    await db.insert(treasuryTxs).values({ userId, kind: "swap", nonce: 7, hash: hashOf(99), raw: "0xabab", feeToken: "USDT", createdAt });
     await db.insert(fxTrades).values({
       userId,
       intentId: intent.id,
@@ -394,15 +422,83 @@ describe("runTreasuryForUser: unknown outcomes (spec §10.4 step 7)", () => {
     expect(await eventTypes(user.id)).toEqual(["converted"]);
   });
 
-  it("marks a swap failed when a later nonce was mined without it", async () => {
+  it("marks a swap dropped when a later nonce was mined without it", async () => {
     const user = await freelancer();
     await pendingSwap(user.id);
     const { deps, state } = harness({});
     state.confirmedNonce = 8;
     expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("idle");
-    expect((await tradesOf(user.id))[0].status).toBe("failed");
-    expect(await eventTypes(user.id)).toEqual(["swap_failed"]);
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "failed", detail: "dropped" });
+    expect((await txByHash(hashOf(99))).status).toBe("failed");
+    expect((await eventsOf(user.id)).map((e) => [e.type, e.data.detail])).toEqual([["swap_failed", "dropped"]]);
     expect(state.sent).toEqual([]);
+  });
+
+  it("keeps a swap pending when a later nonce is mined but the node still knows it (RPC backends disagree)", async () => {
+    const user = await freelancer();
+    await pendingSwap(user.id);
+    const { deps, state } = harness({});
+    state.confirmedNonce = 8;
+    state.known.add(hashOf(99));
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("pending_tx");
+    expect((await tradesOf(user.id))[0].status).toBe("broadcast");
+    expect((await txByHash(hashOf(99))).status).toBe("pending");
+    expect(await eventTypes(user.id)).toEqual([]);
+  });
+
+  it("gives up on a swap the node neither knows nor accepts once it is over 30 minutes old", async () => {
+    const user = await freelancer();
+    await pendingSwap(user.id, new Date(NOW.getTime() - 31 * 60_000));
+    const { deps, state } = harness({});
+    state.confirmedNonce = 7;
+    state.refused.add("0xabab");
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("idle");
+    } finally {
+      logged.mockRestore();
+    }
+    expect((await txByHash(hashOf(99))).status).toBe("failed");
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "failed", detail: "dropped" });
+    expect((await eventsOf(user.id)).map((e) => [e.type, e.data.detail])).toEqual([["swap_failed", "dropped"]]);
+  });
+
+  it.each([
+    ["younger than 30 minutes", 29, false],
+    ["known to the node", 31, true],
+  ])("keeps re-sending a refused swap while it is %s", async (_label, ageMinutes, known) => {
+    const user = await freelancer();
+    await pendingSwap(user.id, new Date(NOW.getTime() - ageMinutes * 60_000));
+    const { deps, state } = harness({});
+    state.confirmedNonce = 7;
+    state.refused.add("0xabab");
+    if (known) state.known.add(hashOf(99));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("pending_tx");
+    } finally {
+      logged.mockRestore();
+    }
+    expect((await txByHash(hashOf(99))).status).toBe("pending");
+    expect(await eventTypes(user.id)).toEqual([]);
+  });
+
+  it("commits a settlement whole or not at all, and tells Textile only after it commits", async () => {
+    const user = await freelancer();
+    await pendingSwap(user.id);
+    const { deps, state } = harness({});
+    state.receipts.set(hashOf(99), "success");
+    await withFailingEvents(async () => {
+      await expect(runTreasuryForUser(deps, user.id)).rejects.toThrow();
+    });
+    expect((await txByHash(hashOf(99))).status).toBe("pending");
+    expect((await tradesOf(user.id))[0].status).toBe("broadcast");
+    expect(deps.rfq.submit).not.toHaveBeenCalled();
+
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("idle");
+    expect((await txByHash(hashOf(99))).status).toBe("success");
+    expect(await eventTypes(user.id)).toEqual(["converted"]);
+    expect(deps.rfq.submit).toHaveBeenCalledTimes(1);
   });
 
   it("leaves a broadcast swap pending when its receipt does not arrive in time", async () => {
@@ -412,6 +508,104 @@ describe("runTreasuryForUser: unknown outcomes (spec §10.4 step 7)", () => {
     expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "pending_tx", detail: "swap" });
     expect((await tradesOf(user.id))[0].status).toBe("broadcast");
     expect((await db.select().from(treasuryTxs).where(eq(treasuryTxs.hash, hashOf(2))))[0].status).toBe("pending");
+  });
+});
+
+describe("runTreasuryForUser: a broadcast the node refuses", () => {
+  it("marks the swap failed at once and leaves the wallet free for the next run", async () => {
+    const user = await freelancer();
+    const { deps, state } = harness({ WARS: pesos(3_200n), ...gas });
+    state.refused.add(rawOf(2)); // the swap; the approval (1) goes through
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "failed", detail: "swap_rejected" });
+    expect((await txByHash(hashOf(2))).status).toBe("failed");
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "failed", detail: "rejected" });
+    expect((await intentsOf(user.id))[0].status).toBe("waiting");
+    expect((await eventsOf(user.id)).map((e) => [e.type, e.data.detail])).toEqual([["swap_failed", "rejected"]]);
+    expect(deps.rfq.submit).not.toHaveBeenCalled();
+
+    state.refused.clear();
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
+  });
+
+  it("marks a refused approval failed and says so", async () => {
+    const user = await freelancer();
+    const { deps, state } = harness({ WARS: pesos(3_200n), ...gas });
+    state.refused.add(rawOf(1));
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "failed", detail: "approve" });
+    expect((await txByHash(hashOf(1))).status).toBe("failed");
+    expect(deps.signTx).toHaveBeenCalledTimes(1);
+    expect((await eventsOf(user.id)).map((e) => [e.type, e.data.detail])).toEqual([["swap_failed", "approve_rejected"]]);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).not.toBe("pending_tx");
+  });
+});
+
+describe("runTreasuryForUser: one event per intent and kind", () => {
+  it("logs a no-quote and then a lack of gas on the same intent, each once", async () => {
+    const user = await freelancer();
+    const { deps, state } = harness(
+      { WARS: pesos(3_200n), ...gas },
+      { outcome: { status: "no_quote", reason: "no_makers_online", retryAfterMs: 30_000 } },
+    );
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("no_quote");
+    // Later the gas is gone and today's drip is used up.
+    state.balances.USDT = 0n;
+    await db.update(treasuryWallets).set({ gasDrippedAt: NOW }).where(eq(treasuryWallets.userId, user.id));
+    deps.now = () => new Date(NOW.getTime() + 600_000);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("needs_gas");
+    deps.now = () => new Date(NOW.getTime() + 1_200_000);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("needs_gas");
+    const [intent] = await intentsOf(user.id);
+    expect((await eventsOf(user.id)).map((e) => [e.type, e.data.intentId])).toEqual([
+      ["no_quote", intent.id],
+      ["needs_gas", intent.id],
+    ]);
+  });
+});
+
+describe("reconcileWallets", () => {
+  async function pendingWithdrawal(userId: string) {
+    await db.insert(treasuryTxs).values({
+      userId,
+      kind: "withdraw",
+      nonce: 3,
+      hash: hashOf(42),
+      raw: "0x4242",
+      feeToken: "USDT",
+      asset: "USDT",
+      amountAtomic: "1000000",
+      toAddress: STRANGER,
+      createdAt: NOW,
+    });
+  }
+
+  it("settles a paused user's pending withdrawal while the global switch is off, signing nothing", async () => {
+    const user = await freelancer();
+    await db.update(rules).set({ enabled: false }).where(eq(rules.userId, user.id));
+    await pendingWithdrawal(user.id);
+    const { deps, state } = harness({});
+    deps.flags.enabled = false;
+    state.receipts.set(hashOf(42), "success");
+    expect(await reconcileWallets(deps)).toEqual({ settled: 1, stillPending: 0, errors: 0 });
+    expect((await txByHash(hashOf(42))).status).toBe("success");
+    expect((await eventsOf(user.id)).map((e) => [e.type, e.data.amount])).toEqual([["withdrawn", "1000000"]]);
+    expect(deps.signTx).not.toHaveBeenCalled();
+    expect(deps.rfq.request).not.toHaveBeenCalled();
+    // The lock is released afterwards.
+    const [wallet] = await db.select().from(treasuryWallets).where(eq(treasuryWallets.userId, user.id));
+    expect(await acquireWalletLock(db, wallet.id, crypto.randomUUID(), NOW)).toBe(true);
+  });
+
+  it("counts what is still pending and leaves a wallet another run holds alone", async () => {
+    const waiting = await freelancer();
+    await pendingWithdrawal(waiting.id);
+    const busy = await freelancer();
+    await db.insert(treasuryTxs).values({ userId: busy.id, kind: "approve", nonce: 1, hash: hashOf(43), raw: "0x43", feeToken: "USDT" });
+    const [busyWallet] = await db.select().from(treasuryWallets).where(eq(treasuryWallets.userId, busy.id));
+    await acquireWalletLock(db, busyWallet.id, crypto.randomUUID(), NOW);
+    const { deps, state } = harness({});
+    state.confirmedNonce = 3;
+    expect(await reconcileWallets(deps)).toEqual({ settled: 0, stillPending: 1, errors: 0 });
+    expect(state.sent).toEqual(["0x4242"]);
   });
 });
 
