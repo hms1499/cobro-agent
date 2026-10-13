@@ -35,7 +35,7 @@ export async function releaseInvoice(db: Db, invoiceId: string): Promise<void> {
 
 export async function recordPayment(
   db: Db,
-  p: { invoiceId: string; payer: string; asset: PayAsset; amountAtomic: bigint; txHash: string; now: Date },
+  p: { invoiceId: string; payer: string; asset: PayAsset; amountAtomic: bigint; txHash: string; now: Date; ratesSnapshot?: Record<string, string> | null },
 ): Promise<void> {
   await db.transaction(async (tx) => {
     await tx
@@ -47,6 +47,7 @@ export async function recordPayment(
         amountAtomic: p.amountAtomic.toString(),
         txHash: p.txHash,
         settledAt: p.now,
+        ratesSnapshot: p.ratesSnapshot ?? null,
       })
       .onConflictDoNothing({ target: payments.txHash });
     await tx.update(invoices).set({ status: "paid", paidAt: p.now, settlingUntil: null }).where(eq(invoices.id, p.invoiceId));

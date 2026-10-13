@@ -1,5 +1,5 @@
 import type { Db } from "@/lib/db/client";
-import { getReferenceRates } from "@/lib/fx/rates";
+import { getReferenceRates, getReferenceRatesOrNull, snapshotRates } from "@/lib/fx/rates";
 import { findPublicInvoice } from "@/lib/invoices/repo";
 import { claimInvoice, recordPayment, releaseInvoice } from "./invoice-claim";
 import type { PayFlowDeps } from "./pay-flow";
@@ -26,6 +26,7 @@ export function invoicePaymentDeps(db: Db): Omit<PayFlowDeps, "process"> {
       }),
     claim: (invoiceId) => claimInvoice(db, invoiceId, new Date()),
     release: (invoiceId) => releaseInvoice(db, invoiceId),
-    record: (payment) => recordPayment(db, { ...payment, now: new Date() }),
+    record: async (payment) =>
+      recordPayment(db, { ...payment, now: new Date(), ratesSnapshot: snapshotRates(await getReferenceRatesOrNull()) }),
   };
 }

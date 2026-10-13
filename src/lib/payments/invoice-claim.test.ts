@@ -72,4 +72,18 @@ describe("recordPayment", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ asset: "USDT", amountAtomic: "300000000" });
   });
+
+  it("keeps the reference rates the payment arrived at, for the P&L", async () => {
+    await recordPayment(db, {
+      invoiceId,
+      payer: "0x9999999999999999999999999999999999999999",
+      asset: "USDT",
+      amountAtomic: 1n,
+      txHash: `0x${"cd".repeat(32)}`,
+      now: at("12:00:20"),
+      ratesSnapshot: { ARS: "1600", BRL: "5" },
+    });
+    const [row] = await db.select().from(payments).where(eq(payments.invoiceId, invoiceId));
+    expect(row.ratesSnapshot).toEqual({ ARS: "1600", BRL: "5" });
+  });
 });

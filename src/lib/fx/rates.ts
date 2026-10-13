@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { parseServerEnv } from "@/lib/config/server";
 import type { LocalCurrency } from "@/lib/money/currencies";
-import { parseDecimal, RATE_DECIMALS } from "@/lib/money/decimal";
+import { formatDecimal, parseDecimal, RATE_DECIMALS } from "@/lib/money/decimal";
 
 /** Local-currency units per 1 USD₮, 18 decimals, from Textile's public tickers (spec §8.3). */
 export interface ReferenceRates {
@@ -114,4 +114,12 @@ export async function getReferenceRatesOrNull(): Promise<ReferenceRates | null> 
   } catch {
     return null;
   }
+}
+
+/** Local units per USD as decimal strings, stored with each payment for the P&L (spec §10.5). */
+export function snapshotRates(rates: ReferenceRates | null): Record<string, string> | null {
+  if (!rates) return null;
+  return Object.fromEntries(
+    Object.entries(rates.perUsd).map(([currency, rate]) => [currency, formatDecimal(rate, RATE_DECIMALS)]),
+  );
 }
