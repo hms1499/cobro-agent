@@ -12,8 +12,11 @@ import { withdrawableAmount } from "@/lib/treasury/withdraw";
 import { WithdrawForm } from "./withdraw-form";
 
 export const metadata: Metadata = { title: `${t("withdraw.title")} · ${t("app.name")}` };
-/** The withdrawal Server Action waits for a Celo receipt (a few seconds). */
-export const maxDuration = 120;
+/**
+ * The withdrawal Server Action can reconcile earlier transactions, drip gas and wait up to 45 s for a
+ * receipt; its worst case is near two minutes, so it gets the same 300 s as the wallet lock.
+ */
+export const maxDuration = 300;
 
 export default function WithdrawPage() {
   return (
