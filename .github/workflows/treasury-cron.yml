@@ -12,13 +12,13 @@ permissions: {}
 jobs:
   tick:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 6
     steps:
       - name: Call the cron route
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: ${{ vars.APP_URL || 'https://cobro-agent.vercel.app' }}
         run: |
-          curl --fail-with-body --silent --show-error --max-time 120 \
+          curl --fail-with-body --silent --show-error --max-time 290 \
             -X POST -H "Authorization: Bearer ${CRON_SECRET}" \
             "${APP_URL}/api/cron/treasury"
