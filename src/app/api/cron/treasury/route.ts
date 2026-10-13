@@ -1,7 +1,9 @@
+import { createCeloPublicClient } from "@/lib/chain/clients";
 import { parseServerEnv } from "@/lib/config/server";
 import { isAuthorizedCron } from "@/lib/cron/auth";
 import { getDb } from "@/lib/db/client";
 import { issueDueRecurring } from "@/lib/invoices/repo";
+import { logTransferFinder, reconcileSettlements } from "@/lib/payments/reconcile";
 import { runTreasuries, runTreasuryForUser, summarizeRuns } from "@/lib/treasury/executor";
 import { liveExecutorDeps } from "@/lib/treasury/live";
 import { listTreasuryUsers } from "@/lib/treasury/repo";
@@ -18,12 +20,20 @@ export async function POST(request: Request) {
   }
   const started = Date.now();
   const db = getDb();
+  const env = parseServerEnv();
   const issued = await issueDueRecurring(db, new Date());
-  if (!parseServerEnv().TREASURY_ENABLED) return Response.json({ issued, treasury: "disabled" });
+  let reconciled: { recorded: number; reopened: number } | "error";
+  try {
+    reconciled = await reconcileSettlements(db, logTransferFinder(createCeloPublicClient(env.CELO_RPC_URL)), new Date());
+  } catch (error) {
+    console.error("Settlement reconciliation failed:", error);
+    reconciled = "error";
+  }
+  if (!env.TREASURY_ENABLED) return Response.json({ issued, reconciled, treasury: "disabled" });
 
   const deps = liveExecutorDeps();
   const results = await runTreasuries(await listTreasuryUsers(db), (userId) => runTreasuryForUser(deps, userId), {
     deadline: started + START_BUDGET_MS,
   });
-  return Response.json({ issued, treasury: summarizeRuns(results) });
+  return Response.json({ issued, reconciled, treasury: summarizeRuns(results) });
 }
