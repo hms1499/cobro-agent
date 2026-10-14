@@ -265,6 +265,9 @@ export const AGENT_EVENT_TYPES = [
   "paused",
   "resumed",
   "payment_reconciled",
+  "proposed",
+  "approved",
+  "dismissed",
 ] as const;
 export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];
 

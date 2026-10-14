@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { parseDecimal } from "@/lib/money/decimal";
-import { describeDecision, describeEvent, moneyText, percentText } from "./explain";
+import { describeDecision, describeEvent, describeProposal, moneyText, percentText } from "./explain";
 
 const rates: ReferenceRates = { perUsd: { ARS: parseDecimal("1600", 18), BRL: parseDecimal("5", 18) }, fetchedAt: 0 };
 const ctx = { local: "ARS" as const, rates };
@@ -73,5 +73,40 @@ describe("describeDecision", () => {
     ).toBe(
       `convert ≈ ARS${NBSP}16,000 to pesos. Your spending money fell below the reserve you set, so the agent refilled it from your savings.`,
     );
+  });
+});
+
+describe("approval events", () => {
+  it("explains a proposal, an approval and a dismissal", () => {
+    const data = { from: "USDT", to: "WARS", amount: "2000000", reason: "top_up" };
+    expect(describeEvent({ type: "proposed", data }, ctx)).toMatchObject({
+      tone: "warning",
+      title: `Your agent asks to convert ≈ ARS${NBSP}3,200 to pesos`,
+    });
+    expect(describeEvent({ type: "approved", data }, ctx).title).toBe(`You approved converting ≈ ARS${NBSP}3,200 to pesos`);
+    expect(describeEvent({ type: "dismissed", data }, ctx).why).toBe("Your agent won't suggest this again for 24 hours.");
+  });
+
+  it("names the spending currency for the first leg of a refill through USD₮", () => {
+    const data = { from: "USAT", to: "USDT", amount: "2000000", reason: "hub_route" };
+    expect(describeEvent({ type: "proposed", data }, ctx).title).toBe(`Your agent asks to convert ≈ ARS${NBSP}3,200 to pesos`);
+  });
+});
+
+describe("describeProposal", () => {
+  it("says what, why, at what price, and keeps token units for Details", () => {
+    const view = describeProposal({ fromAsset: "USDT", toAsset: "WARS", amountAtomic: "2100000", reason: "top_up" }, ctx, 50);
+    expect(view).toEqual({
+      title: "Your agent needs your approval",
+      body: `Convert ≈ ARS${NBSP}3,360 to pesos.`,
+      why: "Your spending money is below the reserve you set.",
+      price: "Your agent waits for a fair price: at most 0.50% below the market rate.",
+      units: "2.1 USD₮",
+    });
+  });
+
+  it("mentions the USD₮ step of a refill from USA₮", () => {
+    const view = describeProposal({ fromAsset: "USAT", toAsset: "USDT", amountAtomic: "2100000", reason: "hub_route" }, ctx, 50);
+    expect(view.body).toBe(`Convert ≈ ARS${NBSP}3,360 to pesos, through USD₮.`);
   });
 });
