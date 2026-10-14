@@ -7,6 +7,7 @@ import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import type { LocalCurrency } from "@/lib/money/currencies";
+import { APPROVAL_MODES } from "@/lib/treasury/approvals";
 import { saveRulesAction, type RulesState } from "./actions";
 
 const ADVANCED = [
@@ -45,6 +46,30 @@ export function RulesForm({ currency, values }: { currency: LocalCurrency; value
         <input type="checkbox" name="autoTopUp" defaultChecked={state.values.autoTopUp === "on"} className="mt-1 size-4 accent-primary" />
         <span>{t("rules.autoTopUp")}</span>
       </label>
+
+      <fieldset className="flex flex-col gap-2" aria-describedby={state.errors.approvalMode ? "approvalMode-error" : undefined}>
+        <legend className="mb-2 font-medium">{t("rules.approval.legend")}</legend>
+        {APPROVAL_MODES.map((mode) => (
+          <label key={mode} className="flex min-h-11 cursor-pointer items-start gap-3">
+            <input
+              type="radio"
+              name="approvalMode"
+              value={mode}
+              defaultChecked={state.values.approvalMode === mode}
+              className="mt-1 size-4 accent-primary"
+            />
+            <span className="flex flex-col">
+              <span>{t(`rules.approval.${mode}`)}</span>
+              <span className="text-sm text-muted-foreground">{t(`rules.approval.${mode}Help`)}</span>
+            </span>
+          </label>
+        ))}
+        {state.errors.approvalMode && (
+          <p id="approvalMode-error" role="alert" className="text-sm text-destructive">
+            {t(state.errors.approvalMode)}
+          </p>
+        )}
+      </fieldset>
 
       <details open={advancedError || undefined} className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
         <summary className="min-h-11 cursor-pointer py-2 font-medium text-primary">{t("rules.advanced")}</summary>

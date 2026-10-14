@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth/current-user";
 import { getDb } from "@/lib/db/client";
 import { rules, type RulesRow } from "@/lib/db/schema";
 import { getReferenceRates } from "@/lib/fx/rates";
+import { modeNeedsApproval } from "@/lib/treasury/approvals";
 import { decide } from "@/lib/treasury/engine";
 import { engineInput } from "@/lib/treasury/executor";
 import { describeDecision } from "@/lib/treasury/explain";
@@ -51,7 +52,9 @@ async function Preview({ user, row }: { user: AppUser; row: RulesRow }) {
   try {
     const [balances, rates] = await Promise.all([liveExecutorDeps().chain.readBalances(user.treasuryAddress), getReferenceRates()]);
     const input = await engineInput(getDb(), { userId: user.id, rules: row }, balances, rates, new Date());
-    text = describeDecision(decide(input), { local: row.localCurrency, rates });
+    const decision = decide(input);
+    const askFirst = decision.kind === "convert" && modeNeedsApproval(row.approvalMode, decision.reason);
+    text = describeDecision(decision, { local: row.localCurrency, rates }, { askFirst });
   } catch (error) {
     console.error("Rules preview failed:", error instanceof Error ? error.message : error);
     return <p className="text-muted-foreground">{t("rules.previewUnavailable")}</p>;

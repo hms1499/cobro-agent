@@ -110,3 +110,10 @@ describe("describeProposal", () => {
     expect(view.body).toBe(`Convert ≈ ARS${NBSP}3,360 to pesos, through USD₮.`);
   });
 });
+
+describe("describeDecision with approval", () => {
+  it("says the agent would ask first", () => {
+    const decision = { kind: "convert", from: "USDT", to: "WARS", amount: 2_000_000n, usdWad: 0n, reason: "top_up" } as const;
+    expect(describeDecision(decision, ctx, { askFirst: true })).toMatch(/^ask you to approve converting ≈ ARS.3,200 to pesos\./);
+  });
+});
