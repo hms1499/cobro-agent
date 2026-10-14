@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,6 +14,7 @@ import { decide } from "@/lib/treasury/engine";
 import { engineInput } from "@/lib/treasury/executor";
 import { describeDecision } from "@/lib/treasury/explain";
 import { liveExecutorDeps } from "@/lib/treasury/live";
+import { openProposal } from "@/lib/treasury/repo";
 import { rulesFormValues } from "@/lib/treasury/rules-form";
 import type { AppUser } from "@/lib/users/queries";
 import { RulesForm } from "./rules-form";
@@ -35,8 +37,20 @@ async function Rules() {
   const user = await requireUser();
   const [row] = await getDb().select().from(rules).where(eq(rules.userId, user.id));
   if (!row) redirect("/app/onboarding");
+  const proposal = await openProposal(getDb(), user.id);
   return (
     <>
+      {proposal && (
+        <p role="status" className="rounded-xl bg-muted p-4">
+          {t("rules.proposalWaiting")}{" "}
+          <Link
+            href="/app"
+            className="font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            {t("rules.proposalReview")}
+          </Link>
+        </p>
+      )}
       <Suspense fallback={<Skeleton className="h-16 w-full" />}>
         <Preview user={user} row={row} />
       </Suspense>

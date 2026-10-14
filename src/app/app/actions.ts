@@ -31,10 +31,12 @@ export async function setAgentEnabled(formData: FormData): Promise<void> {
   const enabled = formData.get("enabled") === "true";
   const db = getDb();
   const now = new Date();
-  await db.update(rules).set({ enabled, updatedAt: now }).where(eq(rules.userId, user.id));
-  // Trade approvals §5.3: a paused agent has nothing to propose; this is not a dismissal.
-  if (!enabled) await cancelProposals(db, user.id, now);
-  await logEvent(db, user.id, enabled ? "resumed" : "paused", {}, now);
+  await db.transaction(async (tx) => {
+    await tx.update(rules).set({ enabled, updatedAt: now }).where(eq(rules.userId, user.id));
+    // Trade approvals §5.3: a paused agent has nothing to propose; this is not a dismissal.
+    if (!enabled) await cancelProposals(tx, user.id, now);
+    await logEvent(tx, user.id, enabled ? "resumed" : "paused", {}, now);
+  });
   refresh();
 }
 
