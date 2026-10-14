@@ -23,6 +23,12 @@ import { TreasurySummary } from "./treasury-summary";
 
 export const metadata: Metadata = { title: `${t("nav.home")} · ${t("app.name")}` };
 
+/**
+ * Approving a proposal runs the agent in after(): it may reconcile, drip gas, request a quote and wait
+ * for receipts, like the withdrawal action, so it gets the same 300 s as the wallet lock.
+ */
+export const maxDuration = 300;
+
 const linkBase =
   "inline-flex min-h-11 items-center gap-2 rounded-lg px-4 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 const primaryLink = `${linkBase} bg-primary text-primary-foreground hover:bg-primary/90`;

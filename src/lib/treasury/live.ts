@@ -105,3 +105,13 @@ export async function runTreasuryAfterPayment(slug: string): Promise<void> {
     console.error(`Treasury run after payment ${slug} failed:`, error);
   }
 }
+
+/** Trade approvals §5.2: an approval schedules a run for its owner at once. Called from after(). */
+export async function runTreasuryAfterApproval(userId: string): Promise<void> {
+  try {
+    if (!parseServerEnv().TREASURY_ENABLED) return;
+    await runTreasuryForUser(liveExecutorDeps(), userId);
+  } catch (error) {
+    console.error(`Treasury run after approval for ${userId} failed:`, error);
+  }
+}
