@@ -20,6 +20,7 @@ import { ActivityFeed } from "./activity-feed";
 import { AgentStatus } from "./agent-status";
 import { Conversions } from "./conversions";
 import { ProposalBanner } from "./proposal-banner";
+import { ProposalSlot } from "./proposal-slot";
 import { RepeatClients } from "./repeat-clients";
 import { TreasurySummary } from "./treasury-summary";
 
@@ -67,11 +68,13 @@ async function Home() {
     <>
       <h1 className="text-2xl font-semibold">{t("app.greeting", { name: user.displayName ?? user.email ?? "" })}</h1>
       <SetupBanner status={user.treasuryStatus} />
-      {proposal && (
-        <Suspense fallback={<Skeleton className="h-40 w-full" />}>
-          <ProposalBanner user={user} proposal={proposal} />
-        </Suspense>
-      )}
+      <ProposalSlot>
+        {proposal && (
+          <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+            <ProposalBanner user={user} proposal={proposal} />
+          </Suspense>
+        )}
+      </ProposalSlot>
       <Suspense fallback={<Skeleton className="h-40 w-full" />}>
         <AgentStatus user={user} />
       </Suspense>

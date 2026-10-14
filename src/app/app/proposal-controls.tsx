@@ -1,42 +1,31 @@
 "use client";
 
-import { useActionState } from "react";
-import { SubmitButton } from "@/components/submit-button";
+import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { t } from "@/i18n";
-import { approveProposalAction, dismissProposalAction, type ProposalState } from "./actions";
-
-const INITIAL: ProposalState = { outcome: null };
+import { useProposalActions } from "./proposal-slot";
 
 /** "Approve" is the screen's one primary action while a proposal waits (MASTER.md "Buttons"). */
 export function ProposalControls({ intentId, seenAtomic }: { intentId: string; seenAtomic: string }) {
-  const [approved, approve] = useActionState(approveProposalAction, INITIAL);
-  const [dismissed, dismiss] = useActionState(dismissProposalAction, INITIAL);
-  const outcome = approved.outcome ?? dismissed.outcome;
+  const { approve, dismiss, approving, dismissing } = useProposalActions();
+  const busy = approving || dismissing;
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-3">
-        <form action={approve}>
-          <input type="hidden" name="intentId" value={intentId} />
-          <input type="hidden" name="seenAtomic" value={seenAtomic} />
-          <SubmitButton pendingLabel={t("proposal.approving")}>{t("proposal.approve")}</SubmitButton>
-        </form>
-        <form action={dismiss}>
-          <input type="hidden" name="intentId" value={intentId} />
-          <Button type="submit" variant="outline" size="lg" className="min-h-11">
-            {t("proposal.dismiss")}
-          </Button>
-        </form>
-      </div>
-      <div aria-live="polite">
-        {outcome === "approved" && <p className="text-success">{t("proposal.approved")}</p>}
-        {outcome === "dismissed" && <p>{t("proposal.dismissed")}</p>}
-      </div>
-      {outcome === "changed" && (
-        <p role="alert" className="text-destructive">
-          {t("proposal.changed")}
-        </p>
-      )}
+    <div className="flex flex-wrap items-center gap-3">
+      <form action={approve}>
+        <input type="hidden" name="intentId" value={intentId} />
+        <input type="hidden" name="seenAtomic" value={seenAtomic} />
+        <Button type="submit" size="lg" className="min-h-11 w-full sm:w-auto" disabled={busy} aria-disabled={busy}>
+          {approving && <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
+          {approving ? t("proposal.approving") : t("proposal.approve")}
+        </Button>
+      </form>
+      <form action={dismiss}>
+        <input type="hidden" name="intentId" value={intentId} />
+        <Button type="submit" variant="outline" size="lg" className="min-h-11" disabled={busy} aria-disabled={busy}>
+          {dismissing && <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
+          {dismissing ? t("proposal.dismissing") : t("proposal.dismiss")}
+        </Button>
+      </form>
     </div>
   );
 }
