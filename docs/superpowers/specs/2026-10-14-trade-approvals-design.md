@@ -1,7 +1,7 @@
 # Trade approvals — Design Spec
 
 - **Date:** 2026-10-14
-- **Status:** Approved in brainstorming; awaiting written-spec review
+- **Status:** Implemented
 - **Extends:** [Cobro design spec](2026-10-08-cobro-design.md) §10 (treasury) and §17 (UX)
 - **Starts after:** Plan 3 Task 17 (production rollout) is finished
 
