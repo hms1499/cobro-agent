@@ -776,6 +776,30 @@ describe("runTreasuryForUser: approvals", () => {
     expect(await eventTypes(user.id)).toEqual(["proposed", "dry_run"]);
   });
 
+  it("caps at an approval that landed after the run read the open intent", async () => {
+    const user = await freelancer(RESERVE, "auto");
+    await db
+      .insert(fxIntents)
+      .values({ userId: user.id, fromAsset: "USDT", toAsset: "WARS", amountAtomic: "10000000", reason: "top_up", status: "waiting", createdAt: NOW });
+    const { deps } = harness({ USDT: 20_000_000n }, { outcome: refillQuote(6_000_000n, 9_570n) });
+    // The approval lands between openIntent and saveIntent: before the first database transaction of the run.
+    let approved = false;
+    deps.db = new Proxy(db, {
+      get(target, key) {
+        if (key !== "transaction") return Reflect.get(target, key);
+        return async (...args: Parameters<Db["transaction"]>) => {
+          if (!approved) {
+            approved = true;
+            await db.update(fxIntents).set({ approvedAt: NOW, approvedAmountAtomic: "6000000" }).where(eq(fxIntents.userId, user.id));
+          }
+          return target.transaction(...args);
+        };
+      },
+    });
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
+    expect(deps.rfq.request).toHaveBeenCalledWith(expect.objectContaining({ sellAmount: 6_000_000n }));
+  });
+
   it("asks once for a refill through USD₮ and lets the second leg inherit the approval, once", async () => {
     const user = await freelancer(RESERVE, "sell_usd");
     const { deps, state } = harness({ USAT: 20_000_000n }, { outcome: quoted({ sellAmount: 10_000_000n, takerPays: 10_000_000n, buyAmount: 9_990_000n }) });
@@ -786,9 +810,11 @@ describe("runTreasuryForUser: approvals", () => {
     expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
 
     // The hub leg bought 9.99 USD₮; the refill's second leg sells at most that, with no new question.
-    state.balances = { ...state.balances, USAT: 10_000_000n, USDT: 9_990_000n };
+    // The engine wants more than that (US$10 of pesos from 15 USD₮), so the inherited cap is what binds.
+    state.balances = { ...state.balances, USAT: 10_000_000n, USDT: 15_000_000n };
     deps.rfq.request = vi.fn(async () => refillQuote(9_000_000n, 14_380n));
     expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
+    expect(deps.rfq.request).toHaveBeenLastCalledWith(expect.objectContaining({ sellAmount: 9_990_000n }));
     const second = (await intentsOf(user.id)).find((i) => i.reason === "top_up");
     expect(second).toMatchObject({ approvedVia: hub.id, approvedAmountAtomic: "9990000", status: "filled" });
 

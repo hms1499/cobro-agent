@@ -252,11 +252,12 @@ async function runLocked(deps: ExecutorDeps, ctx: TreasuryContext, result: Resul
 
   const approval = await approvalFor(deps, ctx, open, plan);
   if (approval.kind === "needed") return propose(deps, ctx, plan, result);
-  const d = capDecision(plan.decision, approval.cap, rates);
-  const sized = { ...plan, decision: d };
+  const sized = { ...plan, decision: capDecision(plan.decision, approval.cap, rates) };
   if (deps.flags.dryRun) return dryRun(deps, ctx, sized, approval.approved, result);
 
   const intent = await saveIntent(deps.db, ctx.userId, sized, deps.now(), approval.save);
+  // The freelancer may have approved a lower amount since `open` was read: the stored approval is the limit.
+  const d = intent.approvedAmountAtomic === null ? sized.decision : capDecision(sized.decision, BigInt(intent.approvedAmountAtomic), rates);
   if (intent.retryAfter && intent.retryAfter > deps.now()) return result("waiting", "retry_after");
 
   const { feeToken } = await ensureFeeToken(deps, ctx, balances, { asset: d.from, amount: d.amount });
