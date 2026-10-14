@@ -132,16 +132,17 @@ export async function saveIntent(
       const [current] = await tx
         .select()
         .from(fxIntents)
-        .where(and(eq(fxIntents.id, plan.keep), inArray(fxIntents.status, OPEN_STATUSES)));
+        .where(and(eq(fxIntents.id, plan.keep), inArray(fxIntents.status, OPEN_STATUSES)))
+        .for("update");
       if (current) {
         const approveNow = current.approvedAt === null && (current.status === "proposed" || approval.via !== undefined);
         // "executing" left behind by a crashed run goes back to waiting; its age is kept.
         const [kept] = await tx
           .update(fxIntents)
           .set({ ...fields, status: "waiting", ...(approveNow ? grant : {}) })
-          .where(eq(fxIntents.id, current.id))
+          .where(and(eq(fxIntents.id, current.id), inArray(fxIntents.status, OPEN_STATUSES)))
           .returning();
-        return kept;
+        if (kept) return kept;
       }
     }
     const [created] = await tx
@@ -199,6 +200,7 @@ export async function approveProposal(
   seenAtomic: bigint,
   now: Date,
 ): Promise<FxIntentRow | null> {
+  if (seenAtomic <= 0n) return null;
   const capped = sql`least(${fxIntents.amountAtomic}, ${seenAtomic.toString()}::numeric)`;
   const [row] = await db
     .update(fxIntents)

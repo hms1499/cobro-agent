@@ -212,6 +212,14 @@ describe("proposals", () => {
     expect(await dismissProposal(db, owner.id, proposal.id, NOW)).toBeNull();
   });
 
+  it("refuses to approve a zero or negative seen amount and leaves the proposal alone", async () => {
+    const user = await seedFreelancer(db);
+    const proposal = await proposeIntent(db, user.id, newPlan(topUp(2_000_000n)), NOW);
+    expect(await approveProposal(db, user.id, proposal.id, 0n, NOW)).toBeNull();
+    expect(await approveProposal(db, user.id, proposal.id, -1n, NOW)).toBeNull();
+    expect((await openProposal(db, user.id))?.id).toBe(proposal.id);
+  });
+
   it("dismisses with a timestamp, and pausing cancels without one", async () => {
     const user = await seedFreelancer(db);
     const first = await proposeIntent(db, user.id, newPlan(topUp(2_000_000n)), NOW);
@@ -242,6 +250,16 @@ describe("saveIntent approvals", () => {
     await approveProposal(db, user.id, proposal.id, 2_000_000n, minutes(5));
     const saved = await saveIntent(db, user.id, keepPlan(proposal.id, topUp(1_800_000n)), minutes(10));
     expect(saved).toMatchObject({ amountAtomic: "1800000", approvedAt: minutes(5), approvedAmountAtomic: "2000000" });
+  });
+
+  it("does not revive a dismissed proposal it was told to keep", async () => {
+    const user = await seedFreelancer(db);
+    const proposal = await proposeIntent(db, user.id, newPlan(topUp(2_000_000n)), NOW);
+    await dismissProposal(db, user.id, proposal.id, NOW);
+    const saved = await saveIntent(db, user.id, keepPlan(proposal.id, topUp(2_000_000n)), minutes(5));
+    expect(saved.id).not.toBe(proposal.id);
+    const [old] = await db.select().from(fxIntents).where(eq(fxIntents.id, proposal.id));
+    expect(old).toMatchObject({ status: "cancelled", dismissedAt: NOW, approvedAt: null });
   });
 
   it("records an inherited approval on a new intent", async () => {
