@@ -24,7 +24,7 @@ export async function ProposalBanner({ user, proposal }: { user: AppUser; propos
       <p className="max-w-prose text-muted-foreground">
         {view.why} {view.price}
       </p>
-      <ProposalControls key={`${proposal.id}:${proposal.amountAtomic}`} intentId={proposal.id} seenAtomic={proposal.amountAtomic} />
+      <ProposalControls key={proposal.id} intentId={proposal.id} seenAtomic={proposal.amountAtomic} />
       <details className="text-sm">
         <summary className="min-h-11 cursor-pointer py-2 text-primary">{t("common.details")}</summary>
         <p className="tabular-nums">{view.units}</p>

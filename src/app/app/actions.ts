@@ -46,7 +46,10 @@ export interface ProposalState {
 export async function approveProposalAction(_previous: ProposalState, formData: FormData): Promise<ProposalState> {
   const user = await requireUser();
   const form = parseProposalForm(formFields(formData));
-  if (!form) return { outcome: "changed" };
+  if (!form) {
+    refresh();
+    return { outcome: "changed" };
+  }
   const db = getDb();
   const now = new Date();
   const intent = await db.transaction(async (tx) => {
@@ -54,7 +57,10 @@ export async function approveProposalAction(_previous: ProposalState, formData: 
     if (row) await logEvent(tx, user.id, "approved", intentEventData(row), now);
     return row;
   });
-  if (!intent) return { outcome: "changed" };
+  if (!intent) {
+    refresh();
+    return { outcome: "changed" };
+  }
   after(() => runTreasuryAfterApproval(user.id));
   refresh();
   return { outcome: "approved" };
@@ -64,7 +70,10 @@ export async function approveProposalAction(_previous: ProposalState, formData: 
 export async function dismissProposalAction(_previous: ProposalState, formData: FormData): Promise<ProposalState> {
   const user = await requireUser();
   const form = parseProposalForm(formFields(formData));
-  if (!form) return { outcome: "changed" };
+  if (!form) {
+    refresh();
+    return { outcome: "changed" };
+  }
   const db = getDb();
   const now = new Date();
   const intent = await db.transaction(async (tx) => {
@@ -72,7 +81,10 @@ export async function dismissProposalAction(_previous: ProposalState, formData: 
     if (row) await logEvent(tx, user.id, "dismissed", intentEventData(row), now);
     return row;
   });
-  if (!intent) return { outcome: "changed" };
+  if (!intent) {
+    refresh();
+    return { outcome: "changed" };
+  }
   refresh();
   return { outcome: "dismissed" };
 }
