@@ -195,15 +195,28 @@ export interface ProposalView {
 export function describeProposal(
   intent: Pick<FxIntentRow, "fromAsset" | "toAsset" | "amountAtomic" | "reason">,
   ctx: ExplainContext,
-  maxSlippageBps: number,
+  limits: { maxSlippageBps: number; hardMaxSlippageBps: number; maxWaitMinutes: number },
 ): ProposalView {
-  const amount = moneyText(intent.fromAsset, intent.amountAtomic, ctx);
+  const { amount, currency } = tokenFiatAmount(intent.fromAsset, BigInt(intent.amountAtomic));
+  const shown = displayAmount(amount, currency, ctx.local, ctx.rates);
+  // The source amount in its own currency first; the other currency is only an estimate, so it follows in parentheses.
+  const exact = formatMoney(amount, currency);
+  const estimate = [shown.primary, shown.secondary].find((text) => text !== undefined && text !== exact);
+  const from = currency === "USD" ? t("proposal.fromDollars", { amount: exact }) : exact;
   const target = proposalTarget(intent.toAsset, intent.reason, ctx.local);
+  const via = intent.reason === "hub_route";
+  const key = via
+    ? estimate ? "proposal.bodyViaEstimate" : "proposal.bodyVia"
+    : estimate ? "proposal.bodyEstimate" : "proposal.body";
   return {
     title: t("proposal.title"),
-    body: t(intent.reason === "hub_route" ? "proposal.bodyVia" : "proposal.body", { amount, target }),
+    body: t(key, { from, target, estimate: estimate ?? "" }),
     why: t(`proposal.why.${intent.reason}`),
-    price: t("proposal.price", { pct: percentText(maxSlippageBps) }),
+    price: t("proposal.price", {
+      pct: percentText(limits.maxSlippageBps),
+      hard: percentText(limits.hardMaxSlippageBps),
+      hours: String(Math.round(limits.maxWaitMinutes / 60)),
+    }),
     units: t("proposal.units", {
       amount: formatDecimal(BigInt(intent.amountAtomic), TOKENS[intent.fromAsset].decimals),
       symbol: t(`asset.${intent.fromAsset}.symbol`),

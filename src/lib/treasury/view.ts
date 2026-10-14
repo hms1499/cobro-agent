@@ -74,6 +74,7 @@ export type AgentState = "off" | "paused" | "awaiting" | "dry_run" | "active";
 export function agentState(input: { globalEnabled: boolean; dryRun: boolean; userEnabled: boolean; awaitingApproval: boolean }): AgentState {
   if (!input.globalEnabled) return "off";
   if (!input.userEnabled) return "paused";
-  if (input.awaitingApproval) return "awaiting";
-  return input.dryRun ? "dry_run" : "active";
+  // Test mode stays visible even while a proposal waits.
+  if (input.dryRun) return "dry_run";
+  return input.awaitingApproval ? "awaiting" : "active";
 }

@@ -13,7 +13,7 @@ export async function ProposalBanner({ user, proposal }: { user: AppUser; propos
   const db = getDb();
   const [[row], rates] = await Promise.all([db.select().from(rules).where(eq(rules.userId, user.id)), getReferenceRatesOrNull()]);
   if (!row) return null;
-  const view = describeProposal(proposal, { local: user.localCurrency, rates }, row.maxSlippageBps);
+  const view = describeProposal(proposal, { local: user.localCurrency, rates }, row);
   return (
     <section aria-labelledby="proposal-heading" className="flex flex-col gap-3 rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
       <h2 id="proposal-heading" className="flex items-center gap-2 text-lg font-semibold">

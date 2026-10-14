@@ -11,13 +11,24 @@ export function isApprovalMode(value: unknown): value is ApprovalMode {
 /** Trade approvals §3: dismissal silences a group, and a refill's two legs share one approval. */
 export type ApprovalGroup = "refill" | "save";
 
+/** Exhaustive: a new ConvertReason does not compile until it is classified. */
+const REASON_GROUP: Record<ConvertReason, ApprovalGroup> = {
+  top_up: "refill",
+  hub_route: "refill",
+  save_excess: "save",
+  save_other: "save",
+};
+
+const reasonsOf = (group: ApprovalGroup): ConvertReason[] =>
+  (Object.keys(REASON_GROUP) as ConvertReason[]).filter((reason) => REASON_GROUP[reason] === group);
+
 export const GROUP_REASONS: Record<ApprovalGroup, ConvertReason[]> = {
-  refill: ["top_up", "hub_route"],
-  save: ["save_excess", "save_other"],
+  refill: reasonsOf("refill"),
+  save: reasonsOf("save"),
 };
 
 export function approvalGroup(reason: ConvertReason): ApprovalGroup {
-  return GROUP_REASONS.refill.includes(reason) ? "refill" : "save";
+  return REASON_GROUP[reason];
 }
 
 /** Trade approvals §3: sell_usd asks before a refill (it sells dollars); all asks before anything. */

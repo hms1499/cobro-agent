@@ -94,20 +94,31 @@ describe("approval events", () => {
 });
 
 describe("describeProposal", () => {
+  const limits = { maxSlippageBps: 50, hardMaxSlippageBps: 150, maxWaitMinutes: 360 };
   it("says what, why, at what price, and keeps token units for Details", () => {
-    const view = describeProposal({ fromAsset: "USDT", toAsset: "WARS", amountAtomic: "2100000", reason: "top_up" }, ctx, 50);
+    const view = describeProposal({ fromAsset: "USDT", toAsset: "WARS", amountAtomic: "2100000", reason: "top_up" }, ctx, limits);
     expect(view).toEqual({
       title: "Your agent needs your approval",
-      body: `Convert ≈ ARS${NBSP}3,360 to pesos.`,
+      body: `Convert US$2.10 of your dollars to pesos (≈ ARS${NBSP}3,360).`,
       why: "Your spending money is below the reserve you set.",
-      price: "Your agent waits for a fair price: at most 0.50% below the market rate.",
+      price: "Your agent waits for a fair price: at most 0.50% below the market rate, or up to 1.50% after 6 hours.",
       units: "2.1 USD₮",
     });
   });
 
   it("mentions the USD₮ step of a refill from USA₮", () => {
-    const view = describeProposal({ fromAsset: "USAT", toAsset: "USDT", amountAtomic: "2100000", reason: "hub_route" }, ctx, 50);
-    expect(view.body).toBe(`Convert ≈ ARS${NBSP}3,360 to pesos, through USD₮.`);
+    const view = describeProposal({ fromAsset: "USAT", toAsset: "USDT", amountAtomic: "2100000", reason: "hub_route" }, ctx, limits);
+    expect(view.body).toBe(`Convert US$2.10 of your dollars to pesos (≈ ARS${NBSP}3,360), through USD₮.`);
+  });
+
+  it("names pesos in their own currency when selling pesos", () => {
+    const view = describeProposal({ fromAsset: "WARS", toAsset: "USDT", amountAtomic: "3200000000000000000000", reason: "save_excess" }, ctx, limits);
+    expect(view.body).toBe(`Convert ARS${NBSP}3,200 to dollars (≈ US$2.00).`);
+  });
+
+  it("drops the estimate without rates", () => {
+    const view = describeProposal({ fromAsset: "USDT", toAsset: "WARS", amountAtomic: "2100000", reason: "top_up" }, { local: null, rates: null }, limits);
+    expect(view.body).toBe("Convert US$2.10 of your dollars to pesos.");
   });
 });
 
