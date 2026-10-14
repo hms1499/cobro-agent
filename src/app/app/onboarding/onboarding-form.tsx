@@ -70,6 +70,7 @@ export function OnboardingForm({ defaultName }: { defaultName: string }) {
           </span>
         </p>
       </FormField>
+      <p className="text-sm text-muted-foreground">{t("onboarding.approvalNote", { currency })}</p>
 
       <SubmitButton pendingLabel={t("onboarding.saving")}>{t("onboarding.submit")}</SubmitButton>
     </form>

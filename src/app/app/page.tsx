@@ -13,11 +13,13 @@ import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { formatDate } from "@/lib/invoices/dates";
 import { listInvoices } from "@/lib/invoices/repo";
 import { displayAmount } from "@/lib/money/display";
+import { openProposal } from "@/lib/treasury/repo";
 import type { AppUser } from "@/lib/users/queries";
 import { finishSetup } from "./actions";
 import { ActivityFeed } from "./activity-feed";
 import { AgentStatus } from "./agent-status";
 import { Conversions } from "./conversions";
+import { ProposalBanner } from "./proposal-banner";
 import { RepeatClients } from "./repeat-clients";
 import { TreasurySummary } from "./treasury-summary";
 
@@ -57,12 +59,19 @@ function HomeSkeleton() {
 
 async function Home() {
   const user = await requireUser();
-  const [invoices, rates] = await Promise.all([listInvoices(getDb(), user.id), getReferenceRatesOrNull()]);
-  const newInvoiceLink = user.treasuryStatus === "ready" ? primaryLink : secondaryLink;
+  const db = getDb();
+  const [invoices, rates, proposal] = await Promise.all([listInvoices(db, user.id), getReferenceRatesOrNull(), openProposal(db, user.id)]);
+  // One primary action per screen: a setup or approval banner takes it from "New invoice" (MASTER.md "Buttons").
+  const newInvoiceLink = user.treasuryStatus === "ready" && !proposal ? primaryLink : secondaryLink;
   return (
     <>
       <h1 className="text-2xl font-semibold">{t("app.greeting", { name: user.displayName ?? user.email ?? "" })}</h1>
       <SetupBanner status={user.treasuryStatus} />
+      {proposal && (
+        <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+          <ProposalBanner user={user} proposal={proposal} />
+        </Suspense>
+      )}
       <Suspense fallback={<Skeleton className="h-40 w-full" />}>
         <AgentStatus user={user} />
       </Suspense>
