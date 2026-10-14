@@ -4,10 +4,15 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db/client";
 import { fxIntents, rules, treasuryWallets } from "@/lib/db/schema";
 import { createTestDb, resetDb, seedFreelancer, TEST_TREASURY } from "@/lib/db/testing";
-import type { ConvertDecision } from "./engine";
+import type { ConvertDecision, IntentPlan } from "./engine";
 import {
   acquireWalletLock,
+  approveProposal,
+  cancelProposals,
+  dismissedRecently,
+  dismissProposal,
   filledUsdWad24h,
+  inheritableApproval,
   insertTrade,
   lastEvent,
   listEvents,
@@ -15,7 +20,9 @@ import {
   loadTreasuryContext,
   logEvent,
   openIntent,
+  openProposal,
   pendingTreasuryTxs,
+  proposeIntent,
   recordTreasuryTx,
   releaseWalletLock,
   saveIntent,
@@ -167,5 +174,134 @@ describe("trade approvals schema", () => {
     await expect(
       db.insert(fxIntents).values({ ...base, fromAsset: "USDT", toAsset: "WARS", reason: "top_up", approvedVia: hub.id }),
     ).rejects.toThrow();
+  });
+});
+
+const topUp = (amount: bigint): ConvertDecision => ({ kind: "convert", from: "USDT", to: "WARS", amount, usdWad: 0n, reason: "top_up" });
+const newPlan = (d: ConvertDecision): Extract<IntentPlan, { action: "convert" }> => ({ action: "convert", keep: null, cancel: null, decision: d });
+const keepPlan = (id: string, d: ConvertDecision): Extract<IntentPlan, { action: "convert" }> => ({ action: "convert", keep: id, cancel: null, decision: d });
+
+describe("proposals", () => {
+  it("proposes, keeps the id when the amount changes, and is the open intent", async () => {
+    const user = await seedFreelancer(db);
+    const first = await proposeIntent(db, user.id, newPlan(topUp(2_000_000n)), NOW);
+    const again = await proposeIntent(db, user.id, keepPlan(first.id, topUp(3_000_000n)), minutes(10));
+    expect(again).toMatchObject({ id: first.id, status: "proposed", amountAtomic: "3000000", approvedAt: null });
+    expect((await openIntent(db, user.id))?.id).toBe(first.id);
+    expect((await openProposal(db, user.id))?.id).toBe(first.id);
+  });
+
+  it("approves at most the amount the freelancer saw (never raises the cap)", async () => {
+    const user = await seedFreelancer(db);
+    const proposal = await proposeIntent(db, user.id, newPlan(topUp(3_000_000n)), NOW);
+    const approved = await approveProposal(db, user.id, proposal.id, 2_100_000n, minutes(5));
+    expect(approved).toMatchObject({ status: "waiting", amountAtomic: "2100000", approvedAmountAtomic: "2100000", approvedAt: minutes(5) });
+
+    const other = await seedFreelancer(db);
+    const small = await proposeIntent(db, other.id, newPlan(topUp(1_500_000n)), NOW);
+    expect((await approveProposal(db, other.id, small.id, 9_000_000n, NOW))?.approvedAmountAtomic).toBe("1500000");
+  });
+
+  it("refuses to approve someone else's proposal, or one already handled", async () => {
+    const owner = await seedFreelancer(db);
+    const stranger = await seedFreelancer(db);
+    const proposal = await proposeIntent(db, owner.id, newPlan(topUp(2_000_000n)), NOW);
+    expect(await approveProposal(db, stranger.id, proposal.id, 2_000_000n, NOW)).toBeNull();
+    expect(await approveProposal(db, owner.id, proposal.id, 2_000_000n, NOW)).not.toBeNull();
+    expect(await approveProposal(db, owner.id, proposal.id, 2_000_000n, NOW)).toBeNull();
+    expect(await dismissProposal(db, owner.id, proposal.id, NOW)).toBeNull();
+  });
+
+  it("dismisses with a timestamp, and pausing cancels without one", async () => {
+    const user = await seedFreelancer(db);
+    const first = await proposeIntent(db, user.id, newPlan(topUp(2_000_000n)), NOW);
+    expect(await dismissProposal(db, user.id, first.id, NOW)).toMatchObject({ status: "cancelled", dismissedAt: NOW });
+    expect(await dismissedRecently(db, user.id, ["top_up", "hub_route"], minutes(60))).toBe(true);
+    expect(await dismissedRecently(db, user.id, ["save_excess", "save_other"], minutes(60))).toBe(false);
+    expect(await dismissedRecently(db, user.id, ["top_up", "hub_route"], minutes(24 * 60))).toBe(false);
+
+    const second = await proposeIntent(db, user.id, newPlan(topUp(2_000_000n)), minutes(1));
+    await cancelProposals(db, user.id, minutes(2));
+    const [row] = await db.select().from(fxIntents).where(eq(fxIntents.id, second.id));
+    expect(row).toMatchObject({ status: "cancelled", dismissedAt: null });
+    expect(await openProposal(db, user.id)).toBeNull();
+  });
+});
+
+describe("saveIntent approvals", () => {
+  it("treats a kept proposal as approved once the mode no longer asks", async () => {
+    const user = await seedFreelancer(db);
+    const proposal = await proposeIntent(db, user.id, newPlan(topUp(2_000_000n)), NOW);
+    const saved = await saveIntent(db, user.id, keepPlan(proposal.id, topUp(2_000_000n)), minutes(30));
+    expect(saved).toMatchObject({ id: proposal.id, status: "waiting", approvedAt: minutes(30), approvedAmountAtomic: "2000000" });
+  });
+
+  it("keeps an earlier approval as it was", async () => {
+    const user = await seedFreelancer(db);
+    const proposal = await proposeIntent(db, user.id, newPlan(topUp(2_000_000n)), NOW);
+    await approveProposal(db, user.id, proposal.id, 2_000_000n, minutes(5));
+    const saved = await saveIntent(db, user.id, keepPlan(proposal.id, topUp(1_800_000n)), minutes(10));
+    expect(saved).toMatchObject({ amountAtomic: "1800000", approvedAt: minutes(5), approvedAmountAtomic: "2000000" });
+  });
+
+  it("records an inherited approval on a new intent", async () => {
+    const user = await seedFreelancer(db);
+    const [hub] = await db
+      .insert(fxIntents)
+      .values({ userId: user.id, fromAsset: "USAT", toAsset: "USDT", amountAtomic: "2000000", reason: "hub_route", status: "filled", approvedAt: NOW })
+      .returning();
+    const saved = await saveIntent(db, user.id, newPlan(topUp(1_900_000n)), NOW, { via: hub.id, capAtomic: 1_990_000n });
+    expect(saved).toMatchObject({ approvedVia: hub.id, approvedAt: NOW, approvedAmountAtomic: "1990000", status: "waiting" });
+  });
+});
+
+describe("inheritableApproval", () => {
+  async function filledHub(userId: string, opts: { approved: boolean; filledAt: Date }) {
+    const [hub] = await db
+      .insert(fxIntents)
+      .values({
+        userId,
+        fromAsset: "USAT",
+        toAsset: "USDT",
+        amountAtomic: "2000000",
+        reason: "hub_route",
+        status: "filled",
+        approvedAt: opts.approved ? NOW : null,
+      })
+      .returning();
+    await insertTrade(db, {
+      userId,
+      intentId: hub.id,
+      sellAsset: "USAT",
+      buyAsset: "USDT",
+      sellAmount: "2000000",
+      buyAmount: "1990000",
+      status: "filled",
+      filledAt: opts.filledAt,
+    });
+    return hub;
+  }
+
+  it("finds an approved hub leg filled in the last 24 hours, with the USD₮ it bought", async () => {
+    const user = await seedFreelancer(db);
+    const hub = await filledHub(user.id, { approved: true, filledAt: NOW });
+    expect(await inheritableApproval(db, user.id, minutes(30))).toEqual({ intentId: hub.id, boughtAtomic: 1_990_000n });
+  });
+
+  it("ignores an unapproved, an old or an already inherited hub leg", async () => {
+    const user = await seedFreelancer(db);
+    await filledHub(user.id, { approved: false, filledAt: NOW });
+    await filledHub(user.id, { approved: true, filledAt: minutes(-25 * 60) });
+    const used = await filledHub(user.id, { approved: true, filledAt: NOW });
+    await db.insert(fxIntents).values({
+      userId: user.id,
+      fromAsset: "USDT",
+      toAsset: "WARS",
+      amountAtomic: "1990000",
+      reason: "top_up",
+      status: "filled",
+      approvedVia: used.id,
+    });
+    expect(await inheritableApproval(db, user.id, minutes(30))).toBeNull();
   });
 });
