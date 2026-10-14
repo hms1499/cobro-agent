@@ -140,3 +140,32 @@ describe("events and treasury transactions", () => {
     expect((await pendingTreasuryTxs(db, user.id)).map((t) => t.hash)).toEqual(["0xb"]);
   });
 });
+
+describe("trade approvals schema", () => {
+  it("gives new rules the sell_usd approval mode", async () => {
+    const user = await seedFreelancer(db);
+    const [row] = await db.select().from(rules).where(eq(rules.userId, user.id));
+    expect(row.approvalMode).toBe("sell_usd");
+  });
+
+  it("allows one open intent per user, a proposal included", async () => {
+    const user = await seedFreelancer(db);
+    const base = { userId: user.id, fromAsset: "USDT" as const, toAsset: "WARS" as const, amountAtomic: "1000000", reason: "top_up" as const };
+    await db.insert(fxIntents).values({ ...base, status: "proposed" });
+    await expect(db.insert(fxIntents).values({ ...base, status: "waiting" })).rejects.toThrow();
+    await db.insert(fxIntents).values({ ...base, status: "cancelled", dismissedAt: NOW });
+  });
+
+  it("lets one intent inherit a given approval only once", async () => {
+    const user = await seedFreelancer(db);
+    const base = { userId: user.id, amountAtomic: "1000000", status: "filled" as const };
+    const [hub] = await db
+      .insert(fxIntents)
+      .values({ ...base, fromAsset: "USAT", toAsset: "USDT", reason: "hub_route", approvedAt: NOW, approvedAmountAtomic: "1000000" })
+      .returning();
+    await db.insert(fxIntents).values({ ...base, fromAsset: "USDT", toAsset: "WARS", reason: "top_up", approvedVia: hub.id });
+    await expect(
+      db.insert(fxIntents).values({ ...base, fromAsset: "USDT", toAsset: "WARS", reason: "top_up", approvedVia: hub.id }),
+    ).rejects.toThrow();
+  });
+});

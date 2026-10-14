@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   boolean,
   date,
   index,
@@ -23,7 +24,9 @@ export const invoiceStatus = pgEnum("invoice_status", ["open", "settling", "paid
 export const recurringInterval = pgEnum("recurring_interval", ["weekly", "monthly"]);
 export const walletStatus = pgEnum("wallet_status", ["creating", "ready", "failed"]);
 export const signerType = pgEnum("signer_type", ["para", "local"]);
-export const intentStatus = pgEnum("intent_status", ["waiting", "executing", "filled", "blocked", "cancelled"]);
+export const intentStatus = pgEnum("intent_status", ["proposed", "waiting", "executing", "filled", "blocked", "cancelled"]);
+/** Trade approvals spec §2: what the agent may convert without asking the freelancer. */
+export const approvalMode = pgEnum("approval_mode", ["auto", "sell_usd", "all"]);
 export const intentReason = pgEnum("intent_reason", ["save_excess", "save_other", "top_up", "hub_route"]);
 export const tradeStatus = pgEnum("trade_status", ["no_quote", "rejected", "expired", "broadcast", "filled", "failed"]);
 export const txKind = pgEnum("tx_kind", ["approve", "swap", "withdraw"]);
@@ -67,6 +70,7 @@ export const rules = pgTable("rules", {
   localCurrency: localCurrency("local_currency").notNull(),
   reserveAmount: fiatAmount("reserve_amount").notNull().default("0"),
   autoTopUp: boolean("auto_top_up").notNull().default(true),
+  approvalMode: approvalMode("approval_mode").notNull().default("sell_usd"),
   maxSlippageBps: integer("max_slippage_bps").notNull().default(50),
   hardMaxSlippageBps: integer("hard_max_slippage_bps").notNull().default(150),
   maxWaitMinutes: integer("max_wait_minutes").notNull().default(360),
@@ -159,7 +163,7 @@ export const payments = pgTable(
   (t) => [index("payments_invoice_idx").on(t.invoiceId)],
 );
 
-/** Spec §10.2: at most one open (waiting or executing) intent per user. */
+/** Spec §10.2 and trade approvals §4: at most one open (proposed, waiting or executing) intent per user. */
 export const fxIntents = pgTable(
   "fx_intents",
   {
@@ -176,10 +180,20 @@ export const fxIntents = pgTable(
     lastSlippageBps: integer("last_slippage_bps"),
     /** Textile asked us to wait (retryAfterMs) or an RFQ just failed; no new RFQ before this time. */
     retryAfter: timestamp("retry_after", { withTimezone: true }),
+    /** Trade approvals §4: the most the freelancer approved, in from_asset units; null until approved. */
+    approvedAmountAtomic: atomic("approved_amount_atomic"),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    /** The freelancer dismissed this proposal: its approval group stays quiet for 24 hours. */
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    /** The approved hub_route intent whose approval this top_up inherited; unique, so an approval is inherited once. */
+    approvedVia: uuid("approved_via")
+      .unique()
+      .references((): AnyPgColumn => fxIntents.id, { onDelete: "set null" }),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [uniqueIndex("fx_intents_one_open_uq").on(t.userId).where(sql`status in ('waiting', 'executing')`)],
+  // Names the closed statuses: the migration that adds 'proposed' cannot use that value in the same transaction.
+  (t) => [uniqueIndex("fx_intents_one_open_uq").on(t.userId).where(sql`status not in ('filled', 'blocked', 'cancelled')`)],
 );
 
 /** One row per RFQ we sent, whatever came of it (spec §10.5 volume: requested, quoted, filled). */
@@ -291,6 +305,7 @@ export type FxIntentRow = typeof fxIntents.$inferSelect;
 export type FxTradeRow = typeof fxTrades.$inferSelect;
 export type TreasuryTxRow = typeof treasuryTxs.$inferSelect;
 export type AgentEventRow = typeof agentEvents.$inferSelect;
+export type ApprovalMode = (typeof approvalMode.enumValues)[number];
 export type IntentReason = (typeof intentReason.enumValues)[number];
 export type TradeStatus = (typeof tradeStatus.enumValues)[number];
 export type TxKind = (typeof txKind.enumValues)[number];
