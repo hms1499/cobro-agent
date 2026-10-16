@@ -20,7 +20,8 @@ export const getCurrentUser = cache(async (): Promise<AppUser | null> => {
 
 export async function requireUser(opts: { allowOnboarding?: boolean } = {}): Promise<AppUser> {
   const user = await getCurrentUser();
-  if (!user) redirect("/signin");
+  // Not "/signin" directly: a cookie that verifies but names no user would bounce back here (see proxy.ts).
+  if (!user) redirect("/api/session/reset");
   if (!user.localCurrency && !opts.allowOnboarding) redirect("/app/onboarding");
   return user;
 }
