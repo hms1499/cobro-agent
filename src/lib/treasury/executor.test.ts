@@ -643,6 +643,48 @@ describe("runTreasuries", () => {
     expect(timed.map((r) => r.userId)).toEqual(["a", "b"]);
     expect(summarizeRuns([...timed, { userId: "x", outcome: "converted" }])).toEqual({ idle: 2, converted: 1 });
   });
+
+  it("runs at most `concurrency` wallets at once and visits each exactly once", async () => {
+    let active = 0;
+    let peak = 0;
+    const seen: string[] = [];
+    const run = async (userId: string) => {
+      active += 1;
+      peak = Math.max(peak, active);
+      seen.push(userId);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      if (userId === "c") throw new Error("boom");
+      return { userId, outcome: "idle" as const };
+    };
+    const results = await runTreasuries(["a", "b", "c", "d", "e"], run, { concurrency: 3 });
+    expect(peak).toBe(3);
+    expect([...seen].sort()).toEqual(["a", "b", "c", "d", "e"]);
+    expect(results).toHaveLength(5);
+    expect(results.find((r) => r.userId === "c")).toEqual({ userId: "c", outcome: "failed", detail: "boom" });
+  });
+
+  it("returns at once for no wallets, whatever the concurrency", async () => {
+    expect(await runTreasuries([], async (userId) => ({ userId, outcome: "idle" as const }), { concurrency: 3 })).toEqual([]);
+  });
+
+  it("starts no new wallet after the deadline, even with free workers", async () => {
+    let clock = 0;
+    const started: string[] = [];
+    const results = await runTreasuries(
+      ["a", "b", "c", "d"],
+      async (userId) => {
+        started.push(userId);
+        await Promise.resolve(); // let the second worker start before time moves on
+        clock += 100;
+        return { userId, outcome: "idle" as const };
+      },
+      { concurrency: 2, deadline: 50, now: () => clock },
+    );
+    // a and b start at clock 0; after either finishes the clock is past 50, so c and d never start.
+    expect([...started].sort()).toEqual(["a", "b"]);
+    expect(results).toHaveLength(2);
+  });
 });
 
 describe("runTreasuryForUser: approvals", () => {

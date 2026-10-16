@@ -5,8 +5,9 @@ import {
   TransactionNotFoundError,
   TransactionReceiptNotFoundError,
   WaitForTransactionReceiptTimeoutError,
+  type Address,
 } from "viem";
-import { createCeloPublicClient } from "@/lib/chain/clients";
+import { createCeloDisplayClient, createCeloPublicClient } from "@/lib/chain/clients";
 import { isNodeRejection, signTreasuryTx, TEXTILE_REACTOR } from "@/lib/chain/treasury-tx";
 import { readPublicEnv } from "@/lib/config/public";
 import { parseServerEnv, requireValue } from "@/lib/config/server";
@@ -16,9 +17,9 @@ import { getReferenceRates } from "@/lib/fx/rates";
 import { TextileRfqClient } from "@/lib/fx/rfq";
 import { paraTreasurySigner } from "@/lib/signer/treasury-signer";
 import { paraRestClient } from "@/lib/users/para";
-import { erc20Balance, readTreasuryBalances } from "./balances";
+import { erc20Balance, readTreasuryBalances, type ReadBalance, type TreasuryBalances } from "./balances";
 import { runTreasuryForUser, TxRejectedError, type ExecutorDeps } from "./executor";
-import { operatorDripper } from "./gas";
+import { operatorDripper, serializedDripper } from "./gas";
 
 /** One run is an RFQ (up to 75 s) plus up to 3 receipt waits; it must fit the 300 s wallet lock, which is never renewed. */
 const RECEIPT_TIMEOUT_MS = 45_000;
@@ -81,14 +82,15 @@ export function liveExecutorDeps(): ExecutorDeps {
     signer: (ctx) => paraTreasurySigner(para, { id: ctx.paraWalletId, address: ctx.address }),
     signTx: (signer, call, feeToken) => signTreasuryTx({ client, signer, attributionCode: code }, call, feeToken),
     rfq: new TextileRfqClient({ baseUrl: env.TEXTILE_API_URL }),
-    // The operator key is read only when a wallet actually needs gas.
-    drip: (to, amount) =>
+    // The operator key is read only when a wallet actually needs gas; drips go one at a time (one nonce sequence).
+    drip: serializedDripper((to, amount) =>
       operatorDripper({
         privateKey: requireValue(env.OPERATOR_PRIVATE_KEY, "OPERATOR_PRIVATE_KEY"),
         attributionCode: code,
         rpcUrl: env.CELO_RPC_URL,
         feeToken: env.OPERATOR_FEE_TOKEN,
       })(to, amount),
+    ),
     allowedSpenders: [TEXTILE_REACTOR],
   };
   return cached;
@@ -114,4 +116,18 @@ export async function runTreasuryAfterApproval(userId: string): Promise<void> {
   } catch (error) {
     console.error(`Treasury run after approval for ${userId} failed:`, error);
   }
+}
+
+let display: ReadBalance | undefined;
+
+/**
+ * Balances for screens (dashboard, rules preview, withdraw page), with the fallback RPC. Money paths
+ * (executor, withdrawal action) use liveExecutorDeps().chain.readBalances, which reads the primary RPC only.
+ */
+export function readDisplayBalances(owner: Address): Promise<TreasuryBalances> {
+  if (!display) {
+    const env = parseServerEnv();
+    display = erc20Balance(createCeloDisplayClient([env.CELO_RPC_URL, env.CELO_RPC_FALLBACK_URL]));
+  }
+  return readTreasuryBalances(display, owner);
 }

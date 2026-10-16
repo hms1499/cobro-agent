@@ -1,15 +1,14 @@
-import { eq } from "drizzle-orm";
 import { CircleCheck, FlaskConical, Hand, Pause } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { t } from "@/i18n";
 import { parseServerEnv } from "@/lib/config/server";
 import { getDb } from "@/lib/db/client";
-import { rules } from "@/lib/db/schema";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { formatMoney } from "@/lib/money/format";
 import { describeEvent } from "@/lib/treasury/explain";
-import { listEvents, openProposal } from "@/lib/treasury/repo";
+import { listEvents } from "@/lib/treasury/repo";
+import { getOpenProposal, getRulesRow } from "@/lib/treasury/request-reads";
 import { agentState, type AgentState } from "@/lib/treasury/view";
 import type { AppUser } from "@/lib/users/queries";
 import { AgentToggle } from "./agent-toggle";
@@ -26,9 +25,9 @@ const CHIPS: Record<AgentState, { icon: typeof Pause; className: string }> = {
 export async function AgentStatus({ user }: { user: AppUser }) {
   const db = getDb();
   const env = parseServerEnv();
-  const [row] = await db.select().from(rules).where(eq(rules.userId, user.id));
+  const row = await getRulesRow(user.id);
   if (!row) return null;
-  const [[last], rates, proposal] = await Promise.all([listEvents(db, user.id, 1), getReferenceRatesOrNull(), openProposal(db, user.id)]);
+  const [[last], rates, proposal] = await Promise.all([listEvents(db, user.id, 1), getReferenceRatesOrNull(), getOpenProposal(user.id)]);
   const state = agentState({
     globalEnabled: env.TREASURY_ENABLED,
     dryRun: env.TREASURY_DRY_RUN,

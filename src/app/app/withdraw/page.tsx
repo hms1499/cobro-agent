@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/auth/current-user";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { PAY_ASSETS } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
-import { liveExecutorDeps } from "@/lib/treasury/live";
+import { readDisplayBalances } from "@/lib/treasury/live";
 import { tokenFiatAmount } from "@/lib/treasury/value";
 import { withdrawableAmount } from "@/lib/treasury/withdraw";
 import { WithdrawForm } from "./withdraw-form";
@@ -34,7 +34,7 @@ async function Withdraw() {
   const user = await requireUser();
   if (!user.treasuryAddress) return <p role="status">{t("withdraw.notReady")}</p>;
   const [balances, rates] = await Promise.all([
-    liveExecutorDeps().chain.readBalances(user.treasuryAddress),
+    readDisplayBalances(user.treasuryAddress),
     getReferenceRatesOrNull(),
   ]);
   const options = PAY_ASSETS.filter((asset) => withdrawableAmount(asset, balances) > 0n).map((asset) => {

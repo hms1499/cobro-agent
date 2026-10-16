@@ -140,7 +140,7 @@ Each freelancer has two wallets:
 |---|---|
 | App, API, UI | Next.js (App Router) + TypeScript, deployed on Vercel Hobby (free) |
 | Database | Neon Postgres (free tier) + Drizzle ORM |
-| Scheduler | GitHub Actions workflow scheduled every 10 minutes calling `POST /api/cron/treasury` with a bearer secret (Vercel Hobby cron only runs once per day). Measured 2026-10-13 to 10-15: GitHub delays scheduled runs, so they arrive every 2–5 hours. A payment also runs the agent at once through `after()`. An external cron service is an open option |
+| Scheduler | cron-job.org (free) calls `POST /api/cron/treasury?mode=async` every 20 minutes with a bearer secret (Neon Free gives 100 CU-hours a month and suspends compute after 5 idle minutes; a 5-minute tick would keep it awake, use about 180 CU-hours and suspend the database mid-month); the route answers 202 and runs the tick in `after()` (cron-job.org waits 30 s at most). GitHub Actions calls the same route without `mode` as the backup trigger and the alert: it runs inline and the workflow fails, emailing the owner, when the tick reports errors. GitHub delays its scheduled runs to every 2–5 hours (measured 2026-10-13 to 10-15). A payment also runs the agent at once through `after()` |
 | Chain access | viem (Celo mainnet, chain id 42220) |
 | Payer wallets | wagmi with the injected connector |
 | x402 | `@x402/next` or `@x402/core` server + `@x402/evm`, `@x402/fetch` in the browser (v2 packages, ≥ 2.26.0) |
@@ -402,8 +402,9 @@ the intent is older than `maxWaitMinutes`, accept if `≤ hardMaxSlippageBps`, o
 
 ### 10.4 Executor
 
-The cron route first issues due recurring invoices (§9.1), then runs these steps for each user with
-rules enabled:
+The cron route first issues due recurring invoices (§9.1) and reconciles settlements and pending
+transactions, then runs these steps for each user with rules enabled, in random order and at most
+three wallets at once (below Textile's four outstanding RFQs); no new wallet starts after 180 s:
 
 1. Take a per-wallet lock (row lock with expiry) so cron and payment triggers cannot overlap.
 2. Read balances and rates and run the engine. In dry-run mode, record the decision and stop. A conversion that needs approval stops here as a proposal (trade approvals §5.1).
@@ -484,6 +485,8 @@ Added with trade approvals: `rules.approval_mode` (`auto|sell_usd|all`, default 
 | Para error or timeout | Intent stays waiting and is retried next run |
 | Unknown broadcast outcome | Reconcile by receipt and nonce before any new transaction from that wallet: re-send the stored bytes, or mark them `failed` when the node refused them or has not seen them for 30 minutes |
 | Unknown x402 settlement outcome | After the `settling` hold, the cron looks for the matching on-chain transfer: it records the payment if found and reopens the invoice otherwise |
+| Primary RPC (forno) failing | Screens read balances through a second free RPC (`CELO_RPC_FALLBACK_URL`, default Ankr's public endpoint; dRPC's free tier refuses `eth_call` on Celo); money paths wait for the primary, so nothing is signed from a lagging node |
+| A cron tick reports errors | The tick logs `CRON TICK HAD ERRORS`; the GitHub workflow's run fails and GitHub emails the owner; cron-job.org emails on a failed call |
 
 Secrets (`PARA_API_KEY`, `X402_API_KEY`, `OPERATOR_PRIVATE_KEY`, `CRON_SECRET`, LLM keys,
 `LOCAL_KEY_ENCRYPTION_SECRET` for the fallback) live only in environment variables. The repo contains `.env.example`.

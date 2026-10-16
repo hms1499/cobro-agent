@@ -1,17 +1,15 @@
-import { eq } from "drizzle-orm";
 import { Hand } from "lucide-react";
 import { t } from "@/i18n";
-import { getDb } from "@/lib/db/client";
-import { rules, type FxIntentRow } from "@/lib/db/schema";
+import type { FxIntentRow } from "@/lib/db/schema";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { describeProposal } from "@/lib/treasury/explain";
+import { getRulesRow } from "@/lib/treasury/request-reads";
 import type { AppUser } from "@/lib/users/queries";
 import { ProposalControls } from "./proposal-controls";
 
 /** Trade approvals §6: what the agent wants to do, why, at what price; token units behind Details. */
 export async function ProposalBanner({ user, proposal }: { user: AppUser; proposal: FxIntentRow }) {
-  const db = getDb();
-  const [[row], rates] = await Promise.all([db.select().from(rules).where(eq(rules.userId, user.id)), getReferenceRatesOrNull()]);
+  const [row, rates] = await Promise.all([getRulesRow(user.id), getReferenceRatesOrNull()]);
   if (!row) return null;
   const view = describeProposal(proposal, { local: user.localCurrency, rates }, row);
   return (
