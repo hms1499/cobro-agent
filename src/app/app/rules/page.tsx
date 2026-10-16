@@ -13,7 +13,7 @@ import { modeNeedsApproval } from "@/lib/treasury/approvals";
 import { decide } from "@/lib/treasury/engine";
 import { engineInput } from "@/lib/treasury/executor";
 import { describeDecision } from "@/lib/treasury/explain";
-import { liveExecutorDeps } from "@/lib/treasury/live";
+import { readDisplayBalances } from "@/lib/treasury/live";
 import { openProposal } from "@/lib/treasury/repo";
 import { rulesFormValues } from "@/lib/treasury/rules-form";
 import type { AppUser } from "@/lib/users/queries";
@@ -64,7 +64,7 @@ async function Preview({ user, row }: { user: AppUser; row: RulesRow }) {
   if (!user.treasuryAddress) return null;
   let text: string;
   try {
-    const [balances, rates] = await Promise.all([liveExecutorDeps().chain.readBalances(user.treasuryAddress), getReferenceRates()]);
+    const [balances, rates] = await Promise.all([readDisplayBalances(user.treasuryAddress), getReferenceRates()]);
     const input = await engineInput(getDb(), { userId: user.id, rules: row }, balances, rates, new Date());
     const decision = decide(input);
     const askFirst = decision.kind === "convert" && modeNeedsApproval(row.approvalMode, decision.reason);

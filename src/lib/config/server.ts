@@ -15,6 +15,8 @@ const flag = (fallback: "true" | "false") =>
 
 const serverEnvSchema = z.object({
   CELO_RPC_URL: z.preprocess(emptyToUndefined, z.url().default("https://forno.celo.org")),
+  /** Second RPC for screens only (createCeloDisplayClient); money paths use CELO_RPC_URL alone. */
+  CELO_RPC_FALLBACK_URL: z.preprocess(emptyToUndefined, z.url().default("https://rpc.ankr.com/celo")),
   OPERATOR_PRIVATE_KEY: z.preprocess(
     emptyToUndefined,
     z

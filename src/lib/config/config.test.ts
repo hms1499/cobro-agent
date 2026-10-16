@@ -42,6 +42,7 @@ describe("parseServerEnv", () => {
   it("applies defaults when nothing is set", () => {
     const env = parseServerEnv({});
     expect(env.CELO_RPC_URL).toBe("https://forno.celo.org");
+    expect(env.CELO_RPC_FALLBACK_URL).toBe("https://rpc.ankr.com/celo");
     expect(env.OPERATOR_FEE_TOKEN).toBe("USDT");
     expect(env.PARA_REST_BASE_URL).toBe("https://api.beta.getpara.com");
     expect(env.PARA_JWKS_URL).toBe("https://api.beta.getpara.com/.well-known/jwks.json");

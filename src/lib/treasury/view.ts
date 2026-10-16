@@ -6,7 +6,7 @@ import { getReferenceRates, type ReferenceRates } from "@/lib/fx/rates";
 import type { LocalCurrency } from "@/lib/money/currencies";
 import type { AppUser } from "@/lib/users/queries";
 import type { TreasuryBalances } from "./balances";
-import { liveExecutorDeps } from "./live";
+import { readDisplayBalances } from "./live";
 import { protectedValue, treasuryUsdWad, type PaymentForPnl } from "./pnl";
 import { paymentsForPnl, withdrawnUsdWad } from "./stats";
 import { fiatToAtomic, LOCAL_ASSET, tokenFiatAmount, usdWad, usdWadToDollars } from "./value";
@@ -60,7 +60,7 @@ export async function loadTreasuryView(user: AppUser): Promise<{ view: TreasuryV
   const [row] = await db.select().from(rules).where(eq(rules.userId, user.id));
   if (!row) return null;
   const [balances, rates, payments, withdrawn] = await Promise.all([
-    liveExecutorDeps().chain.readBalances(user.treasuryAddress),
+    readDisplayBalances(user.treasuryAddress),
     getReferenceRates(),
     paymentsForPnl(db, user.id),
     withdrawnUsdWad(db, user.id),

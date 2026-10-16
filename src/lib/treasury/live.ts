@@ -5,8 +5,9 @@ import {
   TransactionNotFoundError,
   TransactionReceiptNotFoundError,
   WaitForTransactionReceiptTimeoutError,
+  type Address,
 } from "viem";
-import { createCeloPublicClient } from "@/lib/chain/clients";
+import { createCeloDisplayClient, createCeloPublicClient } from "@/lib/chain/clients";
 import { isNodeRejection, signTreasuryTx, TEXTILE_REACTOR } from "@/lib/chain/treasury-tx";
 import { readPublicEnv } from "@/lib/config/public";
 import { parseServerEnv, requireValue } from "@/lib/config/server";
@@ -16,7 +17,7 @@ import { getReferenceRates } from "@/lib/fx/rates";
 import { TextileRfqClient } from "@/lib/fx/rfq";
 import { paraTreasurySigner } from "@/lib/signer/treasury-signer";
 import { paraRestClient } from "@/lib/users/para";
-import { erc20Balance, readTreasuryBalances } from "./balances";
+import { erc20Balance, readTreasuryBalances, type ReadBalance, type TreasuryBalances } from "./balances";
 import { runTreasuryForUser, TxRejectedError, type ExecutorDeps } from "./executor";
 import { operatorDripper } from "./gas";
 
@@ -114,4 +115,18 @@ export async function runTreasuryAfterApproval(userId: string): Promise<void> {
   } catch (error) {
     console.error(`Treasury run after approval for ${userId} failed:`, error);
   }
+}
+
+let display: ReadBalance | undefined;
+
+/**
+ * Balances for screens (dashboard, rules preview, withdraw page), with the fallback RPC. Money paths
+ * (executor, withdrawal action) use liveExecutorDeps().chain.readBalances, which reads the primary RPC only.
+ */
+export function readDisplayBalances(owner: Address): Promise<TreasuryBalances> {
+  if (!display) {
+    const env = parseServerEnv();
+    display = erc20Balance(createCeloDisplayClient([env.CELO_RPC_URL, env.CELO_RPC_FALLBACK_URL]));
+  }
+  return readTreasuryBalances(display, owner);
 }
