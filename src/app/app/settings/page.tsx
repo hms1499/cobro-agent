@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 import { requireUser } from "@/lib/auth/current-user";
 import { readPublicEnv } from "@/lib/config/public";
+import { MyWalletButton } from "./my-wallet";
 import { SignOutButton } from "./sign-out";
 
 export const metadata: Metadata = { title: `${t("settings.title")} · ${t("app.name")}` };
@@ -45,6 +46,7 @@ async function Settings() {
       </Card>
       {env.NEXT_PUBLIC_PARA_API_KEY && (
         <ParaProviders apiKey={env.NEXT_PUBLIC_PARA_API_KEY} environment={env.NEXT_PUBLIC_PARA_ENVIRONMENT}>
+          <MyWalletButton />
           <SignOutButton />
         </ParaProviders>
       )}
