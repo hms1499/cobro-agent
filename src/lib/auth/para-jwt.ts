@@ -14,7 +14,8 @@ interface ParaJwtData {
   wallets?: { type?: string; address?: string }[];
 }
 
-export function paraJwks(url: string): JWTVerifyGetKey {
+/** Remote key set; `reload()` lets the sign-in warm-up fetch it before the first verification. */
+export function paraJwks(url: string): ReturnType<typeof createRemoteJWKSet> {
   return createRemoteJWKSet(new URL(url));
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeNext, signInRedirect } from "./gate";
+import { safeNext, signedInRedirect, signInRedirect } from "./gate";
 
 describe("signInRedirect", () => {
   it("sends signed-out visitors of /app to sign-in and remembers where they were", () => {
@@ -25,5 +25,22 @@ describe("safeNext", () => {
     expect(safeNext("/apple")).toBe("/app");
     expect(safeNext("/app\\@evil.example")).toBe("/app");
     expect(safeNext(null)).toBe("/app");
+  });
+});
+
+describe("signedInRedirect", () => {
+  it("sends a signed-in visitor of the landing page to the app", () => {
+    expect(signedInRedirect("/", null)).toBe("/app");
+  });
+
+  it("sends a signed-in visitor of sign-in to where they were going, inside the app only", () => {
+    expect(signedInRedirect("/signin", "/app/rules")).toBe("/app/rules");
+    expect(signedInRedirect("/signin", null)).toBe("/app");
+    expect(signedInRedirect("/signin", "https://evil.example/app")).toBe("/app");
+  });
+
+  it("leaves every other page alone", () => {
+    expect(signedInRedirect("/pay/abc", null)).toBeNull();
+    expect(signedInRedirect("/app", null)).toBeNull();
   });
 });

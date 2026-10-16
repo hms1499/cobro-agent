@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount, useIssueJwt, useModal } from "@getpara/react-sdk";
-import { CircleAlert, LoaderCircle } from "lucide-react";
+import { CircleAlert, LoaderCircle, Mail } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -11,13 +11,14 @@ import { safeNext } from "@/lib/auth/gate";
 type Phase = "idle" | "creating" | "error";
 
 export function SignIn() {
-  const { isConnected } = useAccount();
+  const { isConnected, isLoading } = useAccount();
   const { openModal } = useModal();
   const { issueJwtAsync } = useIssueJwt();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [phase, setPhase] = useState<Phase>("idle");
   const started = useRef(false);
+  const autoOpened = useRef(false);
 
   async function createSession() {
     started.current = true;
@@ -46,6 +47,19 @@ export function SignIn() {
     if (isConnected && !started.current) void createSession();
   });
 
+  // Wake the database and cache Para's keys while the freelancer types their email and code (src/lib/auth/warm.ts).
+  useEffect(() => {
+    void fetch("/api/session/warm", { method: "POST", keepalive: true }).catch(() => undefined);
+  }, []);
+
+  // One click fewer: open Para's email form as soon as the SDK is ready, once per visit. Closing it
+  // leaves the page and its "Continue with email" button, which reopens it.
+  useEffect(() => {
+    if (isLoading || isConnected || autoOpened.current) return;
+    autoOpened.current = true;
+    openModal();
+  }, [isLoading, isConnected, openModal]);
+
   return (
     <div className="flex flex-col gap-4">
       {phase === "creating" ? (
@@ -59,6 +73,7 @@ export function SignIn() {
           className="min-h-11"
           onClick={() => (isConnected ? void createSession() : openModal())}
         >
+          <Mail aria-hidden="true" className="size-4" />
           {phase === "error" ? t("signin.retry") : t("signin.continue")}
         </Button>
       )}

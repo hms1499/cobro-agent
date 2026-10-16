@@ -10,3 +10,10 @@ export function signInRedirect(pathname: string, search: string, hasSession: boo
   if (hasSession || !(pathname === "/app" || pathname.startsWith("/app/"))) return null;
   return `/signin?next=${encodeURIComponent(pathname + search)}`;
 }
+
+/** Proxy check for a visitor with a verified session: the landing and sign-in pages send them into the app. */
+export function signedInRedirect(pathname: string, next: string | null): string | null {
+  if (pathname === "/") return "/app";
+  if (pathname === "/signin") return safeNext(next);
+  return null;
+}
