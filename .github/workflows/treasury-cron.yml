@@ -1,6 +1,6 @@
 name: Treasury cron
 
-# cron-job.org calls the route every 5 minutes with ?mode=async (spec §7.1). This workflow is the
+# cron-job.org calls the route every 20 minutes with ?mode=async (spec §7.1). This workflow is the
 # backup trigger and the alert: it runs the tick inline and fails (GitHub emails the owner) when the
 # tick reports errors. GitHub delays scheduled runs, so expect it every few hours, not every 10 minutes.
 # Scheduled workflows run only from the default branch (main).

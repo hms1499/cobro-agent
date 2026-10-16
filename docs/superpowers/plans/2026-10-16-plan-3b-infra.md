@@ -473,7 +473,7 @@ export async function POST(request: Request) {
 In `.github/workflows/treasury-cron.yml`, replace the comment at the top and the `run: |` block:
 
 ```yaml
-# cron-job.org calls the route every 5 minutes with ?mode=async (spec §7.1). This workflow is the
+# cron-job.org calls the route every 20 minutes with ?mode=async (spec §7.1). This workflow is the
 # backup trigger and the alert: it runs the tick inline and fails (GitHub emails the owner) when the
 # tick reports errors. GitHub delays scheduled runs, so expect it every few hours, not every 10 minutes.
 ```
@@ -798,7 +798,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 §7.1, replace the Scheduler row with:
 
 ```markdown
-| Scheduler | cron-job.org (free) calls `POST /api/cron/treasury?mode=async` every 5 minutes with a bearer secret; the route answers 202 and runs the tick in `after()` (cron-job.org waits 30 s at most). GitHub Actions calls the same route without `mode` as the backup trigger and the alert: it runs inline and the workflow fails, emailing the owner, when the tick reports errors. GitHub delays its scheduled runs to every 2–5 hours (measured 2026-10-13 to 10-15). A payment also runs the agent at once through `after()` |
+| Scheduler | cron-job.org (free) calls `POST /api/cron/treasury?mode=async` every 20 minutes with a bearer secret (see Task 6 Step 3 on Neon CU-hours); the route answers 202 and runs the tick in `after()` (cron-job.org waits 30 s at most). GitHub Actions calls the same route without `mode` as the backup trigger and the alert: it runs inline and the workflow fails, emailing the owner, when the tick reports errors. GitHub delays its scheduled runs to every 2–5 hours (measured 2026-10-13 to 10-15). A payment also runs the agent at once through `after()` |
 ```
 
 §10.4, replace the sentence "The cron route first issues due recurring invoices (§9.1), then runs these steps for each user with rules enabled:" with:
@@ -865,7 +865,7 @@ Then redeploy the latest production deployment (`vercel redeploy <url>`) and wai
 
 At https://console.cron-job.org (free sign-up with the user's email):
 - **URL:** `https://cobro-agent.vercel.app/api/cron/treasury?mode=async`
-- **Schedule:** every 5 minutes.
+- **Schedule:** every 20 minutes. Not 5: Neon Free has 100 CU-hours a month and sleeps after 5 idle minutes, so a 5-minute tick keeps the DB awake around the clock (about 180 CU-hours) and Neon suspends it mid-month (final review #1).
 - **Advanced → Request method:** `POST`.
 - **Advanced → Headers:** `Authorization` = `Bearer ` followed by the clipboard value from Step 2.
 - **Notifications:** on failure on; "after N failures" = 1.
@@ -875,7 +875,8 @@ At https://console.cron-job.org (free sign-up with the user's email):
 
 Two cron-job.org runs later, check:
 - The cron-job.org history shows 202s.
-- `vercel logs cobro-agent.vercel.app` (or the dashboard's Logs tab) shows `Cron tick: {…}` lines about 5 minutes apart, with no `CRON TICK FAILED`.
+- `vercel logs cobro-agent.vercel.app` (or the dashboard's Logs tab) shows `Cron tick: {…}` lines about 20 minutes apart, with no `CRON TICK FAILED`.
+- After 24 hours, the Neon console's compute usage for the project stays under about 3.3 CU-hours a day (100 a month).
 
 - [ ] **Step 5: Record**
 

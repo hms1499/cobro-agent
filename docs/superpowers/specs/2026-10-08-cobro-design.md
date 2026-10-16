@@ -140,7 +140,7 @@ Each freelancer has two wallets:
 |---|---|
 | App, API, UI | Next.js (App Router) + TypeScript, deployed on Vercel Hobby (free) |
 | Database | Neon Postgres (free tier) + Drizzle ORM |
-| Scheduler | cron-job.org (free) calls `POST /api/cron/treasury?mode=async` every 5 minutes with a bearer secret; the route answers 202 and runs the tick in `after()` (cron-job.org waits 30 s at most). GitHub Actions calls the same route without `mode` as the backup trigger and the alert: it runs inline and the workflow fails, emailing the owner, when the tick reports errors. GitHub delays its scheduled runs to every 2–5 hours (measured 2026-10-13 to 10-15). A payment also runs the agent at once through `after()` |
+| Scheduler | cron-job.org (free) calls `POST /api/cron/treasury?mode=async` every 20 minutes with a bearer secret (Neon Free gives 100 CU-hours a month and suspends compute after 5 idle minutes; a 5-minute tick would keep it awake, use about 180 CU-hours and suspend the database mid-month); the route answers 202 and runs the tick in `after()` (cron-job.org waits 30 s at most). GitHub Actions calls the same route without `mode` as the backup trigger and the alert: it runs inline and the workflow fails, emailing the owner, when the tick reports errors. GitHub delays its scheduled runs to every 2–5 hours (measured 2026-10-13 to 10-15). A payment also runs the agent at once through `after()` |
 | Chain access | viem (Celo mainnet, chain id 42220) |
 | Payer wallets | wagmi with the injected connector |
 | x402 | `@x402/next` or `@x402/core` server + `@x402/evm`, `@x402/fetch` in the browser (v2 packages, ≥ 2.26.0) |
