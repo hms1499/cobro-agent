@@ -108,12 +108,14 @@ Each freelancer has two wallets:
   freelancer owns it. The server cannot sign with it. It is the only withdrawal destination.
 - **Treasury wallet:** an app-owned wallet created through Para's REST API. Clients pay into it. The
   agent signs with it to swap on Textile and to send funds to the personal wallet, and nothing else.
-  Para Guardrails enforce this inside Para's enclave. The executor enforces it again in code.
+  The executor enforces this in code (`encodeTreasuryCall`). Para Guardrails were meant to enforce it
+  again inside Para's enclave, but the spike found them not enforced for REST signing (§8.4).
 
 ### 6.2 Flows
 
 1. **Sign-in.** Freelancer signs in with email (Para modal). On first sign-in the server creates the
-   treasury wallet, default rules, and a gas drip (see §8.6).
+   treasury wallet; onboarding then saves the rules. Nothing is dripped at sign-in: the treasury pays
+   gas in stablecoins and gets an operator drip only when it holds none (§8.6).
 2. **Create invoice.** Freelancer types, for example, "Bill Acme 300 USD for the logo, due Friday", or
    fills the form. The LLM returns a structured draft and the freelancer confirms it. Output: a link
    `/pay/<slug>`. A recurring invoice ("Bill Acme 100 USD every week for maintenance") produces a
@@ -122,8 +124,9 @@ Each freelancer has two wallets:
    in-app browser), and picks USA₮, USDT, wARS or wBRL. The page shows the amount in that token, with
    the rate locked for 10 minutes. The client signs the x402 payment (no gas). Funds settle into the
    treasury wallet and the invoice becomes paid.
-4. **Agent manages funds.** After each payment and every 10 minutes, the treasury engine compares
-   balances with the rules and creates, executes or waits on conversions (§8).
+4. **Agent manages funds.** After each payment and on every cron run, the treasury engine compares
+   balances with the rules and creates, executes or waits on conversions (§10). The cron is scheduled
+   every 10 minutes but GitHub runs it every 2–5 hours in practice (§7.1).
 5. **Dashboard and withdrawal.** Freelancer sees balances, invoices, conversions, P&L and the activity
    feed, and can withdraw any treasury balance to the personal wallet. Every amount is shown in the
    freelancer's local currency (ARS or BRL) first, with the USD value next to it, using the Textile
@@ -137,7 +140,7 @@ Each freelancer has two wallets:
 |---|---|
 | App, API, UI | Next.js (App Router) + TypeScript, deployed on Vercel Hobby (free) |
 | Database | Neon Postgres (free tier) + Drizzle ORM |
-| Scheduler | GitHub Actions workflow every 10 minutes calling `POST /api/cron/treasury` with a bearer secret (Vercel Hobby cron only runs once per day) |
+| Scheduler | GitHub Actions workflow scheduled every 10 minutes calling `POST /api/cron/treasury` with a bearer secret (Vercel Hobby cron only runs once per day). Measured 2026-10-13 to 10-15: GitHub delays scheduled runs, so they arrive every 2–5 hours. A payment also runs the agent at once through `after()`. An external cron service is an open option |
 | Chain access | viem (Celo mainnet, chain id 42220) |
 | Payer wallets | wagmi with the injected connector |
 | x402 | `@x402/next` or `@x402/core` server + `@x402/evm`, `@x402/fetch` in the browser (v2 packages, ≥ 2.26.0) |
@@ -238,11 +241,14 @@ exposes `version()`. USDT has no `eip712Domain()`; its version "1" comes from th
   `POST /rfq/{id}/submit`, `GET /rfq/{id}`, `POST /rfq/{id}/cancel`.
 - Keyless callers send `takerProof`: an EIP-712 signature with domain `{ name: "Textile Taker Control",
   version: "1", chainId }` over `TakerControl { taker, chainId, nonce (bytes32), issuedAt (ms) }`.
-  One proof covers the wallet for about 12 hours.
+  The v2 OpenAPI (`https://api.textilecredit.com/v2/openapi.json`, read 2026-10-09) requires
+  `issuedAt` within 60 s of Textile's clock, so Cobro signs a fresh proof for every RFQ request
+  (one Para `sign-typed-data` call) instead of reusing one for 12 hours.
 - A firm quote lives about 60 s, covers the full size or returns `no_quote`, and is bound to the taker.
   The taker broadcasts `transactions.swap` itself, so our attribution tag can be appended.
-- Approve `takerPays` of the sell token to `quote.reactor` first, and wait for that receipt. USDT
-  requires resetting a non-zero allowance to 0 first.
+- Approve the sell token to `quote.spender` first, and wait for that receipt. On an ordinary quote the
+  spender is the reactor; a vault-routed quote names another spender, and Cobro refuses it because
+  only the reactor is allowed. USDT requires resetting a non-zero allowance to 0 first.
 - Limits: 4 outstanding RFQs, $1 minimum notional, taker fee 1 bps on Celo, client timeout 75 s.
 - Celo contracts: LimitOrderReactor `0xa9AA0a64769cBed4d3B1Ceb4Df01CdE915C235b3`, Permit2 `0x000000000022D473030F116dDEE9F6B43aC78BA3`.
 
@@ -250,9 +256,13 @@ exposes `version()`. USDT has no `eip712Domain()`; its version "1" comes from th
 
 - Client: Para React SDK email sign-in, which creates the freelancer's personal wallet.
 - Server: REST API (`https://api.getpara.com`, `X-API-Key`). `POST /v1/wallets` with
-  `type: "EVM"`, `userIdentifierType: "CUSTOM_ID"`, `userIdentifier: <our user id>`, so that signing
-  in with email never "claims" the treasury wallet. Signing goes through
-  `/v1/wallets/{id}/sign-transaction` and `/sign-typed-data`; we broadcast ourselves.
+  `type: "EVM"`, `userIdentifierType: "CUSTOM_ID"`, so that signing in with email never "claims" the
+  treasury wallet. Since Plan 3 the custom id is `para:<Para user id>`, and an existing wallet with
+  that id is adopted before a new one is created (the §15 risk). Wallets created earlier with our
+  user id keep working. Signing goes through `/v1/wallets/{id}/sign-raw` (treasury transactions:
+  `sign-transaction` accepts only types 0 and 2, so the CIP-64 digest is signed raw and normalised
+  to low-s) and `/sign-typed-data` (Textile's `takerProof`); we broadcast ourselves. Verified on
+  mainnet in Smoke D and E ([treasury smoke results](../smoke/2026-10-treasury.md)).
 - Guardrails: allow calls to the Textile reactor and `approve(reactor)` on the four tokens. Allow
   token transfers (the per-user recipient check stays in code). Spike result (2026-10-08,
   `docs/superpowers/spikes/2026-10-11-para.md`): an active Development Guardrail was not enforced
@@ -267,8 +277,10 @@ exposes `version()`. USDT has no `eip712Domain()`; its version "1" comes from th
   copied from `loops project get` after enrollment. Our entry's tag: `celo_bc3965e128ba` (issued
   2026-10-08). The tag is public, since it appears on-chain, so `.env.example` carries it too. Startup fails if the env value is missing or does
   not match the pattern `celo_[0-9a-f]{12}`.
-- `chain/` exposes one `sendTagged()` path that appends `toDataSuffix(code)` to calldata. No other
-  code path broadcasts transactions.
+- Two code paths append the tag to calldata, and nothing else broadcasts: `createOperatorClient`
+  (`chain/clients.ts`) for operator transactions, and `signTreasuryTx` (`chain/treasury-tx.ts`,
+  through `tagCalldata`) for treasury transactions. The admin page's ERC-8004 registration passes the
+  tag as wagmi's `dataSuffix`.
 - Verification: `verifyTx({ client, hash })` must return our code. This is part of the smoke tests.
 
 ### 8.6 Gas
@@ -276,10 +288,12 @@ exposes `version()`. USDT has no `eip712Domain()`; its version "1" comes from th
 - **Operator wallet** (server key, §8.7): pays its own gas in USDT through Celo fee abstraction
   (CIP-64 `feeCurrency` = the USDT fee-currency adapter, address taken from docs.celo.org/developer/fee-abstraction
   and checked on-chain during implementation). viem's Celo chain support serializes these transactions.
-- **Treasury wallets**: default is a small CELO drip from the operator wallet (about 1 CELO, roughly $0.10,
-  enough for about 200 swaps). Treasury transactions are standard EIP-1559, signed with
-  `sign-transaction`, so Guardrails apply. The Para spike also tries CIP-64 with USDT gas; it is
-  adopted only if Guardrails still apply to it.
+- **Treasury wallets** (decided 2026-10-09, replacing the CELO drip default): every treasury
+  transaction is CIP-64 and pays gas in USD₮, else USA₮, else USDC, whichever holds at least 0.02.
+  It is signed with Para `sign-raw` over the CIP-64 digest (§8.4). Guardrails were not enforced for
+  REST signing anyway, so `encodeTreasuryCall` is the enforcement. When no token qualifies, the
+  operator drips 0.05 USDC, at most once per 24 hours per wallet. Smoke D (2026-10-14) paid
+  0.002452 USD₮ for the approval and 0.004930 USD₮ for the swap; no drip has been needed yet.
 
 Gas paid in stablecoins counts as "real use of the Celo stack" in Track 1.
 
@@ -293,9 +307,11 @@ Gas paid in stablecoins counts as "real use of the Celo stack" in Track 1.
   signed by the agent wallet on `/admin/agent` (wagmi `writeContract` with `dataSuffix` = our tag).
   This is also the agent wallet's first tagged transaction, which the Loops "Find it" check looks for.
   After the `Registered` event, the card's `registrations` entry is filled in.
-- **Operator wallet** (`OPERATOR_PRIVATE_KEY`): a new, low-balance server key, funded from the agent
-  wallet. It sends gas drips to treasury wallets. It is not the declared agent wallet; its transactions
-  are tagged, and credit flows through the tag in calldata.
+- **Operator wallet** (`OPERATOR_PRIVATE_KEY`): planned as a new, low-balance server key. On
+  2026-10-13 the user replaced it with their existing EOA `0x2B33cb68c4D826a4Fc36264bcDB46081c99f4f57`
+  (their choice, against the advice to keep a dedicated key) and swept the old operator's USDC to it.
+  It sends gas drips to treasury wallets and Plan 2 refunds, paying gas in `OPERATOR_FEE_TOKEN`. It is
+  not the declared agent wallet; its transactions are tagged, and credit flows through the tag in calldata.
 - Treasury-wallet transactions are credited the same way (tag in calldata). This is open question 2 in §15.
 - Card: `type`, `name`, `description`, `image`, `services: [{ name: "web", endpoint }]`,
   `x402Support: true`, `active: true`, `registrations: [{ agentId, agentRegistry: "eip155:42220:0x8004A169…a432" }]`
@@ -387,15 +403,28 @@ rules enabled:
 
 1. Take a per-wallet lock (row lock with expiry) so cron and payment triggers cannot overlap.
 2. Read balances and rates and run the engine. In dry-run mode, record the decision and stop.
-3. `POST /rfq/request` with `taker` = treasury wallet and a cached `takerProof` (re-signed when older
-   than 11 h). Store the `claimToken`.
-4. Price check (§10.3). If rejected, `POST /rfq/{id}/cancel` and record the wait.
-5. If the allowance is below `takerPays`, approve up to the remaining daily cap (reset to 0 first for USDT).
-   Wait for the receipt. If `expiresAt` has passed by then, request a new quote instead of sending.
-6. Sign `transactions.swap` with the TreasurySigner, broadcast through `sendTagged()`, wait for the
-   receipt, `POST /rfq/{id}/submit`, and record `fx_trades` and an activity event.
-7. A broadcast with an unknown outcome is never resent blindly. The next run checks the receipt and
-   nonce first. Para calls use idempotency keys.
+3. `POST /rfq/request` with `taker` = treasury wallet and a `takerProof` signed for this request
+   (§8.3). Store the `claimToken`.
+4. Check the quote: it names our taker, sells no more than the intent, and its spender is the reactor;
+   otherwise nothing is signed. Then the price check (§10.3). If either fails, `POST /rfq/{id}/cancel`
+   and record the outcome.
+5. If the allowance to `quote.spender` is below `takerPays`, approve up to the remaining daily cap
+   (reset to 0 first for USDT). Wait for the receipt. If `expiresAt` has passed by then, discard the
+   quote and leave the allowance for the next run.
+6. Sign `transactions.swap` with the TreasurySigner (CIP-64, tagged, §8.5), store the signed bytes in
+   `treasury_txs`, broadcast, wait for the receipt, `POST /rfq/{id}/submit`, and record `fx_trades`
+   and an activity event.
+7. A broadcast with an unknown outcome is never re-signed. The next run re-sends the identical stored
+   bytes, or settles the row by receipt or nonce; bytes the node refused, or that it has not seen for
+   30 minutes, are marked `failed`. Para signing calls carry no idempotency key, because signing has
+   no side effect and no nonce is ever signed twice.
+
+Recorded in Postgres (Plan 3): every RFQ outcome in `fx_trades` (`no_quote`, `rejected`, `expired`,
+`broadcast`, `filled`, `failed`), which is also the source of §10.5's volume figures; activity events
+as `type` + `data`, rendered from `en.ts` templates at display time; the intent deadline computed as
+`created_at + maxWaitMinutes`, so a rules change applies at once, with `retry_after` for Textile's
+`retryAfterMs`. The engine also sells a non-local wFiat (an ARS freelancer paid in wBRL) into USD₮
+(`save_other`), and prices USA₮→USD₮ against 1:1.
 
 ### 10.5 P&L and volume
 
@@ -428,6 +457,14 @@ Added in Plan 2:
 - `recurring_invoices.anchor_day`: monthly invoices keep their day of month.
 - Invoice status `settling` with `settling_until`: a short claim taken before settlement, so two payers cannot both pay one invoice (§12 "no double charge").
 
+Added in Plan 3 (these replace the `fx_trades` and `agent_events` lines above):
+- `treasury_txs` (id, user_id, kind `approve|swap|withdraw`, nonce, hash, raw, fee_token, status `pending|success|reverted|failed`, withdrawal asset/amount/recipient/usd_cents, created_at, confirmed_at): every signed treasury transaction, stored before broadcast (§10.4 step 7). Withdrawals live here too.
+- `fx_trades` as an RFQ log: one row per RFQ whatever came of it (rfq_id, claim_token, sell/buy asset and amount, fee, slippage_bps, notional_usd_cents, status `no_quote|rejected|expired|broadcast|filled|failed`, detail, swap_tx_hash, filled_at). The approval transaction lives in `treasury_txs`.
+- `agent_events` without a `message` column: `type` + `data` only, text rendered from `en.ts` at display time.
+- `fx_intents.retry_after`, and no `deadline_at` (computed from `created_at` and the rules).
+- `payments.rates_snapshot`: Textile reference rates when the payment settled, the input for §10.5's protected value.
+- `wallet_locks.holder`: the run that holds the lock, so only it can release it.
+
 ## 12. Safety and error handling
 
 | Situation | Behaviour |
@@ -438,7 +475,8 @@ Added in Plan 2:
 | x402 verify/settle failure | Invoice stays open; payer sees a clear error; no double charge |
 | Gemini 429/5xx | Groq; then the form |
 | Para error or timeout | Intent stays waiting and is retried next run |
-| Unknown broadcast outcome | Reconcile by receipt and nonce before any new transaction from that wallet |
+| Unknown broadcast outcome | Reconcile by receipt and nonce before any new transaction from that wallet: re-send the stored bytes, or mark them `failed` when the node refused them or has not seen them for 30 minutes |
+| Unknown x402 settlement outcome | After the `settling` hold, the cron looks for the matching on-chain transfer: it records the payment if found and reopens the invoice otherwise |
 
 Secrets (`PARA_API_KEY`, `X402_API_KEY`, `OPERATOR_PRIVATE_KEY`, `CRON_SECRET`, LLM keys,
 `LOCAL_KEY_ENCRYPTION_SECRET` for the fallback) live only in environment variables. The repo contains `.env.example`.
@@ -454,7 +492,11 @@ agent wallet's private key is never stored anywhere in the app.
   Para signing, LLM fallback chain.
 - Mainnet smoke scripts with about $1 each: ERC-8004 registration, USA₮ invoice payment, wARS invoice payment,
   one Textile swap, one withdrawal. Each ends with `verifyTx` on transactions we broadcast.
-- Dry-run on production for at least one day before live conversions.
+- Dry-run on production for at least one day before live conversions. In practice (2026-10-13 to
+  10-14) the dry run lasted about 15 hours: the delayed GitHub schedule ran only three times, and the
+  1 USD₮ balance was below the $1 minimum, so the decision path never ran. On the user's ruling a paid
+  US$1.10 invoice in dry run exercised it instead (correct `dry_run` decision 1.4 s after settlement),
+  and production then went live ([treasury smoke results](../smoke/2026-10-treasury.md)).
 - UX checks from §17.3: the MASTER.md checklist per page, Lighthouse Accessibility ≥ 95 on the key pages, and a hallway test.
 
 **Para spike (first implementation task, decision by 2026-10-11).** Prove: Para email sign-in in Next.js
@@ -470,8 +512,8 @@ so enforcement stays in the executor (report: `docs/superpowers/spikes/2026-10-1
 | Week | Work | Proof |
 |---|---|---|
 | 1 (Oct 8–14) | Done: enrollment, tag `celo_bc3965e128ba`, public repo. Scaffold app and DB, `chain/` with `sendTagged()`, Para spike, `/admin/agent` and Cobro's ERC-8004 registration from the agent wallet, operator wallet funded | First tagged mainnet transaction from the agent wallet; Loops checklist "Find it" passes |
-| 2 (Oct 15–21) | Done 2026-10-09: invoices (one-off and recurring), payment page, x402 for USAT/USDT and wARS/wBRL, cron route | Real invoices paid on mainnet in USD₮, including a double-payment race ([smoke results](smoke/2026-10-payments.md)); wARS and USA₮ smokes pending tokens |
-| 3 (Oct 22–28) | Treasury engine, executor, GitHub Actions cron, dashboard P&L | First autonomous Textile swap |
+| 2 (Oct 15–21) | Done 2026-10-09: invoices (one-off and recurring), payment page, x402 for USAT/USDT and wARS/wBRL, cron route | Real invoices paid on mainnet in USD₮, including a double-payment race ([smoke results](../smoke/2026-10-payments.md)); wARS and USA₮ smokes pending tokens |
+| 3 (Oct 22–28) | Done 2026-10-14: treasury engine, executor, GitHub Actions cron, withdrawals, dashboard with value protected and activity feed | First autonomous Textile swap on 2026-10-14: 1.07 USD₮ → 1,718 wARS at 2 bps, tagged, gas in USD₮; a tagged withdrawal ([smoke results](../smoke/2026-10-treasury.md)) |
 | 4 (Oct 29–Nov 4) | Chat (Gemini/Groq), UX polish, user outreach (hackathon Telegram, Celo LatAm communities) | Independent payers |
 | Finish (Nov 5–8) | README, screenshots, demo video; `loops project create` draft shown to the user and confirmed only after their yes; `loops evaluate` for each targeted sponsor and fixes | Submitted Nov 8 |
 
@@ -484,7 +526,8 @@ Independent payer: a wallet that is not ours, was not first funded by us, and ha
 - Thin wARS liquidity (about $850/day) → small trades, `no_quote` handling, wBRL as the second corridor.
 - No existing users → outreach in week 4; the Track 2 P&L and Track 1 demo do not depend on outside users.
 - Free LLM quotas → Groq fallback, then forms; LLM is not on any money path.
-- Treasury wallets live in Para **BETA** for the hackathon (decided 2026-10-09). BETA's durability and SLA are unverified and wallets cannot move to PROD, so balances stay at a few USD and Cobro moves to Para PROD before inviting real users. If a user row is lost, the next sign-in creates a second Para wallet instead of re-adopting the first (the wallet's custom id is our user id); fix in Plan 3 before balances grow.
+- Treasury wallets live in Para **BETA** for the hackathon (decided 2026-10-09). BETA's durability and SLA are unverified and wallets cannot move to PROD, so balances stay at a few USD and Cobro moves to Para PROD before inviting real users. Resolved in Plan 3: a lost user row no longer leads to a second Para wallet, because the custom id is now `para:<Para user id>` and an existing wallet is adopted before a new one is created (§8.4).
+- Para `sign-typed-data` does not normalise signatures to low-s. If Textile ever verifies the `takerProof` with OpenZeppelin-style ECDSA, about half of RFQs would be refused (no money moves). Smoke D's proof was accepted, but that is one sample; watch for RFQ errors and normalise if they appear.
 
 **Questions for the organisers** (Telegram or office hours, Thursdays 12:00 GMT):
 1. The Celo x402 facilitator does not tag settlement transactions. How are Track 3 USA₮ payments
