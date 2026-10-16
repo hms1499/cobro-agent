@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { CircleCheck, FlaskConical, Pause } from "lucide-react";
+import { CircleCheck, FlaskConical, Hand, Pause } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { t } from "@/i18n";
@@ -9,7 +9,7 @@ import { rules } from "@/lib/db/schema";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { formatMoney } from "@/lib/money/format";
 import { describeEvent } from "@/lib/treasury/explain";
-import { listEvents } from "@/lib/treasury/repo";
+import { listEvents, openProposal } from "@/lib/treasury/repo";
 import { agentState, type AgentState } from "@/lib/treasury/view";
 import type { AppUser } from "@/lib/users/queries";
 import { AgentToggle } from "./agent-toggle";
@@ -17,6 +17,7 @@ import { AgentToggle } from "./agent-toggle";
 const CHIPS: Record<AgentState, { icon: typeof Pause; className: string }> = {
   active: { icon: CircleCheck, className: "text-success" },
   dry_run: { icon: FlaskConical, className: "text-muted-foreground" },
+  awaiting: { icon: Hand, className: "text-warning" },
   paused: { icon: Pause, className: "text-muted-foreground" },
   off: { icon: Pause, className: "text-muted-foreground" },
 };
@@ -27,8 +28,13 @@ export async function AgentStatus({ user }: { user: AppUser }) {
   const env = parseServerEnv();
   const [row] = await db.select().from(rules).where(eq(rules.userId, user.id));
   if (!row) return null;
-  const [[last], rates] = await Promise.all([listEvents(db, user.id, 1), getReferenceRatesOrNull()]);
-  const state = agentState({ globalEnabled: env.TREASURY_ENABLED, dryRun: env.TREASURY_DRY_RUN, userEnabled: row.enabled });
+  const [[last], rates, proposal] = await Promise.all([listEvents(db, user.id, 1), getReferenceRatesOrNull(), openProposal(db, user.id)]);
+  const state = agentState({
+    globalEnabled: env.TREASURY_ENABLED,
+    dryRun: env.TREASURY_DRY_RUN,
+    userEnabled: row.enabled,
+    awaitingApproval: proposal !== null,
+  });
   const { icon: Icon, className } = CHIPS[state];
   return (
     <Card>

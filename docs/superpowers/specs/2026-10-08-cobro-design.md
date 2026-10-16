@@ -362,6 +362,7 @@ Gas paid in stablecoins counts as "real use of the Celo stack" in Track 1.
 | `localCurrency` | wARS | Spending currency (wARS or wBRL) |
 | `reserveAmount` | 0 | Local-currency amount to keep for spending |
 | `autoTopUp` | true | Refill the reserve from the USD bucket when it runs low |
+| `approvalMode` | sell_usd | When the agent asks first: `auto` never, `sell_usd` before selling dollars, `all` before every conversion ([trade approvals](2026-10-14-trade-approvals-design.md)) |
 | `maxSlippageBps` | 50 | Normal acceptance threshold against the reference |
 | `hardMaxSlippageBps` | 150 | Acceptance threshold after the wait deadline |
 | `maxWaitMinutes` | 360 | How long to wait for a better price |
@@ -388,6 +389,9 @@ volume in the last 24 h, now. Output: one decision: `none`, `convert(from, to, a
 - At most one open intent per user. When a run computes a conversion with the same from/to pair as
   the open intent, the intent keeps its age (so the wait deadline still applies) and takes the new
   amount. A different pair, or no conversion at all, cancels the open intent.
+- A conversion the approval mode asks about is stored as a `proposed` intent instead of trading. Approval
+  caps it at the amount shown; dismissal silences its group (refill or save) for 24 hours. See the
+  [trade approvals spec](2026-10-14-trade-approvals-design.md) §5.
 
 ### 10.3 Price acceptance
 
@@ -402,7 +406,7 @@ The cron route first issues due recurring invoices (§9.1), then runs these step
 rules enabled:
 
 1. Take a per-wallet lock (row lock with expiry) so cron and payment triggers cannot overlap.
-2. Read balances and rates and run the engine. In dry-run mode, record the decision and stop.
+2. Read balances and rates and run the engine. In dry-run mode, record the decision and stop. A conversion that needs approval stops here as a proposal (trade approvals §5.1).
 3. `POST /rfq/request` with `taker` = treasury wallet and a `takerProof` signed for this request
    (§8.3). Store the `claimToken`.
 4. Check the quote: it names our taker, sells no more than the intent, and its spender is the reactor;
@@ -443,7 +447,7 @@ recurring_invoices id, slug, user_id, client_name, description, amount, currency
 invoices         id, slug, user_id, recurring_id (nullable), period_start (nullable), client_name, description, amount, currency, due_date, status (open|paid|cancelled), created_at, paid_at
 invoice_quotes   invoice_id, asset, amount_atomic, rate, expires_at  (unique invoice_id + asset)
 payments         id, invoice_id, payer, asset, amount_atomic, tx_hash, settled_at
-fx_intents       id, user_id, from_asset, to_asset, amount_atomic, reason, status (waiting|executing|filled|blocked|cancelled), created_at, deadline_at, attempts, last_slippage_bps
+fx_intents       id, user_id, from_asset, to_asset, amount_atomic, reason, status (proposed|waiting|executing|filled|blocked|cancelled), created_at, attempts, last_slippage_bps, retry_after, approved_amount_atomic, approved_at, dismissed_at, approved_via
 fx_trades        id, intent_id, rfq_id, sell_asset, buy_asset, sell_amount, buy_amount, rate, reference_rate, slippage_bps, fee_amount, approval_tx, swap_tx, status, created_at
 agent_events     id, user_id, type, message, data (jsonb), created_at
 wallet_locks     wallet_id (pk), locked_until
@@ -464,6 +468,9 @@ Added in Plan 3 (these replace the `fx_trades` and `agent_events` lines above):
 - `fx_intents.retry_after`, and no `deadline_at` (computed from `created_at` and the rules).
 - `payments.rates_snapshot`: Textile reference rates when the payment settled, the input for §10.5's protected value.
 - `wallet_locks.holder`: the run that holds the lock, so only it can release it.
+
+Added with trade approvals: `rules.approval_mode` (`auto|sell_usd|all`, default `sell_usd`) and the
+`fx_intents` approval columns above; the open-intent index covers `proposed`.
 
 ## 12. Safety and error handling
 
@@ -574,9 +581,9 @@ tokens; Lucide icons; CSS-only subtle motion that respects reduced motion. Light
 |---|---|
 | Landing `/` | Hero "Get paid in dollars or pesos. Your agent protects the rest."; how it works in 3 steps; trust block (guardrails, ERC-8004 identity link, on-chain receipts); "Start with email" |
 | Onboarding | 3 steps with a progress indicator and Back: (1) email sign-in, (2) pick ARS or BRL and set the spending reserve as a sentence with an input, (3) create a first invoice or skip |
-| Dashboard `/app` | Total in local currency; Spending and Savings buckets with a reserve bar; "Value protected" stat with a small trend chart (labelled, with a text summary); agent status and last action; activity feed; invoices with icon+text status chips; first-use empty state that points to "Create your first invoice" |
+| Dashboard `/app` | Total in local currency; Spending and Savings buckets with a reserve bar; "Value protected" stat with a small trend chart (labelled, with a text summary); agent status and last action; activity feed; a proposal banner (Approve / Dismiss for 24 hours) when the agent waits for approval; a dot on the Agent tab; invoices with icon+text status chips; first-use empty state that points to "Create your first invoice" |
 | Chat `/app/chat` | Example prompt chips; the LLM draft renders as an editable invoice card; nothing is created until "Create invoice"; "Use the form instead" link always visible |
-| Rules `/app/rules` | Rules as sentences ("Keep [300,000] ARS for spending. Save the rest in dollars."); advanced settings (slippage, wait, caps) collapsed; a "If the agent ran now, it would…" preview from a dry run of the engine |
+| Rules `/app/rules` | Rules as sentences ("Keep [300,000] ARS for spending. Save the rest in dollars."); advanced settings (slippage, wait, caps) collapsed; a "If the agent ran now, it would…" preview from a dry run of the engine; a "When should your agent ask you?" choice |
 | Payment `/pay/[slug]` | Invoice summary (from, for, amount); stepper Choose how to pay → Connect wallet → Confirm → Paid; each token shows its amount and a plain-language name ("US dollar (USA₮), recommended for US clients"); "No network fee — you only sign"; 10-minute rate countdown; explicit states for wrong network (switch to Celo), insufficient balance (amount missing, USA₮ faucet link), signing, settling, success receipt with explorer link, and error with retry |
 | Recurring `/r/[slug]` | Current period's invoice plus the list of paid periods |
 | Admin `/admin/agent` | Owner-only; connect agent wallet, register identity, see the tagged tx and its `verifyTx` result |

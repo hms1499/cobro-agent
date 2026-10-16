@@ -13,15 +13,24 @@ import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { formatDate } from "@/lib/invoices/dates";
 import { listInvoices } from "@/lib/invoices/repo";
 import { displayAmount } from "@/lib/money/display";
+import { openProposal } from "@/lib/treasury/repo";
 import type { AppUser } from "@/lib/users/queries";
 import { finishSetup } from "./actions";
 import { ActivityFeed } from "./activity-feed";
 import { AgentStatus } from "./agent-status";
 import { Conversions } from "./conversions";
+import { ProposalBanner } from "./proposal-banner";
+import { ProposalSlot } from "./proposal-slot";
 import { RepeatClients } from "./repeat-clients";
 import { TreasurySummary } from "./treasury-summary";
 
 export const metadata: Metadata = { title: `${t("nav.home")} · ${t("app.name")}` };
+
+/**
+ * Approving a proposal runs the agent in after(): it may reconcile, drip gas, request a quote and wait
+ * for receipts, like the withdrawal action, so it gets the same 300 s as the wallet lock.
+ */
+export const maxDuration = 300;
 
 const linkBase =
   "inline-flex min-h-11 items-center gap-2 rounded-lg px-4 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
@@ -51,12 +60,21 @@ function HomeSkeleton() {
 
 async function Home() {
   const user = await requireUser();
-  const [invoices, rates] = await Promise.all([listInvoices(getDb(), user.id), getReferenceRatesOrNull()]);
-  const newInvoiceLink = user.treasuryStatus === "ready" ? primaryLink : secondaryLink;
+  const db = getDb();
+  const [invoices, rates, proposal] = await Promise.all([listInvoices(db, user.id), getReferenceRatesOrNull(), openProposal(db, user.id)]);
+  // One primary action per screen: a setup or approval banner takes it from "New invoice" (MASTER.md "Buttons").
+  const newInvoiceLink = user.treasuryStatus === "ready" && !proposal ? primaryLink : secondaryLink;
   return (
     <>
       <h1 className="text-2xl font-semibold">{t("app.greeting", { name: user.displayName ?? user.email ?? "" })}</h1>
       <SetupBanner status={user.treasuryStatus} />
+      <ProposalSlot>
+        {proposal && (
+          <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+            <ProposalBanner user={user} proposal={proposal} />
+          </Suspense>
+        )}
+      </ProposalSlot>
       <Suspense fallback={<Skeleton className="h-40 w-full" />}>
         <AgentStatus user={user} />
       </Suspense>

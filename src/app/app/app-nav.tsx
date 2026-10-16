@@ -11,11 +11,11 @@ const ITEMS: { href: string; label: MessageKey; icon: typeof House }[] = [
   { href: "/app/settings", label: "nav.settings", icon: Settings },
 ];
 
-export function AppNav() {
-  return <AppNavLinks pathname={usePathname()} />;
+export function AppNav({ hasProposal }: { hasProposal: boolean }) {
+  return <AppNavLinks pathname={usePathname()} hasProposal={hasProposal} />;
 }
 
-export function AppNavLinks({ pathname }: { pathname: string | null }) {
+export function AppNavLinks({ pathname, hasProposal = false }: { pathname: string | null; hasProposal?: boolean }) {
   return (
     <nav
       aria-label={t("nav.label")}
@@ -34,8 +34,14 @@ export function AppNavLinks({ pathname }: { pathname: string | null }) {
                   active ? "text-primary" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Icon aria-hidden="true" className="size-5" />
+                <span className="relative">
+                  <Icon aria-hidden="true" className="size-5" />
+                  {hasProposal && href === "/app/rules" && (
+                    <span aria-hidden="true" className="absolute -right-1 -top-1 size-2.5 rounded-full bg-destructive" />
+                  )}
+                </span>
                 {t(label)}
+                {hasProposal && href === "/app/rules" && <span className="sr-only">{t("nav.proposalWaiting")}</span>}
               </Link>
             </li>
           );

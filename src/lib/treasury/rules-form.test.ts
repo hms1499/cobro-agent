@@ -21,6 +21,7 @@ const VALID = {
   maxWaitHours: "6",
   perTradeMaxUsd: "50",
   dailyMaxUsd: "200",
+  approvalMode: "sell_usd",
 };
 
 describe("parseRulesForm", () => {
@@ -35,6 +36,7 @@ describe("parseRulesForm", () => {
         maxWaitMinutes: 360,
         perTradeMaxUsd: 50,
         dailyMaxUsd: 200,
+        approvalMode: "sell_usd",
       },
     });
   });
@@ -54,6 +56,7 @@ describe("parseRulesForm", () => {
         maxWaitHours: "49",
         perTradeMaxUsd: "0",
         dailyMaxUsd: "5001",
+        approvalMode: "sell_usd",
       }),
     ).toEqual({
       ok: false,
@@ -84,5 +87,27 @@ describe("saving rules", () => {
     expect(row).toMatchObject({ reserveAmount: "300000.00", maxSlippageBps: 50, hardMaxSlippageBps: 150, maxWaitMinutes: 360 });
     expect(rulesFormValues(row)).toEqual({ ...VALID, reserveAmount: "300000.00", hardMaxSlippagePct: "1.5" });
     expect(parseRulesForm(rulesFormValues(row))).toEqual(parsed);
+  });
+});
+
+describe("approval mode", () => {
+  it("reads each mode and refuses others", () => {
+    for (const approvalMode of ["auto", "sell_usd", "all"] as const) {
+      const parsed = parseRulesForm({ ...VALID, approvalMode });
+      expect(parsed.ok && parsed.data.approvalMode).toBe(approvalMode);
+    }
+    expect(parseRulesForm({ ...VALID, approvalMode: "sometimes" })).toEqual({
+      ok: false,
+      errors: { approvalMode: "rules.error.approvalMode" },
+    });
+  });
+
+  it("round-trips through the stored rules", async () => {
+    const user = await seedFreelancer(db);
+    const parsed = parseRulesForm({ ...VALID, approvalMode: "all" });
+    if (!parsed.ok) throw new Error("expected valid rules");
+    await saveRules(db, user.id, parsed.data, new Date());
+    const [row] = await db.select().from(rules).where(eq(rules.userId, user.id));
+    expect(rulesFormValues(row).approvalMode).toBe("all");
   });
 });

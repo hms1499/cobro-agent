@@ -34,11 +34,14 @@ import {
   type EngineRules,
   type IntentPlan,
 } from "./engine";
+import { approvalGroup, GROUP_REASONS, modeNeedsApproval, waitStartedAt } from "./approvals";
 import { claimDrip, DRIP_AMOUNT_ATOMIC, type Dripper } from "./gas";
 import {
   acquireWalletLock,
   cancelIntent,
+  dismissedRecently,
   filledUsdWad24h,
+  inheritableApproval,
   insertTrade,
   intentById,
   lastEvent,
@@ -46,6 +49,7 @@ import {
   logEvent,
   openIntent,
   pendingTreasuryTxs,
+  proposeIntent,
   recordTreasuryTx,
   releaseWalletLock,
   saveIntent,
@@ -54,6 +58,7 @@ import {
   updateIntent,
   updateTrade,
   usersWithPendingTxs,
+  type SaveApproval,
   type TreasuryContext,
 } from "./repo";
 import { atomicForUsdWad, dollarsToWad, usdWad } from "./value";
@@ -104,6 +109,7 @@ export type RunOutcome =
   | "pending_tx"
   | "no_rates"
   | "idle"
+  | "awaiting_approval"
   | "dry_run"
   | "needs_gas"
   | "waiting"
@@ -229,15 +235,29 @@ async function runLocked(deps: ExecutorDeps, ctx: TreasuryContext, result: Resul
   const balances = await deps.chain.readBalances(ctx.address);
   const decision = decide(await engineInput(deps.db, ctx, balances, rates, deps.now()));
   const open = await openIntent(deps.db, ctx.userId);
+  // Trade approvals §5.1 step 2: a dismissed group stays quiet for 24 hours, unless the mode no longer asks.
+  if (
+    decision.kind === "convert" &&
+    ctx.rules.approvalMode !== "auto" &&
+    (await dismissedRecently(deps.db, ctx.userId, GROUP_REASONS[approvalGroup(decision.reason)], deps.now()))
+  ) {
+    if (open) await cancelIntent(deps.db, open.id, deps.now());
+    return result("idle", "dismissed");
+  }
   const plan = planIntent(open && { id: open.id, fromAsset: open.fromAsset, toAsset: open.toAsset }, decision);
   if (plan.action === "none") {
     if (plan.cancel) await cancelIntent(deps.db, plan.cancel, deps.now());
     return result("idle", decision.kind === "none" ? decision.reason : undefined);
   }
-  if (deps.flags.dryRun) return dryRun(deps, ctx, plan, result);
 
-  const d = plan.decision;
-  const intent = await saveIntent(deps.db, ctx.userId, plan, deps.now());
+  const approval = await approvalFor(deps, ctx, open, plan);
+  if (approval.kind === "needed") return propose(deps, ctx, plan, result);
+  const sized = { ...plan, decision: capDecision(plan.decision, approval.cap, rates) };
+  if (deps.flags.dryRun) return dryRun(deps, ctx, sized, approval.approved, result);
+
+  const intent = await saveIntent(deps.db, ctx.userId, sized, deps.now(), approval.save);
+  // The freelancer may have approved a lower amount since `open` was read: the stored approval is the limit.
+  const d = intent.approvedAmountAtomic === null ? sized.decision : capDecision(sized.decision, BigInt(intent.approvedAmountAtomic), rates);
   if (intent.retryAfter && intent.retryAfter > deps.now()) return result("waiting", "retry_after");
 
   const { feeToken } = await ensureFeeToken(deps, ctx, balances, { asset: d.from, amount: d.amount });
@@ -249,6 +269,53 @@ async function runLocked(deps: ExecutorDeps, ctx: TreasuryContext, result: Resul
   return trade(deps, ctx, intent, d, feeToken, rates, result);
 }
 
+type Approval =
+  | { kind: "needed" }
+  /** `approved`: the freelancer (or an inherited approval) already said yes, so dry run keeps the intent. */
+  | { kind: "granted"; cap: bigint | null; save: SaveApproval; approved: boolean };
+
+/** Trade approvals §5.1 step 4, in order: an earlier approval, the auto mode, an inherited approval, the mode table. */
+async function approvalFor(
+  deps: ExecutorDeps,
+  ctx: TreasuryContext,
+  open: FxIntentRow | null,
+  plan: Extract<IntentPlan, { action: "convert" }>,
+): Promise<Approval> {
+  const kept = plan.keep !== null && open?.id === plan.keep ? open : null;
+  if (kept?.approvedAt) {
+    const cap = kept.approvedAmountAtomic === null ? null : BigInt(kept.approvedAmountAtomic);
+    return { kind: "granted", cap, save: {}, approved: true };
+  }
+  const mode = ctx.rules.approvalMode;
+  if (mode === "auto") return { kind: "granted", cap: null, save: {}, approved: false };
+  if (plan.decision.reason === "top_up") {
+    const parent = await inheritableApproval(deps.db, ctx.userId, deps.now());
+    if (parent) {
+      return { kind: "granted", cap: parent.boughtAtomic, save: { via: parent.intentId, capAtomic: parent.boughtAtomic }, approved: true };
+    }
+  }
+  if (modeNeedsApproval(mode, plan.decision.reason)) return { kind: "needed" };
+  return { kind: "granted", cap: null, save: {}, approved: false };
+}
+
+/** Trade approvals §2: never more than the freelancer approved. */
+function capDecision(d: ConvertDecision, cap: bigint | null, rates: ReferenceRates): ConvertDecision {
+  if (cap === null || d.amount <= cap) return d;
+  return { ...d, amount: cap, usdWad: usdWad(d.from, cap, rates) };
+}
+
+/** Trade approvals §5.1 step 5: store the proposal and tell the freelancer once per intent. */
+async function propose(
+  deps: ExecutorDeps,
+  ctx: TreasuryContext,
+  plan: Extract<IntentPlan, { action: "convert" }>,
+  result: Result,
+): Promise<RunResult> {
+  const intent = await proposeIntent(deps.db, ctx.userId, plan, deps.now());
+  await logOncePerIntent(deps, ctx.userId, intent.id, "proposed", decisionData(plan.decision));
+  return result("awaiting_approval");
+}
+
 /**
  * waiting, no_quote and needs_gas repeat on every run while an intent waits; each is told once per
  * intent. The intent id in the event's data is what the next run compares.
@@ -257,7 +324,7 @@ async function logOncePerIntent(
   deps: Pick<ExecutorDeps, "db" | "now">,
   userId: string,
   intentId: string,
-  type: "waiting" | "no_quote" | "needs_gas",
+  type: "waiting" | "no_quote" | "needs_gas" | "proposed",
   data: Record<string, unknown>,
 ): Promise<void> {
   const last = await lastEvent(deps.db, userId, type);
@@ -268,15 +335,17 @@ async function logOncePerIntent(
 /**
  * Spec §10.3 in dry run: record what would be done, once per pair and reason, and keep no intent.
  * A stored intent would age while nothing trades, and the first live run would then treat it as past
- * the wait deadline and accept a price up to the hard limit at once.
+ * the wait deadline and accept a price up to the hard limit at once. An approved intent is the
+ * exception (trade approvals §5.3): cancelling it would make the next run propose it again.
  */
 async function dryRun(
   deps: ExecutorDeps,
   ctx: TreasuryContext,
   plan: Extract<IntentPlan, { action: "convert" }>,
+  keepApproved: boolean,
   result: Result,
 ): Promise<RunResult> {
-  for (const id of [plan.cancel, plan.keep]) if (id) await cancelIntent(deps.db, id, deps.now());
+  for (const id of [plan.cancel, keepApproved ? null : plan.keep]) if (id) await cancelIntent(deps.db, id, deps.now());
   const data = decisionData(plan.decision);
   const last = await lastEvent(deps.db, ctx.userId, "dry_run");
   if (!last || dryRunKey(last.data) !== dryRunKey(data)) await logEvent(deps.db, ctx.userId, "dry_run", data, deps.now());
@@ -357,7 +426,7 @@ async function trade(
   const slippage = slippageBps(d.from, q.takerPays, d.to, q.buyAmount, rates);
   const verdict = acceptQuote({
     slippageBps: slippage,
-    intentCreatedAt: intent.createdAt,
+    intentCreatedAt: waitStartedAt(intent),
     now: deps.now(),
     maxSlippageBps: ctx.rules.maxSlippageBps,
     hardMaxSlippageBps: ctx.rules.hardMaxSlippageBps,

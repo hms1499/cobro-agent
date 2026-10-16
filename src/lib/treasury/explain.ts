@@ -1,7 +1,9 @@
 // src/lib/treasury/explain.ts
 import { t, type MessageKey } from "@/i18n";
-import type { AgentEventType } from "@/lib/db/schema";
+import { TOKENS } from "@/lib/chain/tokens";
+import type { AgentEventType, FxIntentRow } from "@/lib/db/schema";
 import type { ReferenceRates } from "@/lib/fx/rates";
+import { formatDecimal } from "@/lib/money/decimal";
 import { isPayAsset, type LocalCurrency } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 import { formatMoney } from "@/lib/money/format";
@@ -46,6 +48,12 @@ function targetText(asset: unknown): string {
   if (asset === "WARS") return t("event.target.ARS");
   if (asset === "WBRL") return t("event.target.BRL");
   return t("event.target.USD");
+}
+
+/** A refill through USD₮ (hub_route) is for the spending currency, though its first leg buys USD₮. */
+function proposalTarget(to: unknown, reason: unknown, local: LocalCurrency | null): string {
+  if (reason === "hub_route" && local) return t(`event.target.${local}`);
+  return targetText(to);
 }
 
 const REASONS: Record<string, MessageKey> = {
@@ -134,6 +142,15 @@ export function describeEvent(
         why: t("event.no_quote.why", { amount }),
         txHash: null,
       };
+    case "proposed":
+    case "approved":
+    case "dismissed":
+      return {
+        tone: event.type === "proposed" ? "warning" : "info",
+        title: t(`event.${event.type}.title`, { amount, target: proposalTarget(d.to, d.reason, ctx.local) }),
+        why: t(`event.${event.type}.why`),
+        txHash: null,
+      };
     case "withdrawn":
       return {
         tone: "success",
@@ -165,6 +182,48 @@ export function describeEvent(
   }
 }
 
+export interface ProposalView {
+  title: string;
+  body: string;
+  why: string;
+  price: string;
+  /** Token units, shown only behind "Details". */
+  units: string;
+}
+
+/** The dashboard banner's text for one proposal (trade approvals §6). */
+export function describeProposal(
+  intent: Pick<FxIntentRow, "fromAsset" | "toAsset" | "amountAtomic" | "reason">,
+  ctx: ExplainContext,
+  limits: { maxSlippageBps: number; hardMaxSlippageBps: number; maxWaitMinutes: number },
+): ProposalView {
+  const { amount, currency } = tokenFiatAmount(intent.fromAsset, BigInt(intent.amountAtomic));
+  const shown = displayAmount(amount, currency, ctx.local, ctx.rates);
+  // The source amount in its own currency first; the other currency is only an estimate, so it follows in parentheses.
+  const exact = formatMoney(amount, currency);
+  const estimate = [shown.primary, shown.secondary].find((text) => text !== undefined && text !== exact);
+  const from = currency === "USD" ? t("proposal.fromDollars", { amount: exact }) : exact;
+  const target = proposalTarget(intent.toAsset, intent.reason, ctx.local);
+  const via = intent.reason === "hub_route";
+  const key = via
+    ? estimate ? "proposal.bodyViaEstimate" : "proposal.bodyVia"
+    : estimate ? "proposal.bodyEstimate" : "proposal.body";
+  return {
+    title: t("proposal.title"),
+    body: t(key, { from, target, estimate: estimate ?? "" }),
+    why: t(`proposal.why.${intent.reason}`),
+    price: t("proposal.price", {
+      pct: percentText(limits.maxSlippageBps),
+      hard: percentText(limits.hardMaxSlippageBps),
+      hours: String(Math.round(limits.maxWaitMinutes / 60)),
+    }),
+    units: t("proposal.units", {
+      amount: formatDecimal(BigInt(intent.amountAtomic), TOKENS[intent.fromAsset].decimals),
+      symbol: t(`asset.${intent.fromAsset}.symbol`),
+    }),
+  };
+}
+
 const IDLE: Record<IdleReason, MessageKey> = {
   within_band: "preview.within_band",
   daily_cap: "preview.daily_cap",
@@ -176,10 +235,11 @@ const IDLE: Record<IdleReason, MessageKey> = {
 export function describeDecision(
   decision: Decision,
   ctx: ExplainContext,
+  opts: { askFirst?: boolean } = {},
 ): string {
   if (decision.kind === "none")
     return t(IDLE[decision.reason], { amount: MINIMUM_TEXT });
-  return t("preview.convert", {
+  return t(opts.askFirst ? "preview.propose" : "preview.convert", {
     amount: moneyText(decision.from, decision.amount.toString(), ctx),
     target: targetText(decision.to),
     why: reasonText(decision.reason),

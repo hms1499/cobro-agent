@@ -5,7 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { TOKENS } from "@/lib/chain/tokens";
 import { TEXTILE_REACTOR, type GasToken } from "@/lib/chain/treasury-tx";
 import type { Db } from "@/lib/db/client";
-import { agentEvents, fxIntents, fxTrades, rules, treasuryTxs, treasuryWallets } from "@/lib/db/schema";
+import { agentEvents, fxIntents, fxTrades, rules, treasuryTxs, treasuryWallets, type ApprovalMode } from "@/lib/db/schema";
 import { createTestDb, resetDb, seedFreelancer, TEST_TREASURY } from "@/lib/db/testing";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { TextileError, type FirmQuote, type RfqOutcome } from "@/lib/fx/rfq";
@@ -20,7 +20,7 @@ import {
   TxRejectedError,
   type ExecutorDeps,
 } from "./executor";
-import { acquireWalletLock, loadTreasuryContext } from "./repo";
+import { acquireWalletLock, approveProposal, dismissProposal, loadTreasuryContext } from "./repo";
 
 let db: Db;
 beforeAll(async () => {
@@ -110,9 +110,9 @@ function harness(balances: Partial<TreasuryBalances>, over: { dryRun?: boolean; 
   return { deps, state, signed };
 }
 
-async function freelancer(reserveAmount = "0.00") {
+async function freelancer(reserveAmount = "0.00", approvalMode: ApprovalMode = "auto") {
   const user = await seedFreelancer(db);
-  await db.update(rules).set({ reserveAmount }).where(eq(rules.userId, user.id));
+  await db.update(rules).set({ reserveAmount, approvalMode }).where(eq(rules.userId, user.id));
   return user;
 }
 const eventTypes = async (userId: string) =>
@@ -642,5 +642,183 @@ describe("runTreasuries", () => {
     });
     expect(timed.map((r) => r.userId)).toEqual(["a", "b"]);
     expect(summarizeRuns([...timed, { userId: "x", outcome: "converted" }])).toEqual({ idle: 2, converted: 1 });
+  });
+});
+
+describe("runTreasuryForUser: approvals", () => {
+  // Reserve ARS 16,000 (US$10) and nothing held: the engine wants US$10 of wARS from USD₮.
+  const RESERVE = "16000.00";
+  const refillQuote = (usdt: bigint, pesosOut: bigint) => quoted({ sellAmount: usdt, takerPays: usdt, buyAmount: pesos(pesosOut) });
+
+  it("proposes a refill instead of trading, and says so once", async () => {
+    const user = await freelancer(RESERVE, "sell_usd");
+    const { deps } = harness({ USDT: 20_000_000n });
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "awaiting_approval" });
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("awaiting_approval");
+    expect(deps.rfq.request).not.toHaveBeenCalled();
+    expect(await eventTypes(user.id)).toEqual(["proposed"]);
+    expect((await intentsOf(user.id)).map((i) => [i.status, i.reason, i.amountAtomic])).toEqual([["proposed", "top_up", "10000000"]]);
+  });
+
+  it("still saves extra pesos on its own in sell_usd mode, and asks first in all mode", async () => {
+    const saver = await freelancer("0.00", "sell_usd");
+    const asker = await freelancer("0.00", "all");
+    expect((await runTreasuryForUser(harness({ WARS: pesos(3_200n), ...gas }).deps, saver.id)).outcome).toBe("converted");
+    expect((await runTreasuryForUser(harness({ WARS: pesos(3_200n), ...gas }).deps, asker.id)).outcome).toBe("awaiting_approval");
+  });
+
+  it("updates the open proposal's amount and drops it when the need goes", async () => {
+    const user = await freelancer(RESERVE, "sell_usd");
+    const { deps, state } = harness({ USDT: 20_000_000n });
+    await runTreasuryForUser(deps, user.id);
+    const [first] = await intentsOf(user.id);
+    state.balances.WARS = pesos(4_800n); // US$3 held: US$7 still missing
+    await runTreasuryForUser(deps, user.id);
+    expect(await intentsOf(user.id)).toEqual([expect.objectContaining({ id: first.id, status: "proposed", amountAtomic: "7000000" })]);
+    state.balances.WARS = pesos(16_000n);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("idle");
+    expect((await intentsOf(user.id)).map((i) => i.status)).toEqual(["cancelled"]);
+    expect(await eventTypes(user.id)).toEqual(["proposed"]);
+  });
+
+  it("converts an approved proposal on the next run", async () => {
+    const user = await freelancer(RESERVE, "sell_usd");
+    const { deps } = harness({ USDT: 20_000_000n }, { outcome: refillQuote(10_000_000n, 15_950n) });
+    await runTreasuryForUser(deps, user.id);
+    const [proposal] = await intentsOf(user.id);
+    await approveProposal(db, user.id, proposal.id, 10_000_000n, NOW);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
+    expect((await intentsOf(user.id))[0].status).toBe("filled");
+  });
+
+  it("never sells more than was approved", async () => {
+    const user = await freelancer(RESERVE, "sell_usd");
+    const { deps } = harness({ USDT: 20_000_000n }, { outcome: refillQuote(6_000_000n, 9_570n) });
+    await runTreasuryForUser(deps, user.id);
+    const [proposal] = await intentsOf(user.id);
+    await approveProposal(db, user.id, proposal.id, 6_000_000n, NOW);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
+    expect(deps.rfq.request).toHaveBeenCalledWith(expect.objectContaining({ sellAmount: 6_000_000n }));
+  });
+
+  it("starts the price wait at approval, so an old proposal still holds out for the normal limit", async () => {
+    const user = await freelancer(RESERVE, "sell_usd");
+    // Proposed 8 hours ago, past the 6-hour wait; the quote is 1% worse: within the hard limit, not the normal one.
+    const [proposal] = await db
+      .insert(fxIntents)
+      .values({
+        userId: user.id,
+        fromAsset: "USDT",
+        toAsset: "WARS",
+        amountAtomic: "10000000",
+        reason: "top_up",
+        status: "proposed",
+        createdAt: new Date(NOW.getTime() - 8 * 3_600_000),
+      })
+      .returning();
+    await approveProposal(db, user.id, proposal.id, 10_000_000n, NOW);
+    const { deps } = harness({ USDT: 20_000_000n }, { outcome: refillQuote(10_000_000n, 15_840n) });
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "waiting", detail: "price" });
+  });
+
+  it("stays quiet for 24 hours after a dismissal, then asks again", async () => {
+    const user = await freelancer(RESERVE, "sell_usd");
+    const { deps } = harness({ USDT: 20_000_000n });
+    await runTreasuryForUser(deps, user.id);
+    const [proposal] = await intentsOf(user.id);
+    await dismissProposal(db, user.id, proposal.id, NOW);
+    deps.now = () => new Date(NOW.getTime() + 3_600_000);
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "idle", detail: "dismissed" });
+    deps.now = () => new Date(NOW.getTime() + 24 * 3_600_000);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("awaiting_approval");
+  });
+
+  it("silences only the dismissed group", async () => {
+    const user = await freelancer(RESERVE, "all");
+    const { deps, state } = harness({ USDT: 20_000_000n });
+    await runTreasuryForUser(deps, user.id);
+    const [refill] = await intentsOf(user.id);
+    await dismissProposal(db, user.id, refill.id, NOW);
+    state.balances.WBRL = pesos(10n); // paid in reais: the engine now wants to save them (the save group)
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("awaiting_approval");
+    expect((await intentsOf(user.id)).find((i) => i.status === "proposed")?.reason).toBe("save_other");
+  });
+
+  it("runs an open proposal once the mode is auto, with that choice as consent", async () => {
+    const user = await freelancer(RESERVE, "sell_usd");
+    const { deps } = harness({ USDT: 20_000_000n }, { outcome: refillQuote(10_000_000n, 15_950n) });
+    await runTreasuryForUser(deps, user.id);
+    await db.update(rules).set({ approvalMode: "auto" }).where(eq(rules.userId, user.id));
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
+    expect((await intentsOf(user.id))[0]).toMatchObject({ status: "filled", approvedAt: NOW });
+  });
+
+  it("asks again for an unapproved order when the mode starts asking", async () => {
+    const user = await freelancer(RESERVE, "sell_usd");
+    const [order] = await db
+      .insert(fxIntents)
+      .values({ userId: user.id, fromAsset: "USDT", toAsset: "WARS", amountAtomic: "10000000", reason: "top_up", createdAt: NOW })
+      .returning();
+    const { deps } = harness({ USDT: 20_000_000n });
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("awaiting_approval");
+    expect(await intentsOf(user.id)).toEqual([expect.objectContaining({ id: order.id, status: "proposed" })]);
+  });
+
+  it("keeps an approved order in dry run and does not propose it again", async () => {
+    const user = await freelancer(RESERVE, "sell_usd");
+    const { deps } = harness({ USDT: 20_000_000n }, { dryRun: true });
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("awaiting_approval");
+    const [proposal] = await intentsOf(user.id);
+    await approveProposal(db, user.id, proposal.id, 10_000_000n, NOW);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("dry_run");
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("dry_run");
+    expect((await intentsOf(user.id)).map((i) => i.status)).toEqual(["waiting"]);
+    expect(await eventTypes(user.id)).toEqual(["proposed", "dry_run"]);
+  });
+
+  it("caps at an approval that landed after the run read the open intent", async () => {
+    const user = await freelancer(RESERVE, "auto");
+    await db
+      .insert(fxIntents)
+      .values({ userId: user.id, fromAsset: "USDT", toAsset: "WARS", amountAtomic: "10000000", reason: "top_up", status: "waiting", createdAt: NOW });
+    const { deps } = harness({ USDT: 20_000_000n }, { outcome: refillQuote(6_000_000n, 9_570n) });
+    // The approval lands between openIntent and saveIntent: before the first database transaction of the run.
+    let approved = false;
+    deps.db = new Proxy(db, {
+      get(target, key) {
+        if (key !== "transaction") return Reflect.get(target, key);
+        return async (...args: Parameters<Db["transaction"]>) => {
+          if (!approved) {
+            approved = true;
+            await db.update(fxIntents).set({ approvedAt: NOW, approvedAmountAtomic: "6000000" }).where(eq(fxIntents.userId, user.id));
+          }
+          return target.transaction(...args);
+        };
+      },
+    });
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
+    expect(deps.rfq.request).toHaveBeenCalledWith(expect.objectContaining({ sellAmount: 6_000_000n }));
+  });
+
+  it("asks once for a refill through USD₮ and lets the second leg inherit the approval, once", async () => {
+    const user = await freelancer(RESERVE, "sell_usd");
+    const { deps, state } = harness({ USAT: 20_000_000n }, { outcome: quoted({ sellAmount: 10_000_000n, takerPays: 10_000_000n, buyAmount: 9_990_000n }) });
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("awaiting_approval");
+    const [hub] = await intentsOf(user.id);
+    expect(hub.reason).toBe("hub_route");
+    await approveProposal(db, user.id, hub.id, 10_000_000n, NOW);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
+
+    // The hub leg bought 9.99 USD₮; the refill's second leg sells at most that, with no new question.
+    // The engine wants more than that (US$10 of pesos from 15 USD₮), so the inherited cap is what binds.
+    state.balances = { ...state.balances, USAT: 10_000_000n, USDT: 15_000_000n };
+    deps.rfq.request = vi.fn(async () => refillQuote(9_000_000n, 14_380n));
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
+    expect(deps.rfq.request).toHaveBeenLastCalledWith(expect.objectContaining({ sellAmount: 9_990_000n }));
+    const second = (await intentsOf(user.id)).find((i) => i.reason === "top_up");
+    expect(second).toMatchObject({ approvedVia: hub.id, approvedAmountAtomic: "9990000", status: "filled" });
+
+    // A further refill needs a new approval.
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("awaiting_approval");
   });
 });

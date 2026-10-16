@@ -49,10 +49,13 @@ describe("buildTreasuryView", () => {
 });
 
 describe("agentState", () => {
-  it("shows the most restrictive switch", () => {
-    expect(agentState({ globalEnabled: false, dryRun: true, userEnabled: true })).toBe("off");
-    expect(agentState({ globalEnabled: true, dryRun: true, userEnabled: false })).toBe("paused");
-    expect(agentState({ globalEnabled: true, dryRun: true, userEnabled: true })).toBe("dry_run");
-    expect(agentState({ globalEnabled: true, dryRun: false, userEnabled: true })).toBe("active");
+  it("shows the most restrictive switch, then dry run, then a waiting proposal", () => {
+    const base = { globalEnabled: true, dryRun: false, userEnabled: true, awaitingApproval: false };
+    expect(agentState({ ...base, globalEnabled: false, awaitingApproval: true })).toBe("off");
+    expect(agentState({ ...base, userEnabled: false, awaitingApproval: true })).toBe("paused");
+    expect(agentState({ ...base, dryRun: true, awaitingApproval: true })).toBe("dry_run");
+    expect(agentState({ ...base, awaitingApproval: true })).toBe("awaiting");
+    expect(agentState({ ...base, dryRun: true })).toBe("dry_run");
+    expect(agentState(base)).toBe("active");
   });
 });

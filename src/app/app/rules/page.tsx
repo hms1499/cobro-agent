@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,10 +9,12 @@ import { requireUser } from "@/lib/auth/current-user";
 import { getDb } from "@/lib/db/client";
 import { rules, type RulesRow } from "@/lib/db/schema";
 import { getReferenceRates } from "@/lib/fx/rates";
+import { modeNeedsApproval } from "@/lib/treasury/approvals";
 import { decide } from "@/lib/treasury/engine";
 import { engineInput } from "@/lib/treasury/executor";
 import { describeDecision } from "@/lib/treasury/explain";
 import { liveExecutorDeps } from "@/lib/treasury/live";
+import { openProposal } from "@/lib/treasury/repo";
 import { rulesFormValues } from "@/lib/treasury/rules-form";
 import type { AppUser } from "@/lib/users/queries";
 import { RulesForm } from "./rules-form";
@@ -34,8 +37,20 @@ async function Rules() {
   const user = await requireUser();
   const [row] = await getDb().select().from(rules).where(eq(rules.userId, user.id));
   if (!row) redirect("/app/onboarding");
+  const proposal = await openProposal(getDb(), user.id);
   return (
     <>
+      {proposal && (
+        <p role="status" className="rounded-xl bg-muted p-4">
+          {t("rules.proposalWaiting")}{" "}
+          <Link
+            href="/app"
+            className="font-medium text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          >
+            {t("rules.proposalReview")}
+          </Link>
+        </p>
+      )}
       <Suspense fallback={<Skeleton className="h-16 w-full" />}>
         <Preview user={user} row={row} />
       </Suspense>
@@ -51,7 +66,9 @@ async function Preview({ user, row }: { user: AppUser; row: RulesRow }) {
   try {
     const [balances, rates] = await Promise.all([liveExecutorDeps().chain.readBalances(user.treasuryAddress), getReferenceRates()]);
     const input = await engineInput(getDb(), { userId: user.id, rules: row }, balances, rates, new Date());
-    text = describeDecision(decide(input), { local: row.localCurrency, rates });
+    const decision = decide(input);
+    const askFirst = decision.kind === "convert" && modeNeedsApproval(row.approvalMode, decision.reason);
+    text = describeDecision(decision, { local: row.localCurrency, rates }, { askFirst });
   } catch (error) {
     console.error("Rules preview failed:", error instanceof Error ? error.message : error);
     return <p className="text-muted-foreground">{t("rules.previewUnavailable")}</p>;

@@ -1,11 +1,12 @@
 import { eq } from "drizzle-orm";
 import type { Db } from "@/lib/db/client";
-import { rules, type RulesRow } from "@/lib/db/schema";
+import { rules, type ApprovalMode, type RulesRow } from "@/lib/db/schema";
 import type { FieldErrors, FormResult } from "@/lib/forms";
 import { formatDecimal, parseDecimal } from "@/lib/money/decimal";
 import { parseFiatInput } from "@/lib/money/input";
+import { isApprovalMode } from "./approvals";
 
-export type RulesField = "reserveAmount" | "maxSlippagePct" | "hardMaxSlippagePct" | "maxWaitHours" | "perTradeMaxUsd" | "dailyMaxUsd";
+export type RulesField = "reserveAmount" | "maxSlippagePct" | "hardMaxSlippagePct" | "maxWaitHours" | "perTradeMaxUsd" | "dailyMaxUsd" | "approvalMode";
 
 export interface RulesInput {
   reserveAmount: string;
@@ -15,6 +16,7 @@ export interface RulesInput {
   maxWaitMinutes: number;
   perTradeMaxUsd: number;
   dailyMaxUsd: number;
+  approvalMode: ApprovalMode;
 }
 
 /** "0.5" or "0,5" → 50 basis points, at most two decimals; null when unreadable. */
@@ -48,6 +50,9 @@ export function parseRulesForm(fields: Record<string, string>): FormResult<Rules
   const daily = wholeNumber(fields.dailyMaxUsd);
   if (!within(daily, within(perTrade, 1, 1000) ? perTrade : 1, 5000)) errors.dailyMaxUsd = "rules.error.daily";
 
+  const approvalMode = fields.approvalMode;
+  if (!isApprovalMode(approvalMode)) errors.approvalMode = "rules.error.approvalMode";
+
   if (
     !reserve.ok ||
     Object.keys(errors).length > 0 ||
@@ -55,7 +60,8 @@ export function parseRulesForm(fields: Record<string, string>): FormResult<Rules
     hardMax === null ||
     waitHours === null ||
     perTrade === null ||
-    daily === null
+    daily === null ||
+    !isApprovalMode(approvalMode)
   ) {
     return { ok: false, errors };
   }
@@ -69,6 +75,7 @@ export function parseRulesForm(fields: Record<string, string>): FormResult<Rules
       maxWaitMinutes: waitHours * 60,
       perTradeMaxUsd: perTrade,
       dailyMaxUsd: daily,
+      approvalMode,
     },
   };
 }
@@ -83,6 +90,7 @@ export function rulesFormValues(row: RulesRow): Record<string, string> {
     maxWaitHours: String(Math.round(row.maxWaitMinutes / 60)),
     perTradeMaxUsd: String(row.perTradeMaxUsd),
     dailyMaxUsd: String(row.dailyMaxUsd),
+    approvalMode: row.approvalMode,
   };
 }
 
