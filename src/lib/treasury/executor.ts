@@ -746,23 +746,32 @@ export async function reconcileWallets(
   return totals;
 }
 
-/** Runs wallets one after another; a failure never stops the others. Stops starting new ones after `deadline`. */
+/**
+ * Runs wallets with at most `concurrency` at once (default 1); a failure never stops the others.
+ * No new wallet starts after `deadline`. Results come in completion order.
+ */
 export async function runTreasuries(
   userIds: string[],
   run: (userId: string) => Promise<RunResult>,
-  opts: { deadline?: number; now?: () => number } = {},
+  opts: { deadline?: number; now?: () => number; concurrency?: number } = {},
 ): Promise<RunResult[]> {
   const now = opts.now ?? Date.now;
+  const queue = [...userIds];
   const results: RunResult[] = [];
-  for (const userId of userIds) {
-    if (opts.deadline !== undefined && now() > opts.deadline) break;
-    try {
-      results.push(await run(userId));
-    } catch (error) {
-      console.error(`Treasury run for ${userId} failed:`, error);
-      results.push({ userId, outcome: "failed", detail: messageOf(error) });
+  const worker = async () => {
+    while (queue.length > 0) {
+      if (opts.deadline !== undefined && now() > opts.deadline) return;
+      const userId = queue.shift()!;
+      try {
+        results.push(await run(userId));
+      } catch (error) {
+        console.error(`Treasury run for ${userId} failed:`, error);
+        results.push({ userId, outcome: "failed", detail: messageOf(error) });
+      }
     }
-  }
+  };
+  const workers = Math.min(Math.max(1, opts.concurrency ?? 1), queue.length);
+  await Promise.all(Array.from({ length: workers }, worker));
   return results;
 }
 
