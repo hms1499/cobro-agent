@@ -35,3 +35,14 @@ export async function loadAppUser(db: Db, userId: string): Promise<AppUser | nul
     localCurrency: row.localCurrency ?? null,
   };
 }
+
+/** Whether onboarding is done (a rules row exists), by Para user id so sign-in can run it alongside the user upsert. */
+export async function hasFinishedOnboarding(db: Db, paraUserId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ userId: rules.userId })
+    .from(users)
+    .innerJoin(rules, eq(rules.userId, users.id))
+    .where(eq(users.paraUserId, paraUserId))
+    .limit(1);
+  return row !== undefined;
+}

@@ -2,7 +2,7 @@ import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db/client";
 import { users } from "@/lib/db/schema";
 import { createTestDb, resetDb, seedFreelancer, TEST_TREASURY } from "@/lib/db/testing";
-import { loadAppUser } from "./queries";
+import { hasFinishedOnboarding, loadAppUser } from "./queries";
 
 let db: Db;
 beforeAll(async () => {
@@ -37,5 +37,18 @@ describe("loadAppUser", () => {
 
   it("returns null for an unknown user", async () => {
     expect(await loadAppUser(db, "00000000-0000-4000-8000-000000000000")).toBeNull();
+  });
+});
+
+describe("hasFinishedOnboarding", () => {
+  it("is true once the user has rules, looked up by the Para user id", async () => {
+    const user = await seedFreelancer(db);
+    expect(await hasFinishedOnboarding(db, user.paraUserId)).toBe(true);
+  });
+
+  it("is false for a user without rules, and for a Para user we have never seen", async () => {
+    await db.insert(users).values({ paraUserId: "para-new" });
+    expect(await hasFinishedOnboarding(db, "para-new")).toBe(false);
+    expect(await hasFinishedOnboarding(db, "para-unknown")).toBe(false);
   });
 });

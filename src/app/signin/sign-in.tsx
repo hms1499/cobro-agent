@@ -47,6 +47,11 @@ export function SignIn() {
     if (isConnected && !started.current) void createSession();
   });
 
+  // Wake the database and cache Para's keys while the freelancer types their email and code (src/lib/auth/warm.ts).
+  useEffect(() => {
+    void fetch("/api/session/warm", { method: "POST", keepalive: true }).catch(() => undefined);
+  }, []);
+
   // One click fewer: open Para's email form as soon as the SDK is ready, once per visit. Closing it
   // leaves the page and its "Continue with email" button, which reopens it.
   useEffect(() => {

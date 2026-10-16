@@ -8,8 +8,8 @@ export interface StartSessionDeps {
   /** Runs work after the response is sent (after() in the route). */
   schedule(task: () => Promise<void>): void;
   signSession(userId: string): Promise<string>;
-  /** Whether onboarding is done (the rules row with a local currency exists). */
-  hasCurrency(userId: string): Promise<boolean>;
+  /** Whether onboarding is done (rules with a local currency exist), by Para user id so it runs alongside the upsert. */
+  hasCurrency(paraUserId: string): Promise<boolean>;
 }
 
 export type StartSessionResult =
@@ -32,7 +32,8 @@ export async function startSession(body: unknown, deps: StartSessionDeps): Promi
     return { ok: false, status: 401, error: "invalid_session" };
   }
 
-  const user = await deps.upsertUser(session);
+  // One round trip instead of two: both are keyed by the Para user id (a new user has no rules yet either way).
+  const [user, onboarded] = await Promise.all([deps.upsertUser(session), deps.hasCurrency(session.paraUserId)]);
   deps.schedule(async () => {
     try {
       await deps.provisionWallet(user.id);
@@ -40,6 +41,6 @@ export async function startSession(body: unknown, deps: StartSessionDeps): Promi
       console.error("Treasury wallet setup failed:", error instanceof Error ? error.message : error);
     }
   });
-  const [sessionToken, onboarded] = await Promise.all([deps.signSession(user.id), deps.hasCurrency(user.id)]);
+  const sessionToken = await deps.signSession(user.id);
   return { ok: true, sessionToken, next: onboarded ? "/app" : "/app/onboarding" };
 }

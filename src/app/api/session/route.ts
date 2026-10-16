@@ -8,7 +8,7 @@ import { parseServerEnv, requireValue } from "@/lib/config/server";
 import { getDb } from "@/lib/db/client";
 import { paraRestClient, paraSessionKeys } from "@/lib/users/para";
 import { ensureTreasuryWallet, upsertUser } from "@/lib/users/provision";
-import { loadAppUser } from "@/lib/users/queries";
+import { hasFinishedOnboarding } from "@/lib/users/queries";
 
 /** Wallet creation runs in after(): Para creates it, then we poll until ready (up to 30 s). */
 export const maxDuration = 60;
@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     provisionWallet: (userId) => ensureTreasuryWallet(db, userId, paraRestClient()),
     schedule: (task) => after(task),
     signSession: (userId) => signSession(userId, requireValue(parseServerEnv().SESSION_SECRET, "SESSION_SECRET")),
-    hasCurrency: async (userId) => Boolean((await loadAppUser(db, userId))?.localCurrency),
+    hasCurrency: (paraUserId) => hasFinishedOnboarding(db, paraUserId),
   });
   if (!result.ok) return Response.json({ error: result.error }, { status: result.status });
   (await cookies()).set(SESSION_COOKIE, result.sessionToken, sessionCookieOptions());

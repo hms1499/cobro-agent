@@ -43,6 +43,16 @@ describe("startSession", () => {
     expect(d.provisionWallet).toHaveBeenCalledWith("user-1");
   });
 
+  it("looks up onboarding by the Para user id while the user row is saved, not after", async () => {
+    let saved: (value: { id: string }) => void = () => {};
+    const { d } = deps({ upsertUser: vi.fn(() => new Promise<{ id: string }>((resolve) => (saved = resolve))) });
+    const pending = startSession({ token: "x" }, d);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(d.hasCurrency).toHaveBeenCalledWith("para-1");
+    saved({ id: "user-1" });
+    await expect(pending).resolves.toMatchObject({ ok: true, next: "/app/onboarding" });
+  });
+
   it("sends a freelancer who finished onboarding straight to the app", async () => {
     const { d } = deps({ hasCurrency: vi.fn(async () => true) });
     expect(await startSession({ token: "x" }, d)).toMatchObject({ ok: true, next: "/app" });
