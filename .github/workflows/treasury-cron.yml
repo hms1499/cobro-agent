@@ -1,6 +1,8 @@
 name: Treasury cron
 
-# Vercel Hobby crons run once a day, so GitHub Actions calls the route every 10 minutes (spec §7.1).
+# cron-job.org calls the route every 5 minutes with ?mode=async (spec §7.1). This workflow is the
+# backup trigger and the alert: it runs the tick inline and fails (GitHub emails the owner) when the
+# tick reports errors. GitHub delays scheduled runs, so expect it every few hours, not every 10 minutes.
 # Scheduled workflows run only from the default branch (main).
 on:
   schedule:
@@ -19,6 +21,8 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
           APP_URL: ${{ vars.APP_URL || 'https://cobro-agent.vercel.app' }}
         run: |
-          curl --fail-with-body --silent --show-error --max-time 290 \
+          body=$(curl --fail-with-body --silent --show-error --max-time 290 \
             -X POST -H "Authorization: Bearer ${CRON_SECRET}" \
-            "${APP_URL}/api/cron/treasury"
+            "${APP_URL}/api/cron/treasury") || { echo "$body"; exit 1; }
+          echo "$body"
+          echo "$body" | jq -e '.ok == true' > /dev/null || { echo "::error::The cron tick reported errors"; exit 1; }
