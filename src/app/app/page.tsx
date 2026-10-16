@@ -21,6 +21,7 @@ import { AgentStatus } from "./agent-status";
 import { Conversions } from "./conversions";
 import { ProposalBanner } from "./proposal-banner";
 import { ProposalSlot } from "./proposal-slot";
+import { RefreshWhileCreating } from "./refresh-while-creating";
 import { RepeatClients } from "./repeat-clients";
 import { TreasurySummary } from "./treasury-summary";
 
@@ -152,7 +153,8 @@ async function Home() {
 // Not exported: a page module may only export Next.js page fields.
 function SetupBanner({ status }: { status: AppUser["treasuryStatus"] }) {
   if (status === "ready") return null;
-  const failed = status === "failed" || status === "missing";
+  // "missing" is the moment between sign-in and the background wallet setup claiming its row.
+  const failed = status === "failed";
   return (
     <section
       role="status"
@@ -166,6 +168,7 @@ function SetupBanner({ status }: { status: AppUser["treasuryStatus"] }) {
         )}
         {failed ? t("setup.failed") : t("setup.creating")}
       </p>
+      {!failed && <RefreshWhileCreating />}
       <form action={finishSetup}>
         <SubmitButton pendingLabel={t("setup.working")}>{t("setup.retry")}</SubmitButton>
       </form>
