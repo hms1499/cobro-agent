@@ -1,13 +1,12 @@
 // src/lib/treasury/view.ts
-import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db/client";
-import { rules } from "@/lib/db/schema";
 import { getReferenceRates, type ReferenceRates } from "@/lib/fx/rates";
 import type { LocalCurrency } from "@/lib/money/currencies";
 import type { AppUser } from "@/lib/users/queries";
 import type { TreasuryBalances } from "./balances";
 import { readDisplayBalances } from "./live";
 import { protectedValue, treasuryUsdWad, type PaymentForPnl } from "./pnl";
+import { getRulesRow } from "./request-reads";
 import { paymentsForPnl, withdrawnUsdWad } from "./stats";
 import { fiatToAtomic, LOCAL_ASSET, tokenFiatAmount, usdWad, usdWadToDollars } from "./value";
 
@@ -57,7 +56,7 @@ export function buildTreasuryView(input: {
 export async function loadTreasuryView(user: AppUser): Promise<{ view: TreasuryView; rates: ReferenceRates } | null> {
   if (!user.treasuryAddress || !user.localCurrency) return null;
   const db = getDb();
-  const [row] = await db.select().from(rules).where(eq(rules.userId, user.id));
+  const row = await getRulesRow(user.id);
   if (!row) return null;
   const [balances, rates, payments, withdrawn] = await Promise.all([
     readDisplayBalances(user.treasuryAddress),

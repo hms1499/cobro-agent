@@ -1,8 +1,7 @@
 import { unstable_rethrow } from "next/navigation";
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth/current-user";
-import { getDb } from "@/lib/db/client";
-import { openProposal } from "@/lib/treasury/repo";
+import { getOpenProposal } from "@/lib/treasury/request-reads";
 import { AppNav, AppNavLinks } from "./app-nav";
 
 export default function AppLayout({ children }: LayoutProps<"/app">) {
@@ -23,7 +22,7 @@ async function NavWithProposal() {
   let hasProposal = false;
   try {
     const user = await getCurrentUser();
-    hasProposal = user ? (await openProposal(getDb(), user.id)) !== null : false;
+    hasProposal = user ? (await getOpenProposal(user.id)) !== null : false;
   } catch (error) {
     // Prerender and redirect signals must reach Next.js. The mark is a hint; the nav must work when the lookup fails.
     unstable_rethrow(error);

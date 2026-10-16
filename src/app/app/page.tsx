@@ -13,7 +13,7 @@ import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { formatDate } from "@/lib/invoices/dates";
 import { listInvoices } from "@/lib/invoices/repo";
 import { displayAmount } from "@/lib/money/display";
-import { openProposal } from "@/lib/treasury/repo";
+import { getOpenProposal } from "@/lib/treasury/request-reads";
 import type { AppUser } from "@/lib/users/queries";
 import { finishSetup } from "./actions";
 import { ActivityFeed } from "./activity-feed";
@@ -61,7 +61,7 @@ function HomeSkeleton() {
 async function Home() {
   const user = await requireUser();
   const db = getDb();
-  const [invoices, rates, proposal] = await Promise.all([listInvoices(db, user.id), getReferenceRatesOrNull(), openProposal(db, user.id)]);
+  const [invoices, rates, proposal] = await Promise.all([listInvoices(db, user.id), getReferenceRatesOrNull(), getOpenProposal(user.id)]);
   // One primary action per screen: a setup or approval banner takes it from "New invoice" (MASTER.md "Buttons").
   const newInvoiceLink = user.treasuryStatus === "ready" && !proposal ? primaryLink : secondaryLink;
   return (
