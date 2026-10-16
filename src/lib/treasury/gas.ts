@@ -11,6 +11,22 @@ export const DRIP_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 export type Dripper = (to: Address, amount: bigint) => Promise<Hex>;
 
+/**
+ * One operator key has one nonce sequence. A cron tick runs several wallets at once, and two of them
+ * can need gas together: viem reads the pending nonce per send, so parallel drips would collide and
+ * the loser would wait 24 h for its next slot. Drips from this server instance go one at a time; each
+ * resolves only after its receipt, so the next one reads the advanced nonce. A failed drip does not
+ * block the queue.
+ */
+export function serializedDripper(dripper: Dripper): Dripper {
+  let last: Promise<unknown> = Promise.resolve();
+  return (to, amount) => {
+    const run = last.then(() => dripper(to, amount));
+    last = run.catch(() => undefined);
+    return run;
+  };
+}
+
 /** Operator → treasury USDC transfer, tagged, gas in the operator's fee token. Resolves after a successful receipt. */
 export function operatorDripper(opts: { privateKey: Hex; attributionCode: string; rpcUrl: string; feeToken: FeeToken }): Dripper {
   const operator = createOperatorClient(opts);
