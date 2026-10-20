@@ -1,6 +1,7 @@
 // src/lib/treasury/explain.ts
 import { t, type MessageKey } from "@/i18n";
 import { TOKENS } from "@/lib/chain/tokens";
+import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import type { AgentEventType, FxIntentRow } from "@/lib/db/schema";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { formatDecimal } from "@/lib/money/decimal";
@@ -89,7 +90,7 @@ export function describeEvent(
   ): EventView => ({
     tone,
     title: t(`event.${key}.title`),
-    why: t(`event.${key}.why`),
+    why: t(`event.${key}.why`, { minutes: CHECK_INTERVAL_MINUTES }),
     txHash,
   });
   switch (event.type) {
@@ -118,6 +119,7 @@ export function describeEvent(
         tone: "warning",
         title: t("event.waiting.title"),
         why: t("event.waiting.why", {
+          minutes: CHECK_INTERVAL_MINUTES,
           amount,
           pct: percentText(d.slippageBps),
           limit: percentText(d.limitBps),

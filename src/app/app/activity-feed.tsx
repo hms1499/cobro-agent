@@ -1,6 +1,7 @@
 // src/app/app/activity-feed.tsx
 import { CircleAlert, CircleCheck, Clock, ExternalLink, Info } from "lucide-react";
 import { t } from "@/i18n";
+import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import { getDb } from "@/lib/db/client";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { formatDateTime } from "@/lib/invoices/dates";
@@ -24,7 +25,7 @@ export async function ActivityFeed({ user }: { user: AppUser }) {
         {t("activity.title")}
       </h2>
       {events.length === 0 ? (
-        <p className="text-muted-foreground">{t("activity.empty")}</p>
+        <p className="text-muted-foreground">{t("activity.empty", { minutes: CHECK_INTERVAL_MINUTES })}</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {events.map((event) => {

@@ -2,6 +2,7 @@ import { CircleCheck, FlaskConical, Hand, Pause } from "lucide-react";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { t } from "@/i18n";
+import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import { parseServerEnv } from "@/lib/config/server";
 import { getDb } from "@/lib/db/client";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
@@ -48,7 +49,7 @@ export async function AgentStatus({ user }: { user: AppUser }) {
             {t(`agent.state.${state}` as const)}
           </span>
         </div>
-        <p className="text-muted-foreground">{t(`agent.help.${state}` as const)}</p>
+        <p className="text-muted-foreground">{t(`agent.help.${state}` as const, { minutes: CHECK_INTERVAL_MINUTES })}</p>
         <p className="text-sm">
           {t("agent.guardrails", {
             perTrade: formatMoney(String(row.perTradeMaxUsd), "USD"),
