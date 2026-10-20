@@ -593,6 +593,10 @@ tokens; Lucide icons; CSS-only subtle motion that respects reduced motion. Light
 
 Every data view has loading (skeleton), empty, error (with retry) and success states.
 
+Plan 4 (2026-10-20) redesigned Home, added the Invoices tab and moved agent details to the Agent tab; the
+current screens are specified in `design-system/cobro/pages/` and the Plan 4 spec §4, which supersede the
+Dashboard and Rules rows above where they differ.
+
 ### 17.3 UX verification
 
 - Pre-delivery checklist in MASTER.md for every page.
