@@ -4,8 +4,10 @@ import type { ReactNode } from "react";
 import { Money } from "@/components/money";
 import { Card, CardContent } from "@/components/ui/card";
 import { t } from "@/i18n";
+import { getDb } from "@/lib/db/client";
 import { convertFiat } from "@/lib/fx/convert";
 import { displayAmount } from "@/lib/money/display";
+import { volumeStats } from "@/lib/treasury/stats";
 import { loadTreasuryView } from "@/lib/treasury/view";
 import type { AppUser } from "@/lib/users/queries";
 
@@ -83,5 +85,42 @@ function Figures({ view, rates }: NonNullable<Awaited<ReturnType<typeof loadTrea
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * How the dollar savings compare with keeping every payment in the local currency (spec §10.5), on the
+ * Agent tab. The RFQ volume sits behind "Details".
+ */
+export async function ProtectedCard({ user }: { user: AppUser }) {
+  let loaded: Awaited<ReturnType<typeof loadTreasuryView>> | "error";
+  let volume: Awaited<ReturnType<typeof volumeStats>> | null = null;
+  try {
+    [loaded, volume] = await Promise.all([loadTreasuryView(user), volumeStats(getDb(), user.id)]);
+  } catch (error) {
+    console.error("Value protected failed:", error instanceof Error ? error.message : error);
+    loaded = "error";
+  }
+  if (!loaded || loaded === "error") return null;
+  const { view, rates } = loaded;
+  const currencyName = t(`event.target.${view.local}` as const);
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-2">
+        <h2 className="text-lg font-semibold">
+          {view.protectedNegative ? t("treasury.behind", { currency: currencyName }) : t("treasury.protected")}
+        </h2>
+        <Money size="lg" amount={displayAmount(view.protectedUsd, "USD", view.local, rates)} />
+        <p className="max-w-prose text-sm text-muted-foreground">{t("treasury.protectedHelp", { currency: currencyName })}</p>
+        {volume && volume.requested > 0 && (
+          <details className="text-sm">
+            <summary className="hover-tint -mx-2 min-h-11 w-fit cursor-pointer rounded-md px-2 py-2 text-primary">
+              {t("common.details")}
+            </summary>
+            <p className="text-muted-foreground">{t("conversions.volume", { filled: volume.filled, requested: volume.requested })}</p>
+          </details>
+        )}
+      </CardContent>
+    </Card>
   );
 }

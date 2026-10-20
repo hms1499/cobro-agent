@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { LoadingRows } from "@/components/loading-rows";
+import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 import { requireUser } from "@/lib/auth/current-user";
@@ -16,15 +18,17 @@ import { readDisplayBalances } from "@/lib/treasury/live";
 import { getOpenProposal, getRulesRow } from "@/lib/treasury/request-reads";
 import { rulesFormValues } from "@/lib/treasury/rules-form";
 import type { AppUser } from "@/lib/users/queries";
+import { ActivityFeed } from "../activity-feed";
+import { AgentStatus } from "../agent-status";
+import { ProtectedCard } from "../treasury-summary";
 import { RulesForm } from "./rules-form";
 
 export const metadata: Metadata = { title: `${t("rules.title")} · ${t("app.name")}` };
 
 export default function RulesPage() {
   return (
-    <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
-      <h1 className="text-2xl font-semibold">{t("rules.title")}</h1>
-      <p className="max-w-prose text-muted-foreground">{t("rules.intro")}</p>
+    <main id="main" className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
+      <PageHeader title={t("rules.title")} intro={t("rules.intro")} />
       <Suspense fallback={<Skeleton className="h-96 w-full" />}>
         <Rules />
       </Suspense>
@@ -40,7 +44,7 @@ async function Rules() {
   return (
     <>
       {proposal && (
-        <p role="status" className="rounded-xl bg-muted p-4">
+        <p role="status" className="rounded-xl bg-highlight p-4">
           {t("rules.proposalWaiting")}{" "}
           <Link
             href="/app"
@@ -50,10 +54,24 @@ async function Rules() {
           </Link>
         </p>
       )}
-      <Suspense fallback={<Skeleton className="h-16 w-full" />}>
-        <Preview user={user} row={row} />
+      <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+        <AgentStatus user={user} />
       </Suspense>
-      <RulesForm currency={row.localCurrency} values={rulesFormValues(row)} />
+      <Suspense fallback={<Skeleton className="h-32 w-full" />}>
+        <ProtectedCard user={user} />
+      </Suspense>
+      <section aria-labelledby="rules-heading" className="flex flex-col gap-4">
+        <h2 id="rules-heading" className="text-lg font-semibold">
+          {t("rules.formTitle")}
+        </h2>
+        <Suspense fallback={<Skeleton className="h-16 w-full" />}>
+          <Preview user={user} row={row} />
+        </Suspense>
+        <RulesForm currency={row.localCurrency} values={rulesFormValues(row)} />
+      </section>
+      <Suspense fallback={<LoadingRows count={5} />}>
+        <ActivityFeed user={user} />
+      </Suspense>
     </>
   );
 }
