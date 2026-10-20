@@ -10,6 +10,7 @@ export interface LandingExample {
 }
 
 export const EXAMPLE_ARS_PER_USD = 1600;
+export const EXAMPLE_BRL_PER_USD = 5.4;
 
 export const LANDING_EXAMPLES: readonly LandingExample[] = [
   { client: "Acme", paid: { amount: "300.00", currency: "USD" }, kept: { amount: "200000", currency: "ARS" }, saved: { amount: "175.65", currency: "USD" } },
