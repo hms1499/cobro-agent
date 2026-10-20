@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hero left side options</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --primary:#086288; --primary-90:#075476; --secondary:#4D8DBA; --tint:#97D7FF; --highlight:#FFEFC4; --bg:#F8FAFC; --fg:#0F172A; --muted:#475569; --border:#E2E8F0; --input:#64748B; --success:#15803D; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #EEF2F6; color: var(--fg); font-family: "IBM Plex Sans", system-ui, sans-serif; padding: 28px 20px 60px; }
+  .top { max-width: 1240px; margin: 0 auto 20px; }
+  .top h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .top p { color: var(--muted); margin: 0; }
+  .opt { max-width: 1240px; margin: 0 auto 26px; background: var(--bg); border-radius: 20px; box-shadow: 0 0 0 1px rgba(15,23,42,.07); cursor: pointer; overflow: hidden; }
+  .opt.selected { box-shadow: 0 0 0 3px var(--primary); }
+  .tagrow { padding: 14px 24px; border-bottom: 1px solid var(--border); background: #fff; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+  .tag { font-size: 12px; font-weight: 600; color: var(--primary); background: rgba(151,215,255,.4); border-radius: 999px; padding: 2px 10px; }
+  .tagrow span.d { color: var(--muted); font-size: 14px; }
+  .hero { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 48px; align-items: center; padding: 56px 48px; }
+  .btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 8px; font-weight: 600; font-size: 15px; text-decoration: none; border: 1px solid transparent; }
+  .btn-primary { background: var(--primary); color: #fff; } .btn-outline { border-color: var(--secondary); color: var(--primary); background: #fff; }
+  .muted { color: var(--muted); }
+
+  /* board (static) */
+  .stage { background: linear-gradient(160deg, rgba(151,215,255,.38), rgba(151,215,255,.08) 60%, rgba(255,239,196,.35)); border-radius: 24px; padding: 28px; }
+  .board { background: #0B1730; border-radius: 18px; padding: 18px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 24px 48px -24px rgba(8,98,136,.55); }
+  .bhead { display: flex; gap: 10px; align-items: center; color: #E2E8F0; font-size: 13.5px; padding: 2px 4px 6px; } .bhead i { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+  .line { display: flex; justify-content: space-between; align-items: center; background: #111F3B; border-radius: 10px; padding: 12px 14px; }
+  .k { color: #94A3B8; font-size: 12.5px; }
+  .flaps { display: flex; gap: 2px; font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 17px; }
+  .flaps span { display: inline-grid; place-items: center; width: 14px; height: 26px; background: #1B2B4B; color: #fff; border-radius: 3px; position: relative; }
+  .flaps span::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(0,0,0,.5); }
+  .pesos .flaps span { color: var(--tint); } .dollars .flaps span { color: var(--highlight); }
+
+  /* L1: the headline is the board's three lines */
+  .l1 h2 { margin: 0 0 26px; font-size: clamp(38px, 4.6vw, 60px); line-height: 1.02; letter-spacing: -0.035em; font-weight: 700; }
+  .l1 h2 .r { display: grid; grid-template-columns: 1fr; position: relative; padding-left: 0; }
+  .l1 h2 .r + .r { margin-top: 6px; }
+  .l1 h2 .r em { font-style: normal; display: inline-block; font-size: 12.5px; font-weight: 600; letter-spacing: 0; color: var(--muted); font-family: "IBM Plex Mono", monospace; margin-bottom: 2px; }
+  .l1 h2 .r.p span { color: var(--primary); }
+  .l1 h2 .r.d span { color: var(--fg); text-decoration: underline; text-decoration-color: var(--highlight); text-decoration-thickness: 10px; text-underline-offset: -2px; text-decoration-skip-ink: none; }
+  .l1 p { font-size: 18px; color: var(--muted); max-width: 44ch; margin: 0 0 26px; }
+
+  /* L2: invoice composer in the hero */
+  .l2 h2 { margin: 0 0 14px; font-size: clamp(36px, 4.2vw, 54px); line-height: 1.05; letter-spacing: -0.035em; font-weight: 700; max-width: 14ch; }
+  .l2 p { font-size: 18px; color: var(--muted); max-width: 44ch; margin: 0 0 24px; }
+  .composer { background: #fff; border-radius: 16px; box-shadow: 0 0 0 1px rgba(15,23,42,.08), 0 10px 24px -16px rgba(15,23,42,.25); padding: 18px; max-width: 520px; }
+  .sentence { font-size: 20px; line-height: 2.1; }
+  .slot { display: inline-flex; align-items: center; border: 1px solid var(--input); border-radius: 8px; padding: 0 10px; height: 40px; font-weight: 600; background: var(--bg); margin: 0 2px; }
+  .slot.num { font-variant-numeric: tabular-nums; min-width: 90px; justify-content: flex-end; }
+  .composer .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+  .composer small { color: var(--muted); font-size: 13px; }
+
+  /* L3: email capture + live proof */
+  .l3 h2 { margin: 0 0 18px; font-size: clamp(40px, 5vw, 64px); line-height: 1.02; letter-spacing: -0.04em; font-weight: 700; max-width: 12ch; }
+  .l3 p { font-size: 18px; color: var(--muted); max-width: 42ch; margin: 0 0 26px; }
+  .capture { display: flex; gap: 8px; max-width: 460px; background: #fff; border-radius: 12px; padding: 6px; box-shadow: 0 0 0 1px rgba(15,23,42,.1); }
+  .capture .in { flex: 1; display: flex; align-items: center; padding: 0 12px; color: var(--muted); font-size: 15px; }
+  .proofs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin-top: 34px; max-width: 520px; border-top: 1px solid var(--border); }
+  .proofs div { padding: 14px 14px 0 0; }
+  .proofs div + div { padding-left: 14px; border-left: 1px solid var(--border); }
+  .proofs b { display: block; font-size: 22px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .proofs span { color: var(--muted); font-size: 12.5px; }
+
+  @media (max-width: 900px) { .hero { grid-template-columns: minmax(0,1fr); padding: 32px 20px; } .proofs { grid-template-columns: minmax(0,1fr); } .proofs div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); } }
+</style>
+</head>
+<body>
+<div class="top"><h1>Phần chữ bên trái của hero: chọn kiểu nào?</h1><p>Bảng lật bên phải giữ nguyên, ở đây để tĩnh cho dễ so sánh. Bấm vào khung bạn thích, rồi trả lời trong terminal.</p></div>
+
+<div class="opt" data-choice="l1" onclick="pick(this)">
+  <div class="tagrow"><span class="tag">L1 · Tiêu đề nối với bảng</span><span class="d">Tiêu đề chia đúng 3 dòng như bảng lật: tiền vào, giữ để tiêu, tiết kiệm. Chữ chính là thiết kế.</span></div>
+  <div class="hero">
+    <div class="l1">
+      <h2><span class="r"><em>payment in</em><span>Paid in dollars.</span></span><span class="r p"><em>kept for spending</em><span>Spent in pesos.</span></span><span class="r d"><em>saved</em><span>Saved in dollars.</span></span></h2>
+      <p>Invoice clients who pay in stablecoins. Your agent splits every payment for you, and asks before it sells a single dollar.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap"><a class="btn btn-primary">Start with email</a><a class="btn btn-outline">See how it works</a></div>
+    </div>
+    <div class="stage"><div class="board"><div class="bhead"><i></i>Acme paid an invoice</div><div class="line"><span class="k">Payment in</span><span class="flaps"><span>U</span><span>S</span><span>$</span><span>3</span><span>0</span><span>0</span><span>.</span><span>0</span><span>0</span></span></div><div class="line pesos"><span class="k">Kept for spending</span><span class="flaps"><span>A</span><span>R</span><span>S</span><span> </span><span>2</span><span>0</span><span>0</span><span>,</span><span>0</span><span>0</span><span>0</span></span></div><div class="line dollars"><span class="k">Saved in dollars</span><span class="flaps"><span>U</span><span>S</span><span>$</span><span>1</span><span>7</span><span>5</span><span>.</span><span>6</span><span>5</span></span></div></div></div>
+  </div>
+</div>
+
+<div class="opt" data-choice="l2" onclick="pick(this)">
+  <div class="tagrow"><span class="tag">L2 · Soạn hoá đơn ngay ở hero</span><span class="d">Người xem gõ thử tên khách và số tiền ngay trên trang, bấm nút thì sang đăng nhập với hoá đơn đã điền sẵn.</span></div>
+  <div class="hero">
+    <div class="l2">
+      <h2>Bill a client in one sentence.</h2>
+      <p>They pay in stablecoins from their own wallet. Your agent keeps pesos ready and saves the rest in dollars.</p>
+      <div class="composer">
+        <div class="sentence">Bill <span class="slot">Acme Inc.</span> <span class="slot num">300.00</span> <span class="slot">US$</span> for <span class="slot">logo redesign</span></div>
+        <div class="row"><small>Free. Sign in with your email to send it.</small><a class="btn btn-primary">Create this invoice</a></div>
+      </div>
+    </div>
+    <div class="stage"><div class="board"><div class="bhead"><i></i>Acme paid an invoice</div><div class="line"><span class="k">Payment in</span><span class="flaps"><span>U</span><span>S</span><span>$</span><span>3</span><span>0</span><span>0</span><span>.</span><span>0</span><span>0</span></span></div><div class="line pesos"><span class="k">Kept for spending</span><span class="flaps"><span>A</span><span>R</span><span>S</span><span> </span><span>2</span><span>0</span><span>0</span><span>,</span><span>0</span><span>0</span><span>0</span></span></div><div class="line dollars"><span class="k">Saved in dollars</span><span class="flaps"><span>U</span><span>S</span><span>$</span><span>1</span><span>7</span><span>5</span><span>.</span><span>6</span><span>5</span></span></div></div></div>
+  </div>
+</div>
+
+<div class="opt" data-choice="l3" onclick="pick(this)">
+  <div class="tagrow"><span class="tag">L3 · Ô email và số liệu thật</span><span class="d">Kiểu qash: tiêu đề rất lớn, ô nhập email ngay dưới, và một hàng số liệu có thật thay cho dấu tick.</span></div>
+  <div class="hero">
+    <div class="l3">
+      <h2>Your clients pay in dollars. You keep pesos.</h2>
+      <p>Invoices for stablecoin clients, and an agent that splits every payment within your rules.</p>
+      <div class="capture"><span class="in">you@studio.com</span><a class="btn btn-primary">Start free</a></div>
+      <div class="proofs"><div><b>4</b><span>currencies clients can pay in</span></div><div><b>US$0</b><span>network fee for your client</span></div><div><b>#9884</b><span>agent identity on Celo</span></div></div>
+    </div>
+    <div class="stage"><div class="board"><div class="bhead"><i></i>Acme paid an invoice</div><div class="line"><span class="k">Payment in</span><span class="flaps"><span>U</span><span>S</span><span>$</span><span>3</span><span>0</span><span>0</span><span>.</span><span>0</span><span>0</span></span></div><div class="line pesos"><span class="k">Kept for spending</span><span class="flaps"><span>A</span><span>R</span><span>S</span><span> </span><span>2</span><span>0</span><span>0</span><span>,</span><span>0</span><span>0</span><span>0</span></span></div><div class="line dollars"><span class="k">Saved in dollars</span><span class="flaps"><span>U</span><span>S</span><span>$</span><span>1</span><span>7</span><span>5</span><span>.</span><span>6</span><span>5</span></span></div></div></div>
+  </div>
+</div>
+<script>function pick(el){ document.querySelectorAll('.opt').forEach(o=>o.classList.toggle('selected', o===el)); if (window.toggleSelect) { try { toggleSelect(el); } catch(e){} } }</script>
+</body>
+</html>

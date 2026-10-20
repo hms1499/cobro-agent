@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobro landing mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #086288; --primary-90: #075476; --secondary: #4D8DBA; --tint: #97D7FF; --highlight: #FFEFC4;
+    --bg: #F8FAFC; --fg: #0F172A; --muted: #F1F5F9; --muted-fg: #475569; --border: #E2E8F0; --input: #64748B;
+    --success: #15803D; --warning: #B45309;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: "IBM Plex Sans", system-ui, sans-serif; font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+  .num { font-variant-numeric: tabular-nums; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; }
+
+  /* nav */
+  .nav { position: sticky; top: 0; z-index: 10; background: rgba(248,250,252,.86); backdrop-filter: blur(10px); border-bottom: 1px solid transparent; }
+  .nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 68px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; text-decoration: none; }
+  .navlinks { display: flex; align-items: center; gap: 6px; }
+  .navlinks a.ghost { padding: 10px 12px; border-radius: 8px; text-decoration: none; color: var(--muted-fg); font-weight: 500; font-size: 15px; transition: background 20ms ease-in; }
+  .navlinks a.ghost:hover { background: rgba(8,98,136,.06); color: var(--fg); }
+  .btn { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; border-radius: 8px; font-weight: 600; font-size: 15px; text-decoration: none; border: 1px solid transparent; transition: background-color 100ms ease-in-out; cursor: pointer; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-90); } .btn-primary:active { background: #064763; }
+  .btn-outline { border-color: var(--secondary); color: var(--primary); background: #fff; }
+  .btn-outline:hover { background: rgba(8,98,136,.06); } .btn-outline:active { background: rgba(8,98,136,.12); }
+
+  /* hero */
+  .hero { padding: 72px 0 96px; }
+  .hero .wrap { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 56px; align-items: center; }
+  h1 { font-size: clamp(40px, 5.2vw, 64px); line-height: 1.04; letter-spacing: -0.035em; font-weight: 700; margin: 0 0 22px; max-width: 13ch; }
+  .lede { font-size: 19px; color: var(--muted-fg); max-width: 46ch; margin: 0 0 30px; }
+  .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+  .facts { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 26px 0 0; padding: 0; list-style: none; color: var(--muted-fg); font-size: 14px; }
+  .facts li { display: flex; align-items: center; gap: 8px; }
+  .facts svg { color: var(--success); }
+
+  .stage { position: relative; background: linear-gradient(160deg, rgba(151,215,255,.38), rgba(151,215,255,.08) 60%, rgba(255,239,196,.35)); border-radius: 24px; padding: 34px 30px 150px; }
+  .card { background: #fff; border-radius: 14px; box-shadow: 0 1px 2px rgba(15,23,42,.05), 0 0 0 1px rgba(15,23,42,.06); padding: 20px; }
+  .label { color: var(--muted-fg); font-size: 13px; }
+  .big { font-size: 38px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; margin: 4px 0 2px; }
+  .split { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 16px 0 6px; background: var(--muted); }
+  .legend { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted-fg); }
+  .row-btns { display: flex; gap: 10px; margin-top: 16px; }
+  .row-btns .btn { flex: 1; justify-content: center; font-size: 14px; }
+  .agentline { display: flex; align-items: center; gap: 10px; background: var(--highlight); border-radius: 12px; padding: 12px 14px; font-size: 13.5px; margin-top: 14px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex: none; }
+  .toast { position: absolute; right: -18px; bottom: 28px; width: 300px; display: flex; gap: 12px; align-items: flex-start; animation: arrive 600ms 500ms ease-out both; }
+  .toast .ic { width: 34px; height: 34px; border-radius: 10px; background: #ECFDF5; color: var(--success); display: grid; place-items: center; flex: none; }
+  @keyframes arrive { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; background: #ECFDF5; color: var(--success); }
+  .chip.w { background: #FFF7ED; color: var(--warning); }
+
+
+  .board-stage { padding: 30px; display: grid; place-items: center; }
+  .board { width: 100%; max-width: 460px; background: #0B1730; border-radius: 18px; padding: 18px; box-shadow: 0 24px 48px -24px rgba(8,98,136,.55); display: flex; flex-direction: column; gap: 10px; }
+  .bhead { display: flex; align-items: center; gap: 10px; color: #E2E8F0; font-size: 13.5px; padding: 2px 4px 6px; }
+  .bhead .when { margin-left: auto; color: #64748B; font-size: 12px; }
+  .board .line { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #111F3B; border-radius: 10px; padding: 12px 14px; }
+  .board .k { color: #94A3B8; font-size: 12.5px; white-space: nowrap; }
+  .flaps { display: flex; gap: 2px; font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 18px; }
+  .flaps span { display: inline-grid; place-items: center; width: 15px; height: 28px; background: #1B2B4B; color: #fff; border-radius: 3px; position: relative; }
+  .flaps span::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(0,0,0,.5); }
+  .flaps span.flip { animation: flip 90ms ease-in; }
+  .board .pesos .flaps span { color: var(--tint); }
+  .board .dollars .flaps span { color: var(--highlight); }
+  .bfoot { color: #64748B; font-size: 12px; padding: 4px 4px 0; }
+  @keyframes flip { 0% { transform: rotateX(0); } 50% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+  @media (max-width: 480px) { .flaps span { width: 12px; height: 24px; font-size: 15px; } .board .k { font-size: 11.5px; } }
+  /* sections */
+  section { padding: 96px 0; }
+  .eyebrow { color: var(--primary); font-weight: 600; font-size: 14px; margin: 0 0 12px; }
+  h2 { font-size: clamp(32px, 3.6vw, 46px); line-height: 1.08; letter-spacing: -0.03em; margin: 0 0 16px; font-weight: 700; max-width: 20ch; }
+  .sub { color: var(--muted-fg); font-size: 18px; max-width: 52ch; margin: 0; }
+  .two { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 56px; align-items: center; }
+
+  /* how it works */
+  .steps { list-style: none; margin: 32px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+  .step { display: grid; grid-template-columns: 28px 1fr; gap: 6px 10px; padding: 16px 18px; border-radius: 12px; cursor: pointer; transition: background 20ms ease-in; }
+  .step:hover { background: rgba(8,98,136,.04); }
+  .step.on { background: #fff; box-shadow: 0 0 0 1px rgba(15,23,42,.06), 0 1px 2px rgba(15,23,42,.05); }
+  .step .n { color: var(--muted-fg); font-size: 14px; padding-top: 2px; }
+  .step.on .n { color: var(--primary); font-weight: 600; }
+  .step h3 { margin: 0; font-size: 18px; letter-spacing: -0.01em; }
+  .step p { grid-column: 2; margin: 0; color: var(--muted-fg); font-size: 15px; max-height: 0; overflow: hidden; transition: max-height 220ms ease-out; }
+  .step.on p { max-height: 80px; }
+  .player { display: flex; align-items: center; gap: 12px; margin-top: 18px; padding-left: 18px; }
+  .pause { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border); background: #fff; display: grid; place-items: center; cursor: pointer; }
+  .pause:hover { background: rgba(8,98,136,.06); }
+  .bars { display: flex; gap: 6px; }
+  .bars i { display: block; width: 26px; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+  .bars i b { display: block; height: 100%; width: 0; background: var(--primary); }
+  .frame { background: linear-gradient(160deg, rgba(151,215,255,.32), rgba(151,215,255,.06)); border-radius: 24px; padding: 40px; min-height: 420px; display: grid; place-items: center; }
+  .screen { display: none; width: 100%; max-width: 420px; }
+  .screen.on { display: block; animation: arrive 220ms ease-out both; }
+  .field { border: 1px solid var(--input); border-radius: 8px; height: 44px; display: flex; align-items: center; padding: 0 12px; color: var(--muted-fg); font-size: 15px; margin: 6px 0 14px; }
+  .fl { font-size: 13px; font-weight: 500; }
+  .linkbox { display: flex; gap: 8px; margin-top: 12px; }
+  .linkbox .field { flex: 1; margin: 0; font-size: 13.5px; color: var(--fg); overflow: hidden; white-space: nowrap; }
+
+  /* clients */
+  .clients { background: #fff; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .pay { max-width: 400px; margin-left: auto; }
+  .stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 18px 0 14px; font-size: 11.5px; color: var(--muted-fg); }
+  .stepper span::before { content: ""; display: block; height: 4px; border-radius: 2px; background: var(--border); margin-bottom: 6px; }
+  .stepper span.on::before { background: var(--primary); }
+  .opt { display: flex; align-items: center; gap: 12px; border: 1px solid var(--input); border-radius: 8px; padding: 11px 14px; margin-bottom: 8px; font-size: 15px; transition: background 20ms ease-in; }
+  .opt:hover { background: rgba(8,98,136,.06); }
+  .opt.on { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); background: rgba(151,215,255,.3); }
+  .radio { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--input); flex: none; }
+  .opt.on .radio { border: 5px solid var(--primary); }
+  .opt small { display: block; color: var(--muted-fg); font-size: 12.5px; }
+  .opt .amt { margin-left: auto; font-weight: 600; }
+  .bullets { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 14px; }
+  .bullets li { display: grid; grid-template-columns: 24px 1fr; gap: 12px; }
+  .bullets b { display: block; }
+  .bullets span { color: var(--muted-fg); font-size: 15px; }
+  .bullets svg { color: var(--primary); margin-top: 2px; }
+
+  /* agent */
+  .agent-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 44px; }
+  .rule { padding: 26px; border-radius: 16px; background: #fff; box-shadow: 0 0 0 1px rgba(15,23,42,.06); }
+  .rule h3 { margin: 14px 0 6px; font-size: 19px; letter-spacing: -0.01em; }
+  .rule p { margin: 0; color: var(--muted-fg); font-size: 15px; }
+  .rule .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(151,215,255,.4); color: var(--primary); }
+  .rule.wide { grid-column: 1 / -1; background: var(--fg); color: #fff; display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 40px; align-items: end; padding: 36px; }
+  .rule.wide p { color: #CBD5E1; }
+  .rule.wide .ic { background: rgba(151,215,255,.16); color: var(--tint); }
+  .protected { padding-left: 32px; border-left: 1px solid rgba(255,255,255,.14); }
+  .protected .big { color: #fff; font-size: 44px; }
+  .protected .label { color: #94A3B8; }
+  .stack { display: contents; }
+
+  /* proof */
+  .proof-list { margin-top: 36px; border-radius: 16px; background: #fff; box-shadow: 0 0 0 1px rgba(15,23,42,.06); }
+  .proof { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 18px; align-items: center; padding: 20px 24px; border-top: 1px solid var(--border); text-decoration: none; transition: background 20ms ease-in; }
+  .proof:first-child { border-top: 0; }
+  .proof:hover { background: rgba(8,98,136,.04); }
+  .proof b { display: block; font-size: 16px; }
+  .proof span { color: var(--muted-fg); font-size: 14px; }
+  .proof .mono { font-size: 13px; color: var(--primary); }
+
+  /* faq */
+  .faq { margin-top: 32px; border-top: 1px solid var(--border); }
+  details { border-bottom: 1px solid var(--border); }
+  summary { list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 22px 8px; font-size: 18px; font-weight: 600; cursor: pointer; border-radius: 8px; transition: background 20ms ease-in; }
+  summary::-webkit-details-marker { display: none; }
+  summary:hover { background: rgba(8,98,136,.04); }
+  summary .plus { transition: transform 200ms ease-out; color: var(--muted-fg); }
+  details[open] summary .plus { transform: rotate(45deg); }
+  details p { margin: 0 8px 22px; color: var(--muted-fg); max-width: 70ch; }
+
+  /* final */
+  .final { padding: 0 0 96px; }
+  .final .band { background: var(--primary); color: #fff; border-radius: 24px; padding: 64px 56px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 32px; align-items: end; }
+  .final h2 { color: #fff; margin: 0 0 10px; }
+  .final p { margin: 0; color: #CFE8F7; font-size: 17px; }
+  .final .btn { background: var(--highlight); color: var(--fg); }
+  .final .btn:hover { background: #FFE6A6; }
+  footer { border-top: 1px solid var(--border); padding: 40px 0 56px; font-size: 14px; color: var(--muted-fg); }
+  footer .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 24px; }
+  footer nav { display: flex; gap: 6px; flex-wrap: wrap; }
+  footer nav a { padding: 8px 10px; border-radius: 8px; text-decoration: none; }
+  footer nav a:hover { background: rgba(8,98,136,.06); color: var(--fg); }
+
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+
+  @media (max-width: 900px) {
+    .hero .wrap, .two, .agent-grid, .final .band { grid-template-columns: minmax(0, 1fr); }
+    .hero { padding: 40px 0 64px; }
+    .stage { min-height: 0; padding: 22px 18px 90px; }
+    .toast { right: 12px; left: 12px; width: auto; bottom: 16px; }
+    section { padding: 64px 0; }
+    .frame { padding: 22px; min-height: 0; }
+    .pay { margin: 0; }
+    .proof { grid-template-columns: minmax(0, 1fr) auto; }
+    .proof .mono { grid-column: 1; }
+    .final .band { padding: 40px 24px; }
+    .rule.wide { grid-template-columns: minmax(0, 1fr); }
+    .protected { padding: 22px 0 0; border-left: 0; border-top: 1px solid rgba(255,255,255,.14); }
+    .navlinks a.ghost { display: none; }
+  }
+  .note { max-width: 1160px; margin: 0 auto; padding: 14px 24px; font-size: 13px; color: var(--muted-fg); background: var(--highlight); }
+</style>
+</head>
+<body>
+<div class="note">Mockup landing page Cobro (bản 2: bảng lật ở hero). Dữ liệu trong khung là ví dụ, trừ phần "On-chain" dùng giao dịch và danh tính thật. Thử thu nhỏ cửa sổ để xem bản điện thoại.</div>
+
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#"><svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="#086288"/><path d="M42 22.5a13 13 0 1 0 0 19" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg>Cobro</a>
+    <nav class="navlinks" aria-label="Main">
+      <a class="ghost" href="#how">How it works</a>
+      <a class="ghost" href="#clients">For clients</a>
+      <a class="ghost" href="#faq">Questions</a>
+      <a class="ghost" href="#">Sign in</a>
+      <a class="btn btn-primary" href="#">Start with email</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="wrap">
+      <div>
+        <h1>Get paid in stablecoins. Keep pesos to spend.</h1>
+        <p class="lede">Send an invoice link to clients who pay in dollar stablecoins. Your agent keeps your spending money in pesos, saves the rest in dollars, and asks before it sells a single dollar.</p>
+        <div class="ctas">
+          <a class="btn btn-primary" href="#">Start with email</a>
+          <a class="btn btn-outline" href="#how">See how it works</a>
+        </div>
+        <ul class="facts">
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>No seed phrase</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>Clients pay no network fee</li>
+          <li><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>Every move on Celo, verifiable</li>
+        </ul>
+      </div>
+      <div class="stage board-stage">
+        <div class="board" aria-live="off" aria-label="Example: a client pays US$300.00, the agent keeps ARS 200,000 for spending and saves US$175.65 in dollars">
+          <div class="bhead"><span class="dot"></span><span id="who">Acme paid an invoice</span><span class="when">just now</span></div>
+          <div class="line"><span class="k">Payment in</span><span class="flaps" id="f0"></span></div>
+          <div class="line pesos"><span class="k">Kept for spending</span><span class="flaps" id="f1"></span></div>
+          <div class="line dollars"><span class="k">Saved in dollars</span><span class="flaps" id="f2"></span></div>
+          <div class="bfoot">Your agent split it in 4 seconds, within your rules.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section id="how" style="padding-top:24px">
+    <div class="wrap two">
+      <div>
+        <h2>From invoice to savings in three steps</h2>
+        <ol class="steps" id="steps">
+          <li class="step on" data-i="0"><span class="n">1.</span><h3>Sign in with your email</h3><p>Type a 6-digit code and Cobro sets up your account and wallets. Nothing to install, nothing to write down.</p></li>
+          <li class="step" data-i="1"><span class="n">2.</span><h3>Send your client a link</h3><p>Create an invoice in dollars, pesos or reais, once or every week. Your client opens the link and pays.</p></li>
+          <li class="step" data-i="2"><span class="n">3.</span><h3>Your agent handles the money</h3><p>It keeps the pesos you need for spending and saves the rest in dollars, within the limits you set.</p></li>
+        </ol>
+        <div class="player">
+          <button class="pause" id="pause" aria-label="Pause the walkthrough"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+          <span class="bars" aria-hidden="true"><i><b></b></i><i><b></b></i><i><b></b></i></span>
+        </div>
+      </div>
+      <div class="frame" aria-hidden="true">
+        <div class="screen on card" data-s="0" style="max-width:360px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px"><svg width="28" height="28" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#086288"/><path d="M42 22.5a13 13 0 1 0 0 19" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg><b>Sign in to Cobro</b></div>
+          <div class="fl">Email</div><div class="field">ana@estudio.com.ar</div>
+          <div class="fl">6-digit code</div><div class="field num" style="letter-spacing:.4em;color:var(--fg)">482 913</div>
+          <span class="btn btn-primary" style="width:100%;justify-content:center">Continue</span>
+        </div>
+        <div class="screen card" data-s="1">
+          <div class="label">New invoice</div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px"><b style="font-size:18px">Acme Inc.</b><span class="big num" style="font-size:28px">US$300.00</span></div>
+          <div class="label">Logo redesign, due Oct 30 &nbsp;<span class="chip w">Open</span></div>
+          <div class="fl" style="margin-top:18px">Payment link</div>
+          <div class="linkbox"><div class="field">cobro-agent.vercel.app/pay/8xKq2mPa</div><span class="btn btn-primary">Copy</span></div>
+        </div>
+        <div class="screen" data-s="2" style="max-width:400px">
+          <div class="card">
+            <div style="display:flex;gap:10px;align-items:flex-start"><span class="dot" style="margin-top:7px"></span><div><b style="font-size:15px">Saved US$124.35 in dollars</b><div class="label">Your spending money was above the ARS 200,000 you keep, so the agent saved the extra. The rate was 0.02% from the market.</div></div></div>
+          </div>
+          <div class="card" style="margin-top:10px">
+            <div style="display:flex;gap:10px;align-items:flex-start"><span class="dot" style="margin-top:7px;background:var(--warning)"></span><div><b style="font-size:15px">Your agent asks first</b><div class="label">Refill ARS 50,000 of spending money from your dollars?</div><div style="display:flex;gap:8px;margin-top:12px"><span class="btn btn-primary" style="min-height:36px;font-size:13.5px">Approve</span><span class="btn btn-outline" style="min-height:36px;font-size:13.5px">Not now</span></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="clients" class="clients">
+    <div class="wrap two">
+      <div>
+        <h2>They pay from the wallet they already use</h2>
+        <p class="sub">No account, no sign-up. Your client opens the link, picks a currency, connects a wallet and signs. Cobro covers the network fee.</p>
+        <ul class="bullets">
+          <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg><div><b>Four currencies</b><span>US dollar (USA₮), Dollar (USD₮), Argentine peso (wARS), Brazilian real (wBRL).</span></div></li>
+          <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg><div><b>A locked rate</b><span>The amount holds for 10 minutes while they pay.</span></div></li>
+          <li><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg><div><b>Repeat invoices, one link</b><span>A weekly or monthly client bookmarks a single link that always shows what's due.</span></div></li>
+        </ul>
+      </div>
+      <div class="card pay" aria-hidden="true">
+        <div class="label">Invoice from Ana Estudio</div>
+        <div class="big num">US$300.00</div>
+        <div class="label">Logo redesign, due Oct 30</div>
+        <div class="stepper"><span class="on">Choose how to pay</span><span>Connect wallet</span><span>Confirm</span><span>Paid</span></div>
+        <div class="opt on"><span class="radio"></span><div>US dollar (USA₮)<small>Recommended for US clients</small></div><span class="amt num">300.00</span></div>
+        <div class="opt"><span class="radio"></span><div>Dollar (USD₮)</div><span class="amt num">300.00</span></div>
+        <div class="opt"><span class="radio"></span><div>Argentine peso (wARS)</div><span class="amt num">481,649</span></div>
+        <div class="opt"><span class="radio"></span><div>Brazilian real (wBRL)</div><span class="amt num">1,510.97</span></div>
+        <div class="label" style="margin-top:10px">No network fee. You only sign.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <h2>An agent that works within your rules</h2>
+      <p class="sub">It watches your balance around the clock and acts only inside the limits you set. Everything it does is explained, in your currency.</p>
+      <div class="agent-grid">
+        <div class="rule wide">
+          <div>
+            <span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg></span>
+            <h3>Your pesos stay ready, your savings stay in dollars</h3>
+            <p>Tell it how much to keep for spending. When payments push you above that, it saves the extra in dollars; when you run low, it offers to refill.</p>
+          </div>
+          <div class="protected">
+            <div class="label">Protected from inflation, example account</div>
+            <div class="big num">ARS 38,940</div>
+            <div class="label num">compared with keeping every payment in pesos</div>
+          </div>
+        </div>
+        <div class="stack">
+          <div class="rule"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 11V7a5 5 0 0 1 10 0v4"/><rect x="5" y="11" width="14" height="10" rx="2"/></svg></span><h3>It asks before selling dollars</h3><p>You choose: convert on its own, ask before using your dollars, or ask before every conversion.</p></div>
+          <div class="rule"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h12"/></svg></span><h3>Hard limits you set</h3><p>A cap per conversion and per day, and it only trades at fair prices. Above your limit, it waits.</p></div>
+          <div class="rule"><span class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span><h3>Money goes only to you</h3><p>The agent can convert and send to your own wallet. It cannot pay anyone else.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="padding-top:24px">
+    <div class="wrap">
+      <h2>Don't take our word for it</h2>
+      <p class="sub">Cobro runs on Celo. Its identity and every transaction it sends are public, so anyone can check them.</p>
+      <div class="proof-list">
+        <a class="proof" href="#"><div><b>Registered agent identity</b><span>ERC-8004 agent #9884 on Celo</span></div><span class="mono">eip155:42220:0x8004…a432</span><span aria-hidden="true">↗</span></a>
+        <a class="proof" href="#"><div><b>First autonomous conversion</b><span>Oct 14, 2026: 1.07 USD₮ into 1,718 wARS, unattended</span></div><span class="mono">0xf3a8852e…b00c</span><span aria-hidden="true">↗</span></a>
+        <a class="proof" href="#"><div><b>Every transaction is tagged</b><span>Each one carries Cobro's attribution code</span></div><span class="mono">celo_bc3965e128ba</span><span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq" style="padding-top:24px">
+    <div class="wrap two" style="align-items:start">
+      <div><h2>Questions, answered</h2></div>
+      <div class="faq">
+        <details open><summary>Is Cobro a bank?<span class="plus">+</span></summary><p>No. Cobro is software. Your money sits in stablecoins on Celo, in a wallet set up for you, and you can move it to your own wallet at any time.</p></details>
+        <details><summary>What does it cost?<span class="plus">+</span></summary><p>Creating invoices is free. Conversions happen at market rates through Textile, and the small network fee is paid from your balance in dollars, never in a token you have to buy.</p></details>
+        <details><summary>Which currencies can my clients use?<span class="plus">+</span></summary><p>USA₮, USD₮, wARS and wBRL on Celo, from wallets like MetaMask, Rabby or MiniPay.</p></details>
+        <details><summary>What if the agent makes a bad trade?<span class="plus">+</span></summary><p>It can't trade outside your limits or below a fair price, and it never sells dollars without asking unless you allow it. You can pause it with one click.</p></details>
+        <details><summary>How do I cash out?<span class="plus">+</span></summary><p>Withdraw to your own Cobro wallet, then send to the exchange or app you already use to turn stablecoins into cash.</p></details>
+      </div>
+    </div>
+  </section>
+
+  <div class="final">
+    <div class="wrap">
+      <div class="band">
+        <div><h2>Send your first invoice today</h2><p>Sign in with your email. It takes about a minute.</p></div>
+        <a class="btn" href="#">Start with email</a>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div><b style="color:var(--fg)">Cobro</b><div>Invoicing and a treasury agent for freelancers in Latin America.</div></div>
+    <nav aria-label="Footer"><a href="#">Agent card</a><a href="#">GitHub</a><a href="#">Sign in</a></nav>
+  </div>
+</footer>
+
+<script>
+  const steps = [...document.querySelectorAll('.step')];
+  const screens = [...document.querySelectorAll('.screen')];
+  const bars = [...document.querySelectorAll('.bars b')];
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let i = 0, t0 = performance.now(), paused = reduce, DUR = 4500;
+  function show(n) { i = n; t0 = performance.now(); steps.forEach((s, k) => s.classList.toggle('on', k === n)); screens.forEach((s, k) => s.classList.toggle('on', k === n)); bars.forEach((b, k) => b.style.width = k < n ? '100%' : '0'); }
+  steps.forEach((s, k) => s.addEventListener('click', () => show(k)));
+  document.getElementById('pause').addEventListener('click', (e) => { paused = !paused; e.currentTarget.setAttribute('aria-label', paused ? 'Play the walkthrough' : 'Pause the walkthrough'); t0 = performance.now() - (parseFloat(bars[i].style.width) || 0) / 100 * DUR; });
+  (function tick(now) { if (!paused) { const p = Math.min(1, (now - t0) / DUR); bars[i].style.width = (p * 100) + '%'; if (p >= 1) show((i + 1) % steps.length); } requestAnimationFrame(tick); })(performance.now());
+
+  (function(){
+    const scenes=[['Acme paid an invoice','US$300.00','ARS 200,000','US$175.65'],['Nova Labs paid an invoice','US$1,250.00','ARS 350,000','US$1,031.80'],['Pixel DAO paid an invoice','US$480.00','ARS 120,000','US$405.25']];
+    const W=12, chars=' $0123456789.,ARSU'; const els=[0,1,2].map(i=>document.getElementById('f'+i));
+    els.forEach(el=>{ for(let i=0;i<W;i++){ const s=document.createElement('span'); s.textContent=' '; el.appendChild(s);} });
+    function show(target, el){ const t=target.padStart(W,' ').slice(-W); [...el.children].forEach((s,i)=>{ if (reduce){ s.textContent=t[i]; return; } let n=4+Math.floor(Math.random()*8)+i; const go=()=>{ if(n--<=0){ s.textContent=t[i]; s.classList.remove('flip'); return;} s.textContent=chars[Math.random()*chars.length|0]; s.classList.remove('flip'); void s.offsetWidth; s.classList.add('flip'); setTimeout(go,70); }; setTimeout(go, i*25); }); }
+    let k=0; function next(){ const sc=scenes[k++%scenes.length]; document.getElementById('who').textContent=sc[0]; show(sc[1],els[0]); setTimeout(()=>show(sc[2],els[1]),450); setTimeout(()=>show(sc[3],els[2]),900); }
+    next(); if(!reduce) setInterval(next, 5600);
+  })();
+</script>
+</body>
+</html>

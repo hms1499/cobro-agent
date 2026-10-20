@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cobro hero motion options</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root { --primary:#086288; --secondary:#4D8DBA; --tint:#97D7FF; --highlight:#FFEFC4; --bg:#F8FAFC; --fg:#0F172A; --muted:#475569; --border:#E2E8F0; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: "IBM Plex Sans", system-ui, sans-serif; padding: 28px 20px 60px; }
+  h1 { font-size: 24px; margin: 0 0 6px; letter-spacing: -0.02em; }
+  .lead { color: var(--muted); margin: 0 0 24px; max-width: 80ch; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 20px; max-width: 1400px; }
+  .opt { background: #fff; border-radius: 18px; box-shadow: 0 0 0 1px rgba(15,23,42,.07); overflow: hidden; cursor: pointer; transition: box-shadow 100ms ease-in-out; }
+  .opt:hover { box-shadow: 0 0 0 1px rgba(8,98,136,.35); }
+  .opt.selected { box-shadow: 0 0 0 3px var(--primary); }
+  .stage { height: 380px; position: relative; background: linear-gradient(160deg, rgba(151,215,255,.32), rgba(151,215,255,.06) 60%, rgba(255,239,196,.3)); }
+  canvas { display: block; width: 100%; height: 100%; }
+  .meta { padding: 16px 18px 20px; }
+  .meta h2 { margin: 0 0 6px; font-size: 17px; }
+  .meta p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 600; color: var(--primary); background: rgba(151,215,255,.4); border-radius: 999px; padding: 2px 9px; margin-bottom: 8px; }
+  .lbl { position: absolute; font-size: 12.5px; font-weight: 600; background: rgba(255,255,255,.88); border-radius: 8px; padding: 6px 9px; box-shadow: 0 0 0 1px rgba(15,23,42,.06); font-variant-numeric: tabular-nums; }
+  .lbl small { display: block; font-weight: 500; color: var(--muted); font-size: 11.5px; }
+  /* split-flap */
+  .board { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 12px; padding: 24px; }
+  .line { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--fg); border-radius: 10px; padding: 12px 14px; }
+  .line .k { color: #94A3B8; font-size: 12.5px; white-space: nowrap; }
+  .flaps { display: flex; gap: 2px; font-family: "IBM Plex Mono", monospace; font-weight: 600; font-size: 17px; }
+  .flaps span { display: inline-grid; place-items: center; width: 14px; height: 26px; background: #1E293B; color: #fff; border-radius: 3px; position: relative; }
+  .flaps span::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(0,0,0,.45); }
+  .flaps span.flip { animation: flip 90ms ease-in; }
+  .line.pesos .flaps span { color: var(--tint); }
+  .line.dollars .flaps span { color: var(--highlight); }
+  @keyframes flip { 0% { transform: rotateX(0); } 50% { transform: rotateX(90deg); } 100% { transform: rotateX(0); } }
+  .note { margin-top: 22px; color: var(--muted); font-size: 13.5px; max-width: 90ch; }
+</style>
+</head>
+<body>
+<h1>Điểm nhấn chuyển động cho hero: chọn hướng nào?</h1>
+<p class="lead">Cả 3 bản đều chạy thật và dùng màu của Cobro. Bấm vào khung bạn thích để chọn, rồi trả lời trong terminal. Bản chính thức sẽ dừng lại ở một khung hình đẹp khi người dùng bật "giảm chuyển động".</p>
+
+<div class="grid">
+  <div class="opt" data-choice="a" onclick="pick(this)">
+    <div class="stage"><canvas id="ca"></canvas>
+      <div class="lbl" style="left:14px;top:14px">Client payments<small>USA₮ · USD₮</small></div>
+      <div class="lbl" style="right:14px;top:56px">Pesos to spend<small id="aP">ARS 0</small></div>
+      <div class="lbl" style="right:14px;bottom:56px">Saved in dollars<small id="aD">US$0.00</small></div>
+    </div>
+    <div class="meta"><span class="tag">A · Dòng chảy tách đôi</span><h2>Tiền chảy vào, agent tách làm hai</h2><p>Các hạt stablecoin bay từ trái vào vòng chữ "C" của Cobro, rồi tách thành hai dòng: peso để tiêu và đô để tiết kiệm. Hai con số bên phải tăng dần. Kể đúng việc Cobro làm, chỉ trong 3 giây.</p></div>
+  </div>
+
+  <div class="opt" data-choice="b" onclick="pick(this)">
+    <div class="stage"><canvas id="cb"></canvas></div>
+    <div class="meta"><span class="tag">B · Logo bằng ký hiệu tiền tệ</span><h2>Chữ "C" ghép từ $, ₮, R$</h2><p>Logo Cobro dựng bằng hàng trăm ký hiệu tiền tệ, sáng tối như sóng chạy quanh vòng. Rê chuột vào thì các ký hiệu gần con trỏ đổi thành $ và sáng lên. Gần với quả cầu của qash nhất, nhưng là logo của mình.</p></div>
+  </div>
+
+  <div class="opt" data-choice="c" onclick="pick(this)">
+    <div class="stage">
+      <div class="board">
+        <div class="line"><span class="k" id="cK">Acme paid</span><span class="flaps" id="f0"></span></div>
+        <div class="line pesos"><span class="k">Kept for spending</span><span class="flaps" id="f1"></span></div>
+        <div class="line dollars"><span class="k">Saved in dollars</span><span class="flaps" id="f2"></span></div>
+      </div>
+    </div>
+    <div class="meta"><span class="tag">C · Bảng lật kiểu sân bay</span><h2>Bảng số lật như ga tàu</h2><p>Mỗi 5 giây có một khoản thanh toán mới: các ô chữ lật lách cách rồi dừng ở số đúng, cho thấy tiền vào, phần giữ lại để tiêu và phần tiết kiệm. Cảm giác tài chính, dễ nhớ.</p></div>
+  </div>
+</div>
+<p class="note">Bản đã chọn sẽ thay khung "Your money" ở hero, hoặc đứng cạnh nó. Ý này mình bàn sau khi bạn chọn hướng.</p>
+
+<script>
+function pick(el){ document.querySelectorAll('.opt').forEach(o=>o.classList.toggle('selected', o===el)); if (window.toggleSelect) { try { toggleSelect(el); } catch(e){} } }
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const C = { primary:'#086288', secondary:'#4D8DBA', tint:'#97D7FF', highlight:'#E9B949', fg:'#0F172A' };
+function fit(cv){ const r=cv.getBoundingClientRect(), d=devicePixelRatio||1; cv.width=r.width*d; cv.height=r.height*d; const x=cv.getContext('2d'); x.setTransform(d,0,0,d,0,0); return {x, w:r.width, h:r.height}; }
+
+/* ---------- A: split flow ---------- */
+(function(){
+  const cv=document.getElementById('ca'); let g=fit(cv); addEventListener('resize',()=>g=fit(cv));
+  const parts=[]; let pesos=0, dollars=0, t=0;
+  const glyphs=['$','₮','$','₮','$'];
+  function spawn(){ parts.push({x:-10, y:g.h*0.5+(Math.random()-0.5)*g.h*0.5, vx:2.6+Math.random()*1.6, s:13+Math.random()*6, ch:glyphs[Math.random()*glyphs.length|0], phase:0, side: Math.random()<0.42?-1:1, a:0}); }
+  function arc(x,cx,cy,r){ x.beginPath(); x.arc(cx,cy,r,Math.PI*0.28,Math.PI*1.72); x.strokeStyle=C.primary; x.lineWidth=10; x.lineCap='round'; x.stroke(); }
+  function step(){ t++; if (t%3===0) spawn(); }
+  function frame(){
+    const {x,w,h}=g; x.clearRect(0,0,w,h); t++;
+    const cx=w*0.48, cy=h*0.5, r=Math.min(w,h)*0.16;
+    // pools
+    const pY=h*0.24, dY=h*0.76, tx=w*0.9;
+    x.globalAlpha=.9; arc(x,cx,cy,r); x.globalAlpha=1;
+    // pulse ring
+    x.beginPath(); x.arc(cx,cy,r+8+Math.sin(t/18)*3,0,Math.PI*2); x.strokeStyle='rgba(8,98,136,.12)'; x.lineWidth=2; x.stroke();
+    if (!reduce && t%3===0) spawn();
+    if (reduce) { /* still frame */ }
+    for (let i=parts.length-1;i>=0;i--){ const p=parts[i];
+      p.a=Math.min(1,p.a+0.05);
+      if (p.phase===0){ p.x+=p.vx; p.y+= (cy-p.y)*0.02; if (p.x>cx-r*0.2){ p.phase=1; p.ch = p.side<0 ? '$' : 'US$'; } }
+      else { const ty=p.side<0?pY:dY; p.x+= (tx-p.x)*0.035+0.6; p.y+=(ty-p.y)*0.06; if (p.x>tx-6){ parts.splice(i,1); if(p.side<0) pesos+=24000; else dollars+=13.4; continue; } }
+      x.globalAlpha=p.a; x.font=`600 ${p.phase? p.s-1 : p.s}px "IBM Plex Mono", monospace`;
+      x.fillStyle = p.phase===0 ? C.secondary : (p.side<0 ? C.primary : '#B7791F');
+      x.fillText(p.ch, p.x, p.y); x.globalAlpha=1;
+    }
+    document.getElementById('aP').textContent='ARS '+Math.round(pesos).toLocaleString('en-US');
+    document.getElementById('aD').textContent='US$'+dollars.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+    if (pesos>4.8e6){ pesos=0; dollars=0; }
+    requestAnimationFrame(frame);
+  }
+  // Start mid-flow so the first frame already shows money moving (and the reduced-motion still frame is full).
+  (function warm(){ const real=frame; let n=reduce?140:90; const {x}=g; const save=x.clearRect.bind(x); for(let i=0;i<n;i++){ if(t%3===0) spawn(); t++; for (let j=parts.length-1;j>=0;j--){ const p=parts[j]; const cx=g.w*0.48, cy=g.h*0.5, r=Math.min(g.w,g.h)*0.16, tx=g.w*0.9, pY=g.h*0.24, dY=g.h*0.76; p.a=Math.min(1,p.a+0.05); if(p.phase===0){ p.x+=p.vx; p.y+=(cy-p.y)*0.02; if(p.x>cx-r*0.2){p.phase=1; p.ch=p.side<0?'$':'US$';} } else { const ty=p.side<0?pY:dY; p.x+=(tx-p.x)*0.035+0.6; p.y+=(ty-p.y)*0.06; if(p.x>tx-6){ parts.splice(j,1); if(p.side<0) pesos+=24000; else dollars+=13.4; } } } } })();
+  frame();
+})();
+
+/* ---------- B: glyph C mark ---------- */
+(function(){
+  const cv=document.getElementById('cb'); let g=fit(cv); addEventListener('resize',()=>{g=fit(cv); build();});
+  const set=['·','·','$','₮','R$','$','◆','·']; let cells=[], mouse={x:-999,y:-999}, t=0;
+  cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect(); mouse={x:e.clientX-r.left,y:e.clientY-r.top};});
+  cv.addEventListener('mouseleave',()=>mouse={x:-999,y:-999});
+  function build(){ cells=[]; const {w,h}=g, cx=w/2, cy=h/2, R=Math.min(w,h)*0.36, r=R*0.55, step=13;
+    for(let y=cy-R;y<=cy+R;y+=step) for(let x=cx-R;x<=cx+R;x+=step){ const dx=x-cx, dy=y-cy, d=Math.hypot(dx,dy), ang=Math.atan2(dy,dx);
+      const gap = ang>-0.85 && ang<0.85; if (d<R && d>r && !gap) cells.push({x,y,ang,d,seed:Math.random()*10}); } }
+  build();
+  function frame(){ const {x,w,h}=g; x.clearRect(0,0,w,h); t+= reduce?0:0.016;
+    x.textAlign='center'; x.textBaseline='middle';
+    for(const c of cells){ const wave=(Math.sin(c.ang*3 - t*2.2 + c.seed*0.3)+1)/2; const md=Math.hypot(c.x-mouse.x,c.y-mouse.y); const near=Math.max(0,1-md/70);
+      const v=Math.min(1, wave*0.85+near); const idx = near>0.3 ? 2 : Math.floor(v*(set.length-1));
+      x.globalAlpha=0.18+v*0.82; x.fillStyle = near>0.3 ? C.primary : (v>0.7? C.primary : C.secondary);
+      x.font=`${near>0.3?700:500} ${10+v*3}px "IBM Plex Mono", monospace`; x.fillText(set[idx], c.x, c.y); }
+    x.globalAlpha=1; requestAnimationFrame(frame); }
+  frame();
+})();
+
+/* ---------- C: split-flap board ---------- */
+(function(){
+  const scenes=[ ['Acme paid','US$300.00','ARS 200,000','US$175.65'], ['Nova Labs paid','US$1,250.00','ARS 350,000','US$1,031.80'], ['Pixel DAO paid','US$480.00','ARS 120,000','US$405.25'] ];
+  const W=12, chars=' $0123456789.,ARSU'; const els=[0,1,2].map(i=>document.getElementById('f'+i));
+  els.forEach(el=>{ for(let i=0;i<W;i++){ const s=document.createElement('span'); s.textContent=' '; el.appendChild(s);} });
+  function show(target, el){ const t=target.padStart(W,' ').slice(-W); [...el.children].forEach((s,i)=>{ if (reduce){ s.textContent=t[i]; return; } let n=4+Math.floor(Math.random()*8)+i; const go=()=>{ if(n--<=0){ s.textContent=t[i]; s.classList.remove('flip'); return;} s.textContent=chars[Math.random()*chars.length|0]; s.classList.remove('flip'); void s.offsetWidth; s.classList.add('flip'); setTimeout(go,70); }; setTimeout(go, i*25); }); }
+  let k=0; function next(){ const s=scenes[k++%scenes.length]; document.getElementById('cK').textContent=s[0]; show(s[1],els[0]); setTimeout(()=>show(s[2],els[1]),450); setTimeout(()=>show(s[3],els[2]),900); }
+  next(); if(!reduce) setInterval(next, 5200);
+})();
+</script>
+</body>
+</html>
