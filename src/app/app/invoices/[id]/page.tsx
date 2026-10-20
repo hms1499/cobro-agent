@@ -64,7 +64,7 @@ async function Invoice({
             <h1 className="text-xl font-semibold">{invoice.clientName}</h1>
             <InvoiceStatusChip status={invoice.status} />
           </div>
-          <Money size="lg" amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates)} />
+          <Money size="lg" amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates, "billed")} />
           <dl className="grid gap-3 text-sm">
             <div>
               <dt className="text-muted-foreground">{t("invoice.for")}</dt>
@@ -112,7 +112,7 @@ async function Invoice({
               <li key={payment.id} className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
                 <div className="flex items-start justify-between gap-4">
                   <p className="font-medium">{t("invoice.paidOn", { date: formatDate(payment.settledAt) })}</p>
-                  <Money amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates)} />
+                  <Money amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates, "billed")} />
                 </div>
                 <details className="mt-2 text-sm">
                   <summary className="min-h-11 cursor-pointer py-2 text-primary">{t("common.details")}</summary>

@@ -10,9 +10,9 @@ const ctx = { local: "ARS" as const, rates };
 const NBSP = "\u00A0";
 
 describe("moneyText and percentText", () => {
-  it("shows token amounts in the freelancer's currency first", () => {
+  it("shows token amounts in their own currency", () => {
     expect(moneyText("WARS", "3200000000000000000000", ctx)).toBe(`ARS${NBSP}3,200`);
-    expect(moneyText("USDT", "2000000", ctx)).toBe(`≈ ARS${NBSP}3,200`);
+    expect(moneyText("USDT", "2000000", ctx)).toBe("US$2.00");
     expect(moneyText("USDT", "2000000", { local: null, rates: null })).toBe("US$2.00");
     expect(moneyText("DAI", "1", ctx)).toBe("some money");
   });
@@ -55,7 +55,7 @@ describe("describeEvent", () => {
     expect(waiting.why).toContain("5.00% below the market rate. Your limit is 0.50%");
     expect(describeEvent({ type: "blocked", data: {} }, ctx).tone).toBe("alert");
     expect(describeEvent({ type: "withdrawn", data: { asset: "USDT", amount: "2000000", txHash: "0x1" } }, ctx).title).toBe(
-      `Sent ≈ ARS${NBSP}3,200 to your wallet`,
+      "Sent US$2.00 to your wallet",
     );
   });
 });
@@ -71,7 +71,7 @@ describe("describeDecision", () => {
         ctx,
       ),
     ).toBe(
-      `convert ≈ ARS${NBSP}16,000 to pesos. Your spending money fell below the reserve you set, so the agent refilled it from your savings.`,
+      "convert US$10.00 to pesos. Your spending money fell below the reserve you set, so the agent refilled it from your savings.",
     );
   });
 });
@@ -81,15 +81,15 @@ describe("approval events", () => {
     const data = { from: "USDT", to: "WARS", amount: "2000000", reason: "top_up" };
     expect(describeEvent({ type: "proposed", data }, ctx)).toMatchObject({
       tone: "warning",
-      title: `Your agent asks to convert ≈ ARS${NBSP}3,200 to pesos`,
+      title: "Your agent asks to convert US$2.00 to pesos",
     });
-    expect(describeEvent({ type: "approved", data }, ctx).title).toBe(`You approved converting ≈ ARS${NBSP}3,200 to pesos`);
+    expect(describeEvent({ type: "approved", data }, ctx).title).toBe("You approved converting US$2.00 to pesos");
     expect(describeEvent({ type: "dismissed", data }, ctx).why).toBe("Your agent won't suggest this again for 24 hours.");
   });
 
   it("names the spending currency for the first leg of a refill through USD₮", () => {
     const data = { from: "USAT", to: "USDT", amount: "2000000", reason: "hub_route" };
-    expect(describeEvent({ type: "proposed", data }, ctx).title).toBe(`Your agent asks to convert ≈ ARS${NBSP}3,200 to pesos`);
+    expect(describeEvent({ type: "proposed", data }, ctx).title).toBe("Your agent asks to convert US$2.00 to pesos");
   });
 });
 
@@ -125,6 +125,6 @@ describe("describeProposal", () => {
 describe("describeDecision with approval", () => {
   it("says the agent would ask first", () => {
     const decision = { kind: "convert", from: "USDT", to: "WARS", amount: 2_000_000n, usdWad: 0n, reason: "top_up" } as const;
-    expect(describeDecision(decision, ctx, { askFirst: true })).toMatch(/^ask you to approve converting ≈ ARS.3,200 to pesos\./);
+    expect(describeDecision(decision, ctx, { askFirst: true })).toMatch(/^ask you to approve converting US\$2\.00 to pesos\./);
   });
 });

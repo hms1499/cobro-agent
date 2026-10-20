@@ -26,7 +26,7 @@ export interface EventView {
   txHash: string | null;
 }
 
-/** A token amount as people read it: local currency first (spec §17.1 principle 2), never raw units. */
+/** A token amount as people read it: in its own currency (MASTER.md "Money formatting"), never raw units. */
 export function moneyText(
   asset: unknown,
   atomic: unknown,
@@ -35,7 +35,7 @@ export function moneyText(
   if (!isPayAsset(asset) || typeof atomic !== "string" || !/^\d+$/.test(atomic))
     return t("event.someMoney");
   const { amount, currency } = tokenFiatAmount(asset, BigInt(atomic));
-  return displayAmount(amount, currency, ctx.local, ctx.rates).primary;
+  return displayAmount(amount, currency, ctx.local, ctx.rates, "billed").primary;
 }
 
 /** Basis points as a percentage with two decimals ("0.50%"). */
@@ -198,10 +198,9 @@ export function describeProposal(
   limits: { maxSlippageBps: number; hardMaxSlippageBps: number; maxWaitMinutes: number },
 ): ProposalView {
   const { amount, currency } = tokenFiatAmount(intent.fromAsset, BigInt(intent.amountAtomic));
-  const shown = displayAmount(amount, currency, ctx.local, ctx.rates);
   // The source amount in its own currency first; the other currency is only an estimate, so it follows in parentheses.
   const exact = formatMoney(amount, currency);
-  const estimate = [shown.primary, shown.secondary].find((text) => text !== undefined && text !== exact);
+  const estimate = displayAmount(amount, currency, ctx.local, ctx.rates, "billed").secondary;
   const from = currency === "USD" ? t("proposal.fromDollars", { amount: exact }) : exact;
   const target = proposalTarget(intent.toAsset, intent.reason, ctx.local);
   const via = intent.reason === "hub_route";

@@ -3,18 +3,23 @@ import { t } from "@/i18n";
 import type { FiatCurrency, PayAsset } from "./currencies";
 import { ceilDiv, formatDecimal } from "./decimal";
 
-/** The only fiat formatter in the app (MASTER.md "Money formatting"). Display only. */
-export function formatMoney(amount: string, currency: FiatCurrency, locale = "en-US"): string {
+/**
+ * The only fiat formatter in the app (MASTER.md "Money formatting"). Display only.
+ * `whole` drops the cents, for large peso and real figures that are not exact billed amounts.
+ */
+export function formatMoney(amount: string, currency: FiatCurrency, locale = "en-US", options?: { whole?: boolean }): string {
   const value = Number(amount);
+  const digits = options?.whole ? { minimumFractionDigits: 0, maximumFractionDigits: 0 } : {};
   if (currency === "USD") {
     // en-US renders "$300.00"; the "US" prefix keeps dollars distinct from pesos.
-    return `US${new Intl.NumberFormat(locale, { style: "currency", currency: "USD" }).format(value)}`;
+    return `US${new Intl.NumberFormat(locale, { style: "currency", currency: "USD", ...digits }).format(value)}`;
   }
   return new Intl.NumberFormat(locale, {
     style: "currency",
     currency,
     currencyDisplay: "code",
     trailingZeroDisplay: "stripIfInteger",
+    ...digits,
   }).format(value);
 }
 

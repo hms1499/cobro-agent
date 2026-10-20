@@ -126,7 +126,7 @@ async function Home() {
                     <InvoiceStatusChip status={invoice.status} />
                   </span>
                   <span className="flex shrink-0 flex-col items-end gap-1 text-right">
-                    <Money amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates)} />
+                    <Money amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates, "billed")} />
                     {invoice.dueDate && invoice.status === "open" && (
                       <span className="text-sm text-muted-foreground">{t("invoices.due", { date: formatDate(invoice.dueDate) })}</span>
                     )}
