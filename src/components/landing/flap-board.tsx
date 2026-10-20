@@ -32,6 +32,8 @@ export function FlapBoard() {
   const [index, setIndex] = useState(0);
   const [cells, setCells] = useState(() => settled(LANDING_EXAMPLES[0]));
   const [turning, setTurning] = useState<Set<string>>(() => new Set());
+  // Bumped on every glyph a cell shows; used in the cell's key so React remounts it and the flip replays.
+  const [ticks, setTicks] = useState<Record<Row, number[]>>(() => ({ paid: [], kept: [], saved: [] }));
   const board = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -61,6 +63,11 @@ export function FlapBoard() {
       }
       const glyph = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
       setCells((prev) => ({ ...prev, [row]: prev[row].map((c, k) => (k === i ? glyph : c)) }));
+      setTicks((prev) => {
+        const next = [...prev[row]];
+        next[i] = (next[i] ?? 0) + 1;
+        return { ...prev, [row]: next };
+      });
       setTurning((prev) => new Set(prev).add(id));
       later(() => turnCell(row, i, target, flips - 1), GLYPH_MS);
     };
@@ -122,7 +129,7 @@ export function FlapBoard() {
           <span className={`flex gap-0.5 font-mono text-[15px] font-semibold sm:text-lg ${tone}`}>
             {cells[key].map((char, i) => (
               <span
-                key={i}
+                key={`${i}-${ticks[key][i] ?? 0}`}
                 className={`relative grid h-6 w-3 place-items-center rounded-[3px] bg-primary-foreground/10 after:absolute after:inset-x-0 after:top-1/2 after:h-px after:bg-foreground/50 sm:h-7 sm:w-3.5 ${turning.has(`${key}-${i}`) ? "flap-turn" : ""}`}
               >
                 {char}

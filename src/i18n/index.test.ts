@@ -23,6 +23,11 @@ describe("copy", () => {
     }
   });
 
+  it("never promises a fair price", () => {
+    // The rules allow up to the freelancer's hard slippage limit below market, so "fair" overstates it.
+    for (const value of Object.values(en)) expect(value).not.toMatch(/fair price/i);
+  });
+
   it("states the real check interval", () => {
     expect(t("agent.help.active", { minutes: 20 })).toContain("20 minutes");
   });

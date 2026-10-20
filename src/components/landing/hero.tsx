@@ -21,7 +21,8 @@ export function Hero({ agentId }: { agentId: number | undefined }) {
             {t("landing.hero.title")}
           </h1>
           <p className="mt-5 max-w-[42ch] text-lg text-muted-foreground">{t("landing.hero.intro")}</p>
-          <form action="/signin" method="get" className="mt-7 flex max-w-[460px] gap-2 rounded-xl bg-card p-1.5 ring-1 ring-foreground/10 focus-within:ring-2 focus-within:ring-ring">
+          {/* noValidate: any input goes on to /signin, where only a plausible address is prefilled (spec §3.2). */}
+          <form action="/signin" method="get" noValidate className="mt-7 flex max-w-[460px] gap-2 rounded-xl bg-card p-1.5 ring-1 ring-foreground/10 focus-within:ring-2 focus-within:ring-ring">
             <label htmlFor="landing-email" className="sr-only">
               {t("landing.hero.emailLabel")}
             </label>

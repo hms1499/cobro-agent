@@ -101,7 +101,7 @@ describe("describeProposal", () => {
       title: "Your agent needs your approval",
       body: `Convert US$2.10 of your dollars to pesos (≈ ARS${NBSP}3,360).`,
       why: "Your spending money is below the reserve you set.",
-      price: "Your agent waits for a fair price: at most 0.50% below the market rate, or up to 1.50% after 6 hours.",
+      price: "Your agent converts only within your price limit: at most 0.50% below the market rate, or up to 1.50% after 6 hours.",
       units: "2.1 USD₮",
     });
   });

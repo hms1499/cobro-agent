@@ -63,7 +63,7 @@ export function HowItWorks() {
 
   return (
     <section id="how" className="scroll-mt-20 pb-16 md:pb-24">
-      <div className={`${container} grid grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14`}>
+      <div className={`${container} grid grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14`}>
         <div>
           <h2 className={sectionTitle}>{t("landing.how.title")}</h2>
           <ol className="mt-8 flex flex-col gap-1.5">
@@ -111,7 +111,7 @@ export function HowItWorks() {
             </span>
           </div>
         </div>
-        <div aria-hidden="true" className="grid min-h-[420px] place-items-center rounded-3xl bg-[linear-gradient(160deg,color-mix(in_oklch,var(--tint)_32%,transparent),color-mix(in_oklch,var(--tint)_6%,transparent))] p-6 md:p-10">
+        <div aria-hidden="true" className="grid min-h-[420px] min-w-0 grid-cols-[minmax(0,1fr)] place-items-center rounded-3xl bg-[linear-gradient(160deg,color-mix(in_oklch,var(--tint)_32%,transparent),color-mix(in_oklch,var(--tint)_6%,transparent))] p-6 md:p-10">
           <Frame key={active}>{FRAMES[active]()}</Frame>
         </div>
       </div>
@@ -147,7 +147,9 @@ const FRAMES = [
       <p className="text-sm text-muted-foreground">{t("landing.how.frame.invoiceFor")}</p>
       <p className="mt-4 text-sm font-medium">{t("landing.how.frame.link")}</p>
       <p className="mt-1.5 flex gap-2">
-        <span className={`${box} min-w-0 flex-1 text-sm`}>cobro-agent.vercel.app/pay/8xKq2mPa</span>
+        <span className={`${box} min-w-0 flex-1 text-sm`}>
+          <span className="truncate">cobro-agent.vercel.app/pay/8xKq2mPa</span>
+        </span>
         <span className={fakeButton}>{t("landing.how.frame.copy")}</span>
       </p>
     </div>
