@@ -38,11 +38,11 @@ export function Hero({ agentId }: { agentId: number | undefined }) {
               {t("landing.start")}
             </button>
           </form>
-          <dl aria-label={t("landing.hero.factsLabel")} className="mt-9 grid max-w-[520px] grid-cols-1 border-t sm:grid-cols-3">
+          <dl aria-label={t("landing.hero.factsLabel")} className="mt-9 grid max-w-[520px] grid-cols-3 border-t">
             {facts.map((fact, i) => (
-              <div key={fact.label} className={`flex flex-col pt-3.5 pb-3 sm:pr-3.5 sm:pb-0 ${i > 0 ? "border-t sm:border-t-0 sm:border-l sm:pl-3.5" : ""}`}>
-                <dt className="order-2 text-[0.8rem] text-muted-foreground">{fact.label}</dt>
-                <dd className="order-1 text-[1.375rem] font-bold tracking-tight tabular-nums">{fact.value}</dd>
+              <div key={fact.label} className={`flex flex-col pt-3.5 pr-2.5 sm:pr-3.5 ${i > 0 ? "border-l pl-2.5 sm:pl-3.5" : ""}`}>
+                <dt className="order-2 text-xs text-muted-foreground sm:text-[0.8rem]">{fact.label}</dt>
+                <dd className="order-1 text-lg font-bold tracking-tight tabular-nums sm:text-[1.375rem]">{fact.value}</dd>
               </div>
             ))}
           </dl>

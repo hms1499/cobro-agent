@@ -30,8 +30,12 @@ export function OnchainProof({ agentId }: { agentId: number | undefined }) {
                   <span className="block font-semibold">{row.title}</span>
                   <span className="block text-sm text-muted-foreground">{row.body}</span>
                 </span>
-                <span className="truncate font-mono text-[0.8rem] text-primary">{row.id}</span>
-                {row.href ? <ExternalLink aria-hidden="true" className="size-4 text-muted-foreground" /> : <span />}
+                <span className="col-start-1 row-start-2 truncate font-mono text-[0.8rem] text-primary sm:col-start-auto sm:row-start-auto">{row.id}</span>
+                {row.href ? (
+                  <ExternalLink aria-hidden="true" className="col-start-2 row-span-2 row-start-1 size-4 self-center text-muted-foreground sm:col-start-auto sm:row-span-1 sm:row-start-auto" />
+                ) : (
+                  <span />
+                )}
               </>
             );
             const layout = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-4 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] sm:px-6 sm:py-5";

@@ -20,14 +20,14 @@ export function SiteNav() {
         </Link>
         <nav aria-label={t("landing.nav.label")} className="flex items-center gap-1">
           {ANCHORS.map(({ href, label }) => (
-            <a key={href} href={href} className={`${ghostLink} hidden min-[900px]:inline-flex`}>
+            <a key={href} href={href} className={`${ghostLink} max-[899px]:hidden`}>
               {t(label)}
             </a>
           ))}
           <Link href="/signin" className={ghostLink}>
             {t("landing.nav.signIn")}
           </Link>
-          <Link href="/signin" className={`${primaryAction} hidden sm:inline-flex`}>
+          <Link href="/signin" className={`${primaryAction} max-sm:hidden`}>
             {t("landing.start")}
           </Link>
         </nav>
