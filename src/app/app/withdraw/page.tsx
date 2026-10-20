@@ -4,11 +4,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 import { requireUser } from "@/lib/auth/current-user";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
-import { PAY_ASSETS } from "@/lib/money/currencies";
-import { displayAmount } from "@/lib/money/display";
 import { readDisplayBalances } from "@/lib/treasury/live";
-import { tokenFiatAmount } from "@/lib/treasury/value";
-import { withdrawableAmount } from "@/lib/treasury/withdraw";
+import { withdrawOptions } from "./options";
 import { WithdrawForm } from "./withdraw-form";
 
 export const metadata: Metadata = { title: `${t("withdraw.title")} · ${t("app.name")}` };
@@ -37,10 +34,7 @@ async function Withdraw() {
     readDisplayBalances(user.treasuryAddress),
     getReferenceRatesOrNull(),
   ]);
-  const options = PAY_ASSETS.filter((asset) => withdrawableAmount(asset, balances) > 0n).map((asset) => {
-    const { amount, currency } = tokenFiatAmount(asset, withdrawableAmount(asset, balances));
-    return { asset, label: t(`asset.${asset}.name` as const), available: displayAmount(amount, currency, user.localCurrency, rates) };
-  });
+  const options = withdrawOptions(balances, user.localCurrency, rates);
   if (options.length === 0) return <p className="text-muted-foreground">{t("withdraw.empty")}</p>;
   return <WithdrawForm options={options} destination={user.personalWallet} />;
 }

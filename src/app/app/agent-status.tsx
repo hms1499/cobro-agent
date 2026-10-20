@@ -1,7 +1,7 @@
 import { CircleCheck, FlaskConical, Hand, Pause } from "lucide-react";
-import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { t } from "@/i18n";
+import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import { parseServerEnv } from "@/lib/config/server";
 import { getDb } from "@/lib/db/client";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
@@ -21,7 +21,7 @@ const CHIPS: Record<AgentState, { icon: typeof Pause; className: string }> = {
   off: { icon: Pause, className: "text-muted-foreground" },
 };
 
-/** Spec §17.1 principles 4 and 5: the agent's state, what it may do, its last action, and a pause control. */
+/** The Agent tab's first card (spec §4.3): the agent's state, what it may do, its last action, and a pause control. */
 export async function AgentStatus({ user }: { user: AppUser }) {
   const db = getDb();
   const env = parseServerEnv();
@@ -48,7 +48,7 @@ export async function AgentStatus({ user }: { user: AppUser }) {
             {t(`agent.state.${state}` as const)}
           </span>
         </div>
-        <p className="text-muted-foreground">{t(`agent.help.${state}` as const)}</p>
+        <p className="text-muted-foreground">{t(`agent.help.${state}` as const, { minutes: CHECK_INTERVAL_MINUTES })}</p>
         <p className="text-sm">
           {t("agent.guardrails", {
             perTrade: formatMoney(String(row.perTradeMaxUsd), "USD"),
@@ -60,12 +60,11 @@ export async function AgentStatus({ user }: { user: AppUser }) {
             ? t("agent.lastAction", { title: describeEvent(last, { local: user.localCurrency, rates }).title })
             : t("agent.noActivity")}
         </p>
-        <div className="flex flex-wrap items-center gap-3">
-          {state !== "off" && <AgentToggle enabled={row.enabled} />}
-          <Link href="/app/rules" className="inline-flex min-h-11 items-center text-primary underline underline-offset-4">
-            {t("agent.settings")}
-          </Link>
-        </div>
+        {state !== "off" && (
+          <div className="flex flex-wrap items-center gap-3">
+            <AgentToggle enabled={row.enabled} />
+          </div>
+        )}
       </CardContent>
     </Card>
   );

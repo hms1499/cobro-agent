@@ -1,12 +1,13 @@
 "use client";
 
-import { Bot, House, Settings } from "lucide-react";
+import { Bot, FileText, House, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { t, type MessageKey } from "@/i18n";
 
 const ITEMS: { href: string; label: MessageKey; icon: typeof House }[] = [
   { href: "/app", label: "nav.home", icon: House },
+  { href: "/app/invoices", label: "nav.invoices", icon: FileText },
   { href: "/app/rules", label: "nav.agent", icon: Bot },
   { href: "/app/settings", label: "nav.settings", icon: Settings },
 ];
@@ -22,7 +23,7 @@ export function AppNavLinks({ pathname, hasProposal = false }: { pathname: strin
       className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card lg:static lg:w-60 lg:shrink-0 lg:border-r lg:border-t-0"
     >
       <p className="hidden px-6 py-6 text-lg font-semibold text-primary lg:block">{t("app.name")}</p>
-      <ul className="flex lg:flex-col">
+      <ul className="flex lg:flex-col lg:gap-0.5 lg:px-3">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname !== null && (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
           return (
@@ -30,8 +31,8 @@ export function AppNavLinks({ pathname, hasProposal = false }: { pathname: strin
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:px-6 lg:text-sm ${
-                  active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+                className={`flex min-h-14 flex-col items-center justify-center gap-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-md lg:px-3 lg:text-sm ${
+                  active ? "text-primary lg:bg-tint/35" : "hover-tint text-muted-foreground"
                 }`}
               >
                 <span className="relative">

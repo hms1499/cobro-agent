@@ -1,29 +1,20 @@
-import { CircleAlert, Clock, FileText, Plus, Repeat } from "lucide-react";
+import { CircleAlert, Clock } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
-import { Money } from "@/components/money";
-import { InvoiceStatusChip } from "@/components/status-chip";
+import { LoadingRows } from "@/components/loading-rows";
 import { SubmitButton } from "@/components/submit-button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 import { requireUser } from "@/lib/auth/current-user";
-import { getDb } from "@/lib/db/client";
-import { getReferenceRatesOrNull } from "@/lib/fx/rates";
-import { formatDate } from "@/lib/invoices/dates";
-import { listInvoices } from "@/lib/invoices/repo";
-import { displayAmount } from "@/lib/money/display";
 import { getOpenProposal } from "@/lib/treasury/request-reads";
 import type { AppUser } from "@/lib/users/queries";
 import { finishSetup } from "./actions";
-import { ActivityFeed } from "./activity-feed";
-import { AgentStatus } from "./agent-status";
-import { Conversions } from "./conversions";
+import { AgentLine } from "./agent-line";
 import { ProposalBanner } from "./proposal-banner";
 import { ProposalSlot } from "./proposal-slot";
+import { Recent } from "./recent";
 import { RefreshWhileCreating } from "./refresh-while-creating";
-import { RepeatClients } from "./repeat-clients";
-import { TreasurySummary } from "./treasury-summary";
+import { MoneyCard } from "./treasury-summary";
 
 export const metadata: Metadata = { title: `${t("nav.home")} · ${t("app.name")}` };
 
@@ -33,15 +24,9 @@ export const metadata: Metadata = { title: `${t("nav.home")} · ${t("app.name")}
  */
 export const maxDuration = 300;
 
-const linkBase =
-  "inline-flex min-h-11 items-center gap-2 rounded-lg px-4 font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
-const primaryLink = `${linkBase} bg-primary text-primary-foreground hover:bg-primary/90`;
-// While setup is unfinished the banner's button is the screen's one primary action (MASTER.md "Secondary buttons").
-const secondaryLink = `${linkBase} border border-primary text-primary hover:bg-muted`;
-
 export default function AppHomePage() {
   return (
-    <main id="main" className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
+    <main id="main" className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
       <Suspense fallback={<HomeSkeleton />}>
         <Home />
       </Suspense>
@@ -53,18 +38,18 @@ function HomeSkeleton() {
   return (
     <div className="flex flex-col gap-4" aria-busy="true" aria-label={t("common.loading")}>
       <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-20 w-full" />
+      <Skeleton className="h-40 w-full lg:w-[330px]" />
       <Skeleton className="h-20 w-full" />
     </div>
   );
 }
 
+/** Spec §4.2, layout A: money first, one agent line, then Recent; two columns from 1024px (A2). */
 async function Home() {
   const user = await requireUser();
-  const db = getDb();
-  const [invoices, rates, proposal] = await Promise.all([listInvoices(db, user.id), getReferenceRatesOrNull(), getOpenProposal(user.id)]);
+  const proposal = await getOpenProposal(user.id);
   // One primary action per screen: a setup or approval banner takes it from "New invoice" (MASTER.md "Buttons").
-  const newInvoiceLink = user.treasuryStatus === "ready" && !proposal ? primaryLink : secondaryLink;
+  const primaryAction = user.treasuryStatus === "ready" && !proposal;
   return (
     <>
       <h1 className="text-2xl font-semibold">{t("app.greeting", { name: user.displayName ?? user.email ?? "" })}</h1>
@@ -76,76 +61,19 @@ async function Home() {
           </Suspense>
         )}
       </ProposalSlot>
-      <Suspense fallback={<Skeleton className="h-40 w-full" />}>
-        <AgentStatus user={user} />
-      </Suspense>
-      <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-        <TreasurySummary user={user} />
-      </Suspense>
-      <section aria-labelledby="invoices-heading" className="flex flex-col gap-4">
-        <div className="flex items-center justify-between gap-4">
-          <h2 id="invoices-heading" className="text-lg font-semibold">
-            {t("invoices.title")}
-          </h2>
-          {invoices.length > 0 && (
-            <Link href="/app/invoices/new" className={newInvoiceLink}>
-              <Plus aria-hidden="true" className="size-4" />
-              {t("invoices.new")}
-            </Link>
-          )}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[330px_minmax(0,1fr)]">
+        <div className="flex flex-col gap-4">
+          <Suspense fallback={<Skeleton className="h-48 w-full" />}>
+            <MoneyCard user={user} primaryAction={primaryAction} />
+          </Suspense>
+          <Suspense fallback={<Skeleton className="h-11 w-full" />}>
+            <AgentLine user={user} />
+          </Suspense>
         </div>
-        {invoices.length === 0 ? (
-          <div className="flex flex-col items-start gap-3 rounded-xl bg-card p-6 shadow-sm ring-1 ring-foreground/10">
-            <FileText aria-hidden="true" className="size-6 text-muted-foreground" />
-            <p className="font-semibold">{t("invoices.emptyTitle")}</p>
-            <p className="max-w-prose text-muted-foreground">{t("invoices.emptyBody")}</p>
-            <Link href="/app/invoices/new" className={newInvoiceLink}>
-              <Plus aria-hidden="true" className="size-4" />
-              {t("invoices.emptyAction")}
-            </Link>
-          </div>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {invoices.map((invoice) => (
-              <li key={invoice.id}>
-                <Link
-                  href={`/app/invoices/${invoice.id}`}
-                  className="flex cursor-pointer items-start justify-between gap-4 rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10 transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-                >
-                  <span className="flex min-w-0 flex-col gap-1">
-                    <span className="flex items-center gap-2 font-medium">
-                      {invoice.clientName}
-                      {invoice.recurringId && (
-                        <>
-                          <Repeat aria-hidden="true" className="size-4 text-muted-foreground" />
-                          <span className="sr-only">{t("invoices.repeats")}</span>
-                        </>
-                      )}
-                    </span>
-                    <span className="truncate text-sm text-muted-foreground">{invoice.description}</span>
-                    <InvoiceStatusChip status={invoice.status} />
-                  </span>
-                  <span className="flex shrink-0 flex-col items-end gap-1 text-right">
-                    <Money amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates)} />
-                    {invoice.dueDate && invoice.status === "open" && (
-                      <span className="text-sm text-muted-foreground">{t("invoices.due", { date: formatDate(invoice.dueDate) })}</span>
-                    )}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-      <Suspense fallback={<Skeleton className="h-24 w-full" />}>
-        <RepeatClients user={user} />
-      </Suspense>
-      <Suspense fallback={<Skeleton className="h-40 w-full" />}>
-        <ActivityFeed user={user} />
-      </Suspense>
-      <Suspense fallback={<Skeleton className="h-24 w-full" />}>
-        <Conversions user={user} />
-      </Suspense>
+        <Suspense fallback={<LoadingRows count={5} />}>
+          <Recent user={user} />
+        </Suspense>
+      </div>
     </>
   );
 }

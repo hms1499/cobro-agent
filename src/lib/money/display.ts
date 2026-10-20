@@ -8,17 +8,41 @@ export interface DisplayAmount {
   secondary?: string;
 }
 
-/** Spec §17.1 principle 2: local currency large, USD (or the invoice currency) small. */
+/** Which figure leads: the local currency (balances) or the amount's own currency (invoices, token amounts). */
+export type AmountLead = "local" | "billed";
+
+// Peso and real figures from here up are shown without cents unless they are an exact billed amount.
+const WHOLE_FROM = 1000;
+
+function rounded(amount: string, currency: FiatCurrency): string {
+  return formatMoney(amount, currency, undefined, { whole: currency !== "USD" && Math.abs(Number(amount)) >= WHOLE_FROM });
+}
+
+/** A converted, secondary figure: marked "≈", and never shown as zero when the source is not zero. */
+function converted(source: string, amount: string, currency: FiatCurrency): string {
+  if (Number(amount) === 0 && Number(source) > 0) return `< ${formatMoney("0.01", currency)}`;
+  return `≈ ${rounded(amount, currency)}`;
+}
+
+/**
+ * MASTER.md "Money formatting": two figures, the lead one large. Balances lead with the local
+ * currency; invoices and token amounts lead with their own currency, exact. Only the secondary,
+ * converted figure carries "≈".
+ */
 export function displayAmount(
   amount: string,
   currency: FiatCurrency,
   local: LocalCurrency | null,
   rates: ReferenceRates | null,
+  lead: AmountLead = "local",
 ): DisplayAmount {
-  const exact = formatMoney(amount, currency);
-  if (!local || !rates) return { primary: exact };
-  if (currency === local) {
-    return { primary: exact, secondary: `≈ ${formatMoney(convertFiat(amount, currency, "USD", rates), "USD")}` };
+  if (!local || !rates) return { primary: formatMoney(amount, currency) };
+  if (lead === "billed") {
+    const other = currency === local ? "USD" : local;
+    return { primary: formatMoney(amount, currency), secondary: converted(amount, convertFiat(amount, currency, other, rates), other) };
   }
-  return { primary: `≈ ${formatMoney(convertFiat(amount, currency, local, rates), local)}`, secondary: exact };
+  if (currency === local) {
+    return { primary: rounded(amount, local), secondary: converted(amount, convertFiat(amount, local, "USD", rates), "USD") };
+  }
+  return { primary: rounded(convertFiat(amount, currency, local, rates), local), secondary: formatMoney(amount, currency) };
 }

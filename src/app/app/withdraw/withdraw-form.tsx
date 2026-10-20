@@ -33,7 +33,7 @@ export function WithdrawForm({ options, destination }: { options: WithdrawOption
         {options.map((option) => (
           <label
             key={option.asset}
-            className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border border-input bg-card px-4 py-3 has-checked:border-primary has-checked:ring-2 has-checked:ring-primary has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring"
+            className="flex min-h-11 cursor-pointer items-center justify-between gap-3 rounded-lg border border-input bg-card px-4 py-3 transition-colors duration-[20ms] ease-in hover:bg-primary/6 has-checked:border-primary has-checked:bg-tint/35 has-checked:ring-2 has-checked:ring-primary has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring"
           >
             <span className="flex items-center gap-3">
               <input

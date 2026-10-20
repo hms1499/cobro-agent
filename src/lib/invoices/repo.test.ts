@@ -11,6 +11,7 @@ import {
   getOwnedInvoice,
   issueDueRecurring,
   listInvoices,
+  listRecentInvoices,
   resolveRecurringLink,
 } from "./repo";
 
@@ -69,6 +70,26 @@ describe("one-off invoices", () => {
     expect(await getOwnedInvoice(db, stranger.id, invoice.id)).toBeNull();
     expect(await getOwnedInvoice(db, owner.id, "not-a-uuid")).toBeNull();
     expect(await findPublicInvoice(db, "nope")).toBeNull();
+  });
+});
+
+describe("listRecentInvoices", () => {
+  it("brings an old invoice back to the top once it is paid", async () => {
+    const user = await seedFreelancer(db);
+    const created: string[] = [];
+    for (let day = 1; day <= 11; day++) {
+      const invoice = await createInvoice(db, user.id, input);
+      await db.update(invoices).set({ createdAt: new Date(`2026-10-${String(day).padStart(2, "0")}T00:00:00Z`) }).where(eq(invoices.id, invoice.id));
+      created.push(invoice.id);
+    }
+    // The oldest invoice is paid after every other one was created.
+    await db.update(invoices).set({ status: "paid", paidAt: new Date("2026-10-15T00:00:00Z") }).where(eq(invoices.id, created[0]));
+
+    expect((await listInvoices(db, user.id, 10)).map((i) => i.id)).not.toContain(created[0]);
+    const recent = await listRecentInvoices(db, user.id, 10);
+    expect(recent).toHaveLength(10);
+    expect(recent[0].id).toBe(created[0]);
+    expect(recent[1].id).toBe(created[10]);
   });
 });
 
