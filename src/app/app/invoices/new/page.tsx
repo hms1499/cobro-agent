@@ -34,7 +34,10 @@ async function NewInvoice({ searchParams }: { searchParams: PageProps<"/app/invo
       <div className="flex items-start justify-between gap-4">
         <h1 className="text-2xl font-semibold">{t("invoiceForm.title")}</h1>
         {onboarding && (
-          <Link href="/app" className="min-h-11 rounded-sm py-2 text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring">
+          <Link
+            href="/app"
+            className="hover-tint -mr-3 min-h-11 rounded-md px-3 py-2 text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
+          >
             {t("invoiceForm.skip")}
           </Link>
         )}

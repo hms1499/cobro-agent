@@ -45,10 +45,20 @@ async function Settings() {
         </CardContent>
       </Card>
       {env.NEXT_PUBLIC_PARA_API_KEY && (
-        <ParaProviders apiKey={env.NEXT_PUBLIC_PARA_API_KEY} environment={env.NEXT_PUBLIC_PARA_ENVIRONMENT}>
-          <MyWalletButton />
-          <SignOutButton />
-        </ParaProviders>
+        // Para renders its children only once the SDK has loaded (several seconds on a slow link); until a
+        // button exists, the placeholder holds their place so the screen doesn't look unfinished.
+        <div className="flex flex-col gap-6 [&:not(:has(button))_.para-placeholder]:flex">
+          <ParaProviders apiKey={env.NEXT_PUBLIC_PARA_API_KEY} environment={env.NEXT_PUBLIC_PARA_ENVIRONMENT}>
+            <MyWalletButton />
+            <SignOutButton />
+          </ParaProviders>
+          <div className="para-placeholder hidden flex-col gap-3" aria-busy="true" aria-label={t("common.loading")}>
+            <Skeleton className="h-6 w-32" />
+            <Skeleton className="h-4 w-full max-w-prose" />
+            <Skeleton className="h-11 w-40" />
+            <Skeleton className="h-11 w-28" />
+          </div>
+        </div>
       )}
     </>
   );
