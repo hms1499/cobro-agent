@@ -582,7 +582,7 @@ tokens; Lucide icons; CSS-only subtle motion that respects reduced motion. Light
 
 | Screen | Key content and behaviour |
 |---|---|
-| Landing `/` | Hero "Get paid in dollars or pesos. Your agent protects the rest."; how it works in 3 steps; trust block (guardrails, ERC-8004 identity link, on-chain receipts); "Start with email" |
+| Landing `/` | Superseded by `2026-10-20-landing-design.md` and `design-system/cobro/pages/landing.md` (split-flap hero, email capture, on-chain proof, FAQ) |
 | Onboarding | 3 steps with a progress indicator and Back: (1) email sign-in, (2) pick ARS or BRL and set the spending reserve as a sentence with an input, (3) create a first invoice or skip |
 | Dashboard `/app` | Total in local currency; Spending and Savings buckets with a reserve bar; "Value protected" stat with a small trend chart (labelled, with a text summary); agent status and last action; activity feed; a proposal banner (Approve / Dismiss for 24 hours) when the agent waits for approval; a dot on the Agent tab; invoices with icon+text status chips; first-use empty state that points to "Create your first invoice" |
 | Chat `/app/chat` | Example prompt chips; the LLM draft renders as an editable invoice card; nothing is created until "Create invoice"; "Use the form instead" link always visible |

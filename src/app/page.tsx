@@ -1,29 +1,34 @@
-import Link from "next/link";
+import type { Metadata } from "next";
+import { AgentPanel } from "@/components/landing/agent-panel";
+import { ClientPreview } from "@/components/landing/client-preview";
+import { Faq } from "@/components/landing/faq";
+import { FinalCta } from "@/components/landing/final-cta";
+import { Hero } from "@/components/landing/hero";
+import { HowItWorks } from "@/components/landing/how-it-works";
+import { OnchainProof } from "@/components/landing/onchain-proof";
+import { SiteFooter } from "@/components/landing/site-footer";
+import { SiteNav } from "@/components/landing/site-nav";
 import { t } from "@/i18n";
+import { readPublicEnv } from "@/lib/config/public";
 
+export const metadata: Metadata = { title: t("landing.meta.title"), description: t("landing.meta.description") };
+
+/** The landing page (docs/superpowers/specs/2026-10-20-landing-design.md). Signed-in visitors are sent to /app by the proxy. */
 export default function Home() {
+  const agentId = readPublicEnv().NEXT_PUBLIC_AGENT_ID;
   return (
-    <main
-      id="main"
-      className="mx-auto flex w-full max-w-6xl flex-1 flex-col justify-center gap-6 px-4 py-16 md:px-8"
-    >
-      <p className="text-sm font-medium text-primary">{t("app.name")}</p>
-      <h1 className="max-w-[20ch] text-balance text-3xl font-semibold tracking-tight md:text-5xl">
-        {t("app.tagline")}
-      </h1>
-      <p className="max-w-prose text-muted-foreground">{t("home.how")}</p>
-      <Link
-        href="/signin"
-        className="inline-flex min-h-11 w-fit items-center rounded-lg bg-primary px-5 font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      >
-        {t("home.start")}
-      </Link>
-      <Link
-        href="/agent-card.json"
-        className="w-fit rounded-sm text-primary underline underline-offset-4 transition-colors hover:text-primary/80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-      >
-        {t("home.agentCard")}
-      </Link>
-    </main>
+    <>
+      <SiteNav />
+      <main id="main" className="flex-1">
+        <Hero agentId={agentId} />
+        <HowItWorks />
+        <ClientPreview />
+        <AgentPanel />
+        <OnchainProof agentId={agentId} />
+        <Faq />
+        <FinalCta />
+      </main>
+      <SiteFooter />
+    </>
   );
 }
