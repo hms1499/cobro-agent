@@ -170,6 +170,18 @@
   }
 }
 
+/* Landing split-flap board: one cell turning over (MASTER.md "Motion"; the board's only movement). */
+@keyframes flap {
+  50% {
+    transform: rotateX(90deg);
+  }
+}
+@layer components {
+  .flap-turn {
+    animation: flap 90ms ease-in;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   ::before,
