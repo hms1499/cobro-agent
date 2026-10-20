@@ -10,6 +10,9 @@
   --font-sans: var(--font-plex-sans);
   --font-mono: var(--font-plex-mono);
   --font-heading: var(--font-plex-sans);
+  --color-secondary-accent: var(--secondary-accent);
+  --color-tint: var(--tint);
+  --color-highlight: var(--highlight);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-warning: var(--warning);
@@ -54,13 +57,16 @@
 
 /* Cobro light palette — design-system/cobro/MASTER.md (hex → OKLCH) */
 :root {
+  --secondary-accent: oklch(0.62 0.095 241.2); /* #4D8DBA: icons, borders, charts; never body text (3.6:1) */
+  --tint: oklch(0.85 0.086 236.6); /* #97D7FF: selected backgrounds only */
+  --highlight: oklch(0.954 0.058 90); /* #FFEFC4: the few things that need attention */
   --background: oklch(0.984 0.003 247.9); /* #F8FAFC */
   --foreground: oklch(0.208 0.04 265.8); /* #0F172A */
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.208 0.04 265.8);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.208 0.04 265.8);
-  --primary: oklch(0.511 0.086 186.4); /* #0F766E */
+  --primary: oklch(0.468 0.096 234.6); /* #086288 */
   --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.968 0.007 247.9); /* #F1F5F9 */
   --secondary-foreground: oklch(0.208 0.04 265.8);
@@ -75,21 +81,21 @@
   --warning-foreground: oklch(1 0 0);
   --border: oklch(0.929 0.013 255.5); /* #E2E8F0, decorative */
   --input: oklch(0.554 0.041 257.4); /* #64748B, ≥3:1 boundary */
-  --ring: oklch(0.511 0.086 186.4);
-  --chart-1: oklch(0.511 0.086 186.4); /* spending bucket (local currency) */
-  --chart-2: oklch(0.488 0.217 264.4); /* savings bucket (USD), #1D4ED8 */
+  --ring: oklch(0.468 0.096 234.6);
+  --chart-1: oklch(0.468 0.096 234.6); /* spending bucket (local currency), primary */
+  --chart-2: oklch(0.85 0.086 236.6); /* savings bucket (USD), #97D7FF */
   --chart-3: oklch(0.446 0.037 257.3);
   --chart-4: oklch(0.554 0.041 257.4);
   --chart-5: oklch(0.929 0.013 255.5);
   --radius: 0.5rem;
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.208 0.04 265.8);
-  --sidebar-primary: oklch(0.511 0.086 186.4);
+  --sidebar-primary: oklch(0.468 0.096 234.6);
   --sidebar-primary-foreground: oklch(1 0 0);
   --sidebar-accent: oklch(0.968 0.007 247.9);
   --sidebar-accent-foreground: oklch(0.208 0.04 265.8);
   --sidebar-border: oklch(0.929 0.013 255.5);
-  --sidebar-ring: oklch(0.511 0.086 186.4);
+  --sidebar-ring: oklch(0.468 0.096 234.6);
 }
 
 .dark {
@@ -143,6 +149,24 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/*
+ * Notion-like feedback (MASTER.md "Motion"): a faint primary tint on hover, a stronger one on press,
+ * no scale or translate. Hover only where a pointer can hover, so touch never sticks.
+ */
+@layer components {
+  .hover-tint {
+    transition: background-color 20ms ease-in;
+  }
+  .hover-tint:active {
+    background-color: color-mix(in oklch, var(--primary) 12%, transparent);
+  }
+  @media (hover: hover) {
+    .hover-tint:hover:not(:active) {
+      background-color: color-mix(in oklch, var(--primary) 6%, transparent);
+    }
   }
 }
 
