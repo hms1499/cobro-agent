@@ -24,7 +24,10 @@ export const metadata: Metadata = { title: `${t("invoices.title")} · ${t("app.n
 export default function InvoicePage(props: PageProps<"/app/invoices/[id]">) {
   return (
     <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
-      <Link href="/app" className="flex min-h-11 w-fit items-center gap-2 rounded-sm text-primary focus-visible:outline-2 focus-visible:outline-ring">
+      <Link
+        href="/app/invoices"
+        className="hover-tint -ml-3 flex min-h-11 w-fit items-center gap-2 rounded-md px-3 text-primary focus-visible:outline-2 focus-visible:outline-ring"
+      >
         <ArrowLeft aria-hidden="true" className="size-4" />
         {t("invoice.back")}
       </Link>
