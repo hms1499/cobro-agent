@@ -14,7 +14,8 @@ import type { AppUser } from "@/lib/users/queries";
 const linkBase =
   "inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg px-4 font-medium transition-colors duration-100 ease-in-out focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 const primaryLink = `${linkBase} bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80`;
-const outlineLink = `${linkBase} border border-secondary-accent bg-card text-primary hover-tint`;
+// Utilities, not `.hover-tint`: that class sits in @layer components and would lose to `bg-card`.
+const outlineLink = `${linkBase} border border-secondary-accent bg-card text-primary hover:bg-primary/6 active:bg-primary/12`;
 
 /**
  * Home's money card (spec §4.2, layout A): one total in the local currency, the split between spending

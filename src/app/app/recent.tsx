@@ -10,7 +10,7 @@ import { getDb } from "@/lib/db/client";
 import type { InvoiceRow } from "@/lib/db/schema";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { formatDate } from "@/lib/invoices/dates";
-import { listInvoices } from "@/lib/invoices/repo";
+import { listRecentInvoices } from "@/lib/invoices/repo";
 import { displayAmount } from "@/lib/money/display";
 import { describeEvent } from "@/lib/treasury/explain";
 import { listEvents } from "@/lib/treasury/repo";
@@ -32,7 +32,7 @@ export function invoiceSubtitle(invoice: InvoiceRow): string {
 /** Home's "Recent" (spec §4.2): invoices and agent actions together, newest first. */
 export async function Recent({ user }: { user: AppUser }) {
   const db = getDb();
-  const [invoices, events, rates] = await Promise.all([listInvoices(db, user.id, 10), listEvents(db, user.id, 10), getReferenceRatesOrNull()]);
+  const [invoices, events, rates] = await Promise.all([listRecentInvoices(db, user.id, 10), listEvents(db, user.id, 10), getReferenceRatesOrNull()]);
   const items = buildRecent(invoices, events);
   return (
     <section aria-labelledby="recent-heading">

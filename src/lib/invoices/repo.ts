@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lte } from "drizzle-orm";
+import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
 import { getAddress, type Address } from "viem";
 import type { Db } from "@/lib/db/client";
 import {
@@ -150,6 +150,16 @@ export async function issueDueRecurring(db: Db, now: Date, limit = 100): Promise
 
 export async function listInvoices(db: Db, userId: string, limit = 50): Promise<InvoiceRow[]> {
   return db.select().from(invoices).where(eq(invoices.userId, userId)).orderBy(desc(invoices.createdAt)).limit(limit);
+}
+
+/** Newest activity first: a paid invoice counts from its payment, so an old invoice paid today comes back to the top. */
+export async function listRecentInvoices(db: Db, userId: string, limit = 10): Promise<InvoiceRow[]> {
+  return db
+    .select()
+    .from(invoices)
+    .where(eq(invoices.userId, userId))
+    .orderBy(desc(sql`coalesce(${invoices.paidAt}, ${invoices.createdAt})`), desc(invoices.id))
+    .limit(limit);
 }
 
 export async function getOwnedInvoice(db: Db, userId: string, invoiceId: string): Promise<OwnedInvoice | null> {

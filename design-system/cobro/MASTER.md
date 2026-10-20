@@ -66,8 +66,9 @@ values appear in components.
   formats amounts by hand.
 - Two figures, one large and one small: `displayAmount(amount, currency, local, rates, lead)` decides
   which is which. Never format a pair by hand.
-- **Balances** (Your money, spending, savings, withdraw) lead with the local currency, USD second:
-  `ARS 1,784` above `US$1.10`.
+- **Balances** (Your money, spending, savings) lead with the local currency, USD second:
+  `ARS 1,784` above `US$1.10`. The withdraw form is the exception: it shows each token's own currency,
+  exact, because the freelancer types that figure.
 - **Invoices** lead with the currency they were billed in, exact: `US$300.00` above `≈ ARS 481,649`
   (`lead: "billed"`). An agent event names a token amount in its own currency ("Converted US$1.07 to
   pesos").

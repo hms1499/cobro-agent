@@ -1,5 +1,6 @@
 // src/app/app/activity-feed.tsx
 import { CircleAlert, CircleCheck, Clock, ExternalLink, Info } from "lucide-react";
+import { ScrollToHash } from "@/components/scroll-to-hash";
 import { t } from "@/i18n";
 import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import { getDb } from "@/lib/db/client";
@@ -22,6 +23,7 @@ export async function ActivityFeed({ user, limit = 40 }: { user: AppUser; limit?
   const [events, rates] = await Promise.all([listEvents(getDb(), user.id, limit), getReferenceRatesOrNull()]);
   return (
     <section id="history" aria-labelledby="activity-heading" className="flex scroll-mt-6 flex-col gap-3">
+      <ScrollToHash id="history" />
       <h2 id="activity-heading" className="text-lg font-semibold">
         {t("activity.title")}
       </h2>
