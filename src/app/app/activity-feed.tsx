@@ -9,7 +9,7 @@ import { describeEvent, type EventTone } from "@/lib/treasury/explain";
 import { listEvents } from "@/lib/treasury/repo";
 import type { AppUser } from "@/lib/users/queries";
 
-const TONES: Record<EventTone, { icon: typeof Info; className: string }> = {
+export const TONES: Record<EventTone, { icon: typeof Info; className: string }> = {
   success: { icon: CircleCheck, className: "text-success" },
   warning: { icon: Clock, className: "text-warning" },
   alert: { icon: CircleAlert, className: "text-destructive" },
