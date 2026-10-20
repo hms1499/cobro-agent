@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { t } from "@/i18n";
 import { safeNext } from "@/lib/auth/gate";
+import { prefillEmail } from "@/lib/landing/prefill";
 
 type Phase = "idle" | "creating" | "error";
 
@@ -16,6 +17,8 @@ export function SignIn() {
   const { issueJwtAsync } = useIssueJwt();
   const router = useRouter();
   const searchParams = useSearchParams();
+  // "Start free" on the landing page sends its email field here as ?email=; Para shows it in its form.
+  const email = prefillEmail(searchParams.get("email"));
   const [phase, setPhase] = useState<Phase>("idle");
   const started = useRef(false);
   const autoOpened = useRef(false);
@@ -57,8 +60,8 @@ export function SignIn() {
   useEffect(() => {
     if (isLoading || isConnected || autoOpened.current) return;
     autoOpened.current = true;
-    openModal();
-  }, [isLoading, isConnected, openModal]);
+    openModal(email ? { defaultAuthIdentifier: email } : undefined);
+  }, [isLoading, isConnected, openModal, email]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -71,7 +74,7 @@ export function SignIn() {
         <Button
           size="lg"
           className="min-h-11"
-          onClick={() => (isConnected ? void createSession() : openModal())}
+          onClick={() => (isConnected ? void createSession() : openModal(email ? { defaultAuthIdentifier: email } : undefined))}
         >
           <Mail aria-hidden="true" className="size-4" />
           {phase === "error" ? t("signin.retry") : t("signin.continue")}
