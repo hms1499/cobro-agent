@@ -78,6 +78,7 @@ export async function Recent({ user }: { user: AppUser }) {
                       href="/app/rules#history"
                       icon={<Icon aria-hidden="true" className={`mt-0.5 size-5 shrink-0 ${className}`} />}
                       title={view.title}
+                      wrapTitle
                       subtitle={formatDate(item.event.createdAt)}
                     />
                   </li>

@@ -61,7 +61,7 @@ async function Home() {
           </Suspense>
         )}
       </ProposalSlot>
-      <div className="grid items-start gap-6 lg:grid-cols-[330px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[330px_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
           <Suspense fallback={<Skeleton className="h-48 w-full" />}>
             <MoneyCard user={user} primaryAction={primaryAction} />

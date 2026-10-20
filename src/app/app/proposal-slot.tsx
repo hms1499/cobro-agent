@@ -55,7 +55,8 @@ export function ProposalSlot({ children }: { children: ReactNode }) {
   return (
     <ProposalActionsContext.Provider value={actions}>
       {children}
-      <div ref={status} tabIndex={-1} aria-live="polite" className="outline-none">
+      {/* Out of flow while empty, so the page's gap doesn't leave a hole; never display:none, or announcements drop. */}
+      <div ref={status} tabIndex={-1} aria-live="polite" className="outline-none empty:absolute">
         {outcome === "approved" && <p className="text-success">{t("proposal.approved")}</p>}
         {outcome === "dismissed" && <p>{t("proposal.dismissed")}</p>}
         {outcome === "changed" && (

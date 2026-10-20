@@ -6,8 +6,9 @@ const base = "flex min-h-11 items-start justify-between gap-4 rounded-lg px-3 py
 
 /**
  * One invoice or one agent action in a list (MASTER.md "Shared components"). A row with `href` is a
- * link with the hover tint and a focus ring; without it the row is static. The title truncates and
- * the amount never wraps, so long client names and large figures fit at 375px.
+ * link with the hover tint and a focus ring; without it the row is static. The title truncates (or,
+ * with `wrapTitle`, wraps to two lines for sentences such as agent actions) and the amount never
+ * wraps, so long client names and large figures fit at 375px.
  */
 export function ListRow({
   href,
@@ -16,6 +17,7 @@ export function ListRow({
   amount,
   status,
   icon,
+  wrapTitle = false,
 }: {
   href?: string;
   title: string;
@@ -23,13 +25,14 @@ export function ListRow({
   amount?: DisplayAmount;
   status?: ReactNode;
   icon?: ReactNode;
+  wrapTitle?: boolean;
 }) {
   const body = (
     <>
       <span className="flex min-w-0 items-start gap-3">
         {icon}
         <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate font-medium">{title}</span>
+          <span className={`font-medium ${wrapTitle ? "line-clamp-2" : "truncate"}`}>{title}</span>
           {subtitle && <span className="truncate text-sm text-muted-foreground">{subtitle}</span>}
         </span>
       </span>
