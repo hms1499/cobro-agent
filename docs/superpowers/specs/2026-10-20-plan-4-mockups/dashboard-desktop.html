@@ -1,0 +1,90 @@
+<style>
+  .desk { width:100%; max-width:980px; margin:0 auto 28px; border:1px solid #cbd5e1; border-radius:14px; overflow:hidden; background:#F8FAFC; color:#0F172A; font-family:"IBM Plex Sans", system-ui, sans-serif; box-shadow:0 8px 24px rgba(15,23,42,.08); cursor:pointer; }
+  .desk.selected { outline:3px solid #0F766E; }
+  .bar-top { background:#E2E8F0; padding:7px 12px; font-size:11px; color:#475569; }
+  .shell { display:flex; min-height:470px; }
+  .side { width:190px; background:#fff; border-right:1px solid #E2E8F0; padding:18px 0; flex:none; }
+  .side .brand { color:#0F766E; font-weight:700; font-size:17px; padding:0 20px 16px; }
+  .side .it { padding:9px 20px; font-size:14px; color:#475569; }
+  .side .it.on { color:#0F766E; font-weight:600; background:#F0FDFA; border-left:3px solid #0F766E; padding-left:17px; }
+  .main { flex:1; padding:24px 28px; }
+  .hi { font-size:22px; font-weight:600; margin:0 0 16px; }
+  .cardx { background:#fff; border:1px solid #E2E8F0; border-radius:14px; padding:16px; margin-bottom:14px; }
+  .muted { color:#475569; font-size:13px; }
+  .big { font-size:34px; font-weight:700; font-variant-numeric:tabular-nums; margin:2px 0; }
+  .btns { display:flex; gap:10px; margin-top:14px; }
+  .bp { background:#0F766E; color:#fff; border-radius:10px; padding:11px 22px; font-weight:600; font-size:14px; }
+  .bo { border:1px solid #64748B; border-radius:10px; padding:11px 22px; font-weight:500; font-size:14px; background:#fff; }
+  .split { display:flex; height:8px; border-radius:4px; overflow:hidden; margin:12px 0 6px; }
+  .split .l { background:#0F766E; } .split .u { background:#1D4ED8; }
+  .legend { display:flex; justify-content:space-between; font-size:12px; color:#475569; }
+  .chip { display:inline-block; font-size:12px; padding:2px 9px; border-radius:999px; background:#ECFDF5; color:#15803D; font-weight:600; }
+  .chip.w { background:#FFF7ED; color:#B45309; }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:11px 0; border-bottom:1px solid #F1F5F9; font-size:14px; }
+  .row:last-child { border-bottom:0; }
+  .row .s { font-size:12px; color:#475569; }
+  .row .r { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; display:flex; gap:10px; align-items:center; }
+  .h3x { font-size:15px; font-weight:600; margin:0 0 6px; display:flex; justify-content:space-between; }
+  .h3x a { font-size:13px; color:#0F766E; font-weight:500; text-decoration:underline; }
+  .agentline { display:flex; align-items:center; gap:8px; font-size:13px; background:#fff; border:1px solid #E2E8F0; border-radius:12px; padding:10px 12px; margin-bottom:14px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#15803D; }
+  .lbl h3 { margin:0 0 4px; } .lbl p { margin:0 0 10px; font-size:13px; color:#475569; }
+  .wrap { max-width:980px; margin:0 auto; }
+</style>
+
+<h2>Bản A trên máy tính: một cột hay hai cột?</h2>
+<p class="subtitle">Điện thoại vẫn giữ đúng bản A bạn chọn (menu ở dưới). Trên màn hình rộng, menu chuyển sang cột trái như app hiện tại. Bấm để chọn.</p>
+
+<div class="wrap lbl"><h3>A1 · Một cột ở giữa</h3><p>Giống hệt bản điện thoại, chỉ rộng hơn. Dễ làm, giống nhau trên mọi thiết bị, nhưng màn hình rộng còn nhiều khoảng trống hai bên.</p></div>
+<div class="desk" data-choice="a1" onclick="toggleSelect(this)">
+  <div class="bar-top">cobro-agent.vercel.app/app</div>
+  <div class="shell">
+    <div class="side"><div class="brand">Cobro</div><div class="it on">Home</div><div class="it">Invoices</div><div class="it">Agent</div><div class="it">Settings</div></div>
+    <div class="main"><div style="max-width:560px;margin:0 auto">
+      <p class="hi">Hi, testmee</p>
+      <div class="cardx">
+        <div class="muted">Your money</div><div class="big">ARS 1,784</div><div class="muted">≈ US$1.10</div>
+        <div class="split"><div class="l" style="width:96%"></div><div class="u" style="width:4%"></div></div>
+        <div class="legend"><span>Spending ARS 1,718</span><span>Savings US$0.04</span></div>
+        <div class="btns"><div class="bp">+ New invoice</div><div class="bo">Withdraw</div></div>
+      </div>
+      <div class="agentline"><span class="dot"></span>Agent is on · checks every 20 min</div>
+      <div class="cardx"><div class="h3x">Recent <a>See all</a></div>
+        <div class="row"><div>VANHUY · work hard<div class="s">Due Oct 23 · repeats weekly</div></div><div class="r">US$1.00 <span class="chip w">Open</span></div></div>
+        <div class="row"><div>Agent saved dollars as pesos<div class="s">Oct 14</div></div><div class="r">ARS 1,718</div></div>
+        <div class="row"><div>VANHUY · new bill<div class="s">Paid Oct 14</div></div><div class="r">US$1.10 <span class="chip">Paid</span></div></div>
+      </div>
+    </div></div>
+  </div>
+</div>
+
+<div class="wrap lbl"><h3>A2 · Hai cột</h3><p>Bên trái là tiền, nút bấm và trạng thái agent. Bên phải là danh sách gần đây, dài hơn. Tận dụng màn hình rộng. Trên điện thoại hai cột xếp chồng lên nhau, thành đúng bản A.</p></div>
+<div class="desk" data-choice="a2" onclick="toggleSelect(this)">
+  <div class="bar-top">cobro-agent.vercel.app/app</div>
+  <div class="shell">
+    <div class="side"><div class="brand">Cobro</div><div class="it on">Home</div><div class="it">Invoices</div><div class="it">Agent</div><div class="it">Settings</div></div>
+    <div class="main">
+      <p class="hi">Hi, testmee</p>
+      <div style="display:flex;gap:16px;align-items:flex-start">
+        <div style="flex:0 0 330px">
+          <div class="cardx">
+            <div class="muted">Your money</div><div class="big">ARS 1,784</div><div class="muted">≈ US$1.10</div>
+            <div class="split"><div class="l" style="width:96%"></div><div class="u" style="width:4%"></div></div>
+            <div class="legend"><span>Spending ARS 1,718</span><span>Savings US$0.04</span></div>
+            <div class="btns"><div class="bp">+ New invoice</div><div class="bo">Withdraw</div></div>
+          </div>
+          <div class="agentline"><span class="dot"></span>Agent is on · checks every 20 min</div>
+        </div>
+        <div style="flex:1">
+          <div class="cardx"><div class="h3x">Recent <a>See all</a></div>
+            <div class="row"><div>VANHUY · work hard<div class="s">Due Oct 23 · repeats weekly</div></div><div class="r">US$1.00 <span class="chip w">Open</span></div></div>
+            <div class="row"><div>Agent saved dollars as pesos<div class="s">Oct 14</div></div><div class="r">ARS 1,718</div></div>
+            <div class="row"><div>VANHUY · new bill<div class="s">Paid Oct 14</div></div><div class="r">US$1.10 <span class="chip">Paid</span></div></div>
+            <div class="row"><div>VANHUY · job freelancer<div class="s">Paid Oct 9</div></div><div class="r">US$1.00 <span class="chip">Paid</span></div></div>
+            <div class="row"><div>Agent sent pesos to your wallet<div class="s">Oct 14</div></div><div class="r">ARS 1,590</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

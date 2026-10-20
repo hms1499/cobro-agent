@@ -1,0 +1,127 @@
+<style>
+  .sw { display:flex; gap:12px; flex-wrap:wrap; margin:8px 0 20px; }
+  .sw div { width:150px; border-radius:10px; overflow:hidden; border:1px solid #E2E8F0; font-size:12px; background:#fff; }
+  .sw i { display:block; height:56px; }
+  .sw p { margin:6px 8px 8px; line-height:1.4; color:#334155; }
+  .desk { max-width:980px; margin:0 auto 10px; border:1px solid #cbd5e1; border-radius:14px; overflow:hidden; font-family:"IBM Plex Sans", system-ui, sans-serif; color:#0F172A; box-shadow:0 8px 24px rgba(15,23,42,.08); cursor:pointer; }
+  .desk.selected { outline:3px solid #086288; }
+  .shell { display:flex; min-height:430px; }
+  .side { width:190px; border-right:1px solid #E2E8F0; padding:18px 8px; flex:none; background:#fff; }
+  .brand { color:#086288; font-weight:700; font-size:17px; padding:0 12px 16px; }
+  .it { padding:8px 12px; font-size:14px; color:#334155; border-radius:6px; transition: background 20ms ease-in; }
+  .it:hover { background: rgba(8,98,136,.06); }
+  .it:active { background: rgba(8,98,136,.12); }
+  .it.on { color:#086288; font-weight:600; background: rgba(151,215,255,.35); }
+  .main { flex:1; padding:22px 26px; }
+  .hi { font-size:22px; font-weight:600; margin:0 0 14px; }
+  .cardx { background:#fff; border:1px solid #E2E8F0; border-radius:12px; padding:16px; margin-bottom:14px; }
+  .muted { color:#475569; font-size:13px; }
+  .big { font-size:34px; font-weight:700; font-variant-numeric:tabular-nums; margin:2px 0; }
+  .split { display:flex; height:8px; border-radius:4px; overflow:hidden; margin:12px 0 6px; }
+  .legend { display:flex; justify-content:space-between; font-size:12px; color:#475569; }
+  .btns { display:flex; gap:10px; margin-top:14px; }
+  .bp { background:#086288; color:#fff; border-radius:8px; padding:10px 20px; font-weight:600; font-size:14px; border:0; cursor:pointer; transition: background 100ms ease-in-out; font-family:inherit; }
+  .bp:hover { background:#075476; } .bp:active { background:#064763; }
+  .bo { background:#fff; color:#086288; border:1px solid #4D8DBA; border-radius:8px; padding:10px 20px; font-weight:500; font-size:14px; cursor:pointer; transition: background 100ms ease-in-out; font-family:inherit; }
+  .bo:hover { background: rgba(8,98,136,.06); } .bo:active { background: rgba(8,98,136,.12); }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:10px 8px; margin:0 -8px; border-radius:6px; font-size:14px; transition: background 20ms ease-in; cursor:pointer; position:relative; }
+  .row:hover { background: rgba(8,98,136,.06); } .row:active { background: rgba(8,98,136,.12); }
+  .row .s { font-size:12px; color:#475569; }
+  .row .r { font-weight:600; font-variant-numeric:tabular-nums; display:flex; gap:10px; align-items:center; }
+  .chip { font-size:12px; padding:2px 9px; border-radius:999px; background:#ECFDF5; color:#15803D; font-weight:600; }
+  .chip.w { background:#FFF7ED; color:#B45309; }
+  .h3x { font-size:15px; font-weight:600; margin:0 0 6px; display:flex; justify-content:space-between; align-items:center; }
+  .h3x a { font-size:13px; color:#086288; text-decoration:underline; }
+  .agentline { display:flex; align-items:center; gap:8px; font-size:13px; border-radius:12px; padding:10px 12px; margin-bottom:14px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#15803D; }
+  .more { position:relative; }
+  .more .menu { position:absolute; right:0; top:28px; width:170px; background:#fff; border:1px solid #E2E8F0; border-radius:8px; box-shadow:0 10px 15px rgba(15,23,42,.12); padding:4px; opacity:0; transform:translateY(-4px) scale(.98); transform-origin:top right; pointer-events:none; transition: opacity 120ms ease-out, transform 120ms ease-out; z-index:5; }
+  .more.open .menu { opacity:1; transform:none; pointer-events:auto; }
+  .menu div { padding:7px 10px; font-size:13px; border-radius:6px; transition: background 20ms ease-in; }
+  .menu div:hover { background: rgba(8,98,136,.06); }
+  .dots { border:0; background:transparent; border-radius:6px; padding:2px 8px; font-size:16px; cursor:pointer; transition: background 20ms ease-in; color:#475569; }
+  .dots:hover { background: rgba(8,98,136,.06); } .dots:active { background: rgba(8,98,136,.12); }
+  .lbl { max-width:980px; margin:22px auto 6px; } .lbl h3 { margin:0 0 4px; } .lbl p { margin:0; font-size:13px; color:#475569; }
+  .warmbg .main { background:#FFF8E6; }
+  .note { max-width:980px; margin:18px auto 0; font-size:14px; }
+</style>
+
+<h2>Bảng màu mới và hiệu ứng kiểu Notion</h2>
+<p class="subtitle">Rê chuột và bấm thử vào menu bên trái, các dòng trong "Recent", các nút, và nút "⋯". Hiệu ứng đã làm theo số đo thật trên Notion. Bấm vào khung để chọn bản.</p>
+
+<div class="sw">
+  <div><i style="background:#086288"></i><p><b>#086288</b><br>Màu chính: nút, link, viền focus. Chữ trắng trên nền này 6.75:1 ✓</p></div>
+  <div><i style="background:#4D8DBA"></i><p><b>#4D8DBA</b><br>Phụ: viền nút phụ, icon, biểu đồ. Không dùng cho chữ nhỏ (3.6:1)</p></div>
+  <div><i style="background:#97D7FF"></i><p><b>#97D7FF</b><br>Nền nhạt: mục đang chọn, phần tiết kiệm trên thanh chia. Không dùng cho chữ</p></div>
+  <div><i style="background:#FFEFC4"></i><p><b>#FFEFC4</b><br>Màu ấm: nhấn những chỗ cần chú ý (agent hỏi ý kiến, tóm tắt)</p></div>
+</div>
+
+<div class="lbl"><h3>P1 · Nền sáng, kem chỉ để nhấn</h3><p>Nền trắng xám như hiện tại. Màu kem chỉ xuất hiện ở những chỗ quan trọng, ví dụ dòng agent.</p></div>
+<div class="desk" data-choice="p1" onclick="toggleSelect(this)">
+  <div class="shell">
+    <div class="side"><div class="brand">Cobro</div><div class="it on">Home</div><div class="it">Invoices</div><div class="it">Agent</div><div class="it">Settings</div></div>
+    <div class="main" style="background:#F8FAFC">
+      <p class="hi">Hi, testmee</p>
+      <div style="display:flex;gap:16px;align-items:flex-start">
+        <div style="flex:0 0 330px">
+          <div class="cardx">
+            <div class="muted">Your money</div><div class="big">ARS 1,784</div><div class="muted">≈ US$1.10</div>
+            <div class="split"><div style="width:90%;background:#086288"></div><div style="width:10%;background:#97D7FF"></div></div>
+            <div class="legend"><span>Spending ARS 1,718</span><span>Savings US$0.04</span></div>
+            <div class="btns"><button class="bp">+ New invoice</button><button class="bo">Withdraw</button></div>
+          </div>
+          <div class="agentline" style="background:#FFEFC4"><span class="dot"></span>Agent is on · checks every 20 min</div>
+        </div>
+        <div style="flex:1">
+          <div class="cardx"><div class="h3x">Recent <span style="display:flex;gap:8px;align-items:center"><a>See all</a><span class="more" onclick="event.stopPropagation();this.classList.toggle('open')"><button class="dots">⋯</button><div class="menu"><div>Only invoices</div><div>Only agent</div><div>Export CSV</div></div></span></span></div>
+            <div class="row"><div>VANHUY · work hard<div class="s">Due Oct 23 · repeats weekly</div></div><div class="r">US$1.00 <span class="chip w">Open</span></div></div>
+            <div class="row"><div>Agent saved dollars as pesos<div class="s">Oct 14</div></div><div class="r">ARS 1,718</div></div>
+            <div class="row"><div>VANHUY · new bill<div class="s">Paid Oct 14</div></div><div class="r">US$1.10 <span class="chip">Paid</span></div></div>
+            <div class="row"><div>VANHUY · job freelancer<div class="s">Paid Oct 9</div></div><div class="r">US$1.00 <span class="chip">Paid</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="lbl"><h3>P2 · Nền kem ấm</h3><p>Toàn bộ vùng nội dung có nền kem nhạt, thẻ trắng nổi lên trên. Ấm hơn, ít giống ngân hàng, nhưng màu kem bị dùng khắp nơi nên không còn để nhấn được.</p></div>
+<div class="desk warmbg" data-choice="p2" onclick="toggleSelect(this)">
+  <div class="shell">
+    <div class="side"><div class="brand">Cobro</div><div class="it on">Home</div><div class="it">Invoices</div><div class="it">Agent</div><div class="it">Settings</div></div>
+    <div class="main">
+      <p class="hi">Hi, testmee</p>
+      <div style="display:flex;gap:16px;align-items:flex-start">
+        <div style="flex:0 0 330px">
+          <div class="cardx">
+            <div class="muted">Your money</div><div class="big">ARS 1,784</div><div class="muted">≈ US$1.10</div>
+            <div class="split"><div style="width:90%;background:#086288"></div><div style="width:10%;background:#97D7FF"></div></div>
+            <div class="legend"><span>Spending ARS 1,718</span><span>Savings US$0.04</span></div>
+            <div class="btns"><button class="bp">+ New invoice</button><button class="bo">Withdraw</button></div>
+          </div>
+          <div class="agentline" style="background:#fff;border:1px solid #E2E8F0"><span class="dot"></span>Agent is on · checks every 20 min</div>
+        </div>
+        <div style="flex:1">
+          <div class="cardx"><div class="h3x">Recent <a>See all</a></div>
+            <div class="row"><div>VANHUY · work hard<div class="s">Due Oct 23 · repeats weekly</div></div><div class="r">US$1.00 <span class="chip w">Open</span></div></div>
+            <div class="row"><div>Agent saved dollars as pesos<div class="s">Oct 14</div></div><div class="r">ARS 1,718</div></div>
+            <div class="row"><div>VANHUY · new bill<div class="s">Paid Oct 14</div></div><div class="r">US$1.10 <span class="chip">Paid</span></div></div>
+            <div class="row"><div>VANHUY · job freelancer<div class="s">Paid Oct 9</div></div><div class="r">US$1.00 <span class="chip">Paid</span></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <h3>Hiệu ứng kiểu Notion (đo trên notion.site)</h3>
+  <ul>
+    <li><b>Rê chuột:</b> nền mờ hiện ra gần như tức thì (20ms). Không phóng to, không nhảy chỗ.</li>
+    <li><b>Bấm giữ:</b> nền đậm hơn một chút, để biết là đã bấm trúng.</li>
+    <li><b>Nút:</b> đổi màu trong 100ms. Bo góc 4–8px.</li>
+    <li><b>Menu bật ra (nút ⋯):</b> mờ dần hiện ra và trượt nhẹ 4px trong 120ms. Thông số này là tôi chọn, chưa đo được trên Notion.</li>
+    <li>Người dùng bật "giảm chuyển động" trên máy thì tắt hết các hiệu ứng.</li>
+  </ul>
+  <p class="muted">Các màu trạng thái tiền giữ nguyên: xanh lá = đã trả, cam = đang chờ, đỏ = lỗi. Lý do: ai cũng hiểu ngay mấy màu này, và không lẫn với màu xanh dương của thương hiệu.</p>
+</div>

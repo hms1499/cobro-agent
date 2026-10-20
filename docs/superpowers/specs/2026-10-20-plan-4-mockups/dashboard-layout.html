@@ -1,0 +1,130 @@
+<style>
+  .phones { display:flex; gap:24px; flex-wrap:wrap; justify-content:center; }
+  .phone { width:340px; border:1px solid #cbd5e1; border-radius:28px; background:#F8FAFC; overflow:hidden; color:#0F172A; font-family: "IBM Plex Sans", system-ui, sans-serif; box-shadow:0 8px 24px rgba(15,23,42,.08); cursor:pointer; }
+  .phone.selected { outline:3px solid #0F766E; }
+  .ph-body { padding:18px 16px 8px; min-height:600px; }
+  .ph-nav { display:flex; justify-content:space-around; border-top:1px solid #E2E8F0; background:#fff; padding:10px 0 12px; font-size:12px; color:#475569; }
+  .ph-nav b { color:#0F766E; font-weight:600; }
+  .hi { font-size:20px; font-weight:600; margin:0 0 14px; }
+  .cardx { background:#fff; border:1px solid #E2E8F0; border-radius:14px; padding:14px; margin-bottom:12px; }
+  .muted { color:#475569; font-size:13px; }
+  .big { font-size:30px; font-weight:700; font-variant-numeric:tabular-nums; margin:2px 0; }
+  .mid { font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .btns { display:flex; gap:8px; margin-top:12px; }
+  .bp { flex:1; background:#0F766E; color:#fff; border-radius:10px; padding:11px 0; text-align:center; font-weight:600; font-size:14px; }
+  .bo { flex:1; border:1px solid #64748B; color:#0F172A; border-radius:10px; padding:11px 0; text-align:center; font-weight:500; font-size:14px; background:#fff; }
+  .bar { display:flex; height:8px; border-radius:4px; overflow:hidden; margin:10px 0 6px; }
+  .bar .l { background:#0F766E; } .bar .u { background:#1D4ED8; }
+  .legend { display:flex; justify-content:space-between; font-size:12px; color:#475569; }
+  .chip { display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:3px 9px; border-radius:999px; background:#ECFDF5; color:#15803D; font-weight:600; }
+  .chip.w { background:#FFF7ED; color:#B45309; }
+  .row { display:flex; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid #F1F5F9; font-size:14px; }
+  .row:last-child { border-bottom:0; }
+  .row .r { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+  .row .s { font-size:12px; color:#475569; font-weight:400; }
+  .h3x { font-size:15px; font-weight:600; margin:14px 0 4px; display:flex; justify-content:space-between; }
+  .h3x a { font-size:13px; color:#0F766E; font-weight:500; text-decoration:underline; }
+  .agentline { display:flex; align-items:center; gap:8px; font-size:13px; color:#0F172A; background:#fff; border:1px solid #E2E8F0; border-radius:12px; padding:10px 12px; margin-bottom:12px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#15803D; flex:none; }
+  .label-top { text-align:center; margin-bottom:8px; }
+  .label-top h3 { margin:0; } .label-top p { margin:4px 0 0; font-size:13px; color:#475569; max-width:340px; }
+  .notes { max-width:1100px; margin:24px auto 0; font-size:14px; }
+</style>
+
+<h2>Dashboard mới: bố cục nào hợp nhất?</h2>
+<p class="subtitle">Cả 3 bản dùng chung dữ liệu thật của tài khoản testmee. Bấm vào điện thoại để chọn, rồi trả lời trong terminal.</p>
+
+<div class="phones">
+
+  <!-- A -->
+  <div>
+    <div class="label-top"><h3>A · Tiền trước</h3><p>Kiểu app ngân hàng: một số dư lớn, 2 nút, rồi danh sách gần đây gộp hoá đơn và việc agent làm.</p></div>
+    <div class="phone" data-choice="a" onclick="toggleSelect(this)">
+      <div class="ph-body">
+        <p class="hi">Hi, testmee</p>
+        <div class="cardx">
+          <div class="muted">Your money</div>
+          <div class="big">ARS 1,784</div>
+          <div class="muted">≈ US$1.10</div>
+          <div class="bar"><div class="l" style="width:96%"></div><div class="u" style="width:4%"></div></div>
+          <div class="legend"><span>Spending ARS 1,718</span><span>Savings US$0.04</span></div>
+          <div class="btns"><div class="bp">+ New invoice</div><div class="bo">Withdraw</div></div>
+        </div>
+        <div class="agentline"><span class="dot"></span>Agent is on · checks every 20 min</div>
+        <div class="h3x">Recent <a>See all</a></div>
+        <div class="cardx" style="padding:4px 14px">
+          <div class="row"><div>VANHUY · work hard<div class="s">Due Oct 23 · repeats weekly</div></div><div class="r">US$1.00<div><span class="chip w">Open</span></div></div></div>
+          <div class="row"><div>Agent saved dollars as pesos<div class="s">Oct 14 · kept your spending money full</div></div><div class="r">ARS 1,718</div></div>
+          <div class="row"><div>VANHUY · new bill<div class="s">Paid Oct 14</div></div><div class="r">US$1.10<div><span class="chip">Paid</span></div></div></div>
+        </div>
+      </div>
+      <div class="ph-nav"><b>Home</b><span>Invoices</span><span>Agent</span><span>Settings</span></div>
+    </div>
+  </div>
+
+  <!-- B -->
+  <div>
+    <div class="label-top"><h3>B · Hoá đơn trước</h3><p>Kiểu công cụ làm việc: số tiền đang chờ thu, nút tạo hoá đơn, danh sách hoá đơn. Tiền và agent gọn ở dưới.</p></div>
+    <div class="phone" data-choice="b" onclick="toggleSelect(this)">
+      <div class="ph-body">
+        <p class="hi">Hi, testmee</p>
+        <div class="cardx">
+          <div class="muted">Waiting to be paid</div>
+          <div class="big">US$1.00</div>
+          <div class="muted">1 open invoice</div>
+          <div class="btns"><div class="bp">+ New invoice</div></div>
+        </div>
+        <div class="h3x">Invoices <a>See all</a></div>
+        <div class="cardx" style="padding:4px 14px">
+          <div class="row"><div>VANHUY · work hard<div class="s">Due Oct 23 · repeats weekly</div></div><div class="r">US$1.00<div><span class="chip w">Open</span></div></div></div>
+          <div class="row"><div>VANHUY · new bill<div class="s">Paid Oct 14</div></div><div class="r">US$1.10<div><span class="chip">Paid</span></div></div></div>
+          <div class="row"><div>VANHUY · job freelancer<div class="s">Paid Oct 9</div></div><div class="r">US$1.00<div><span class="chip">Paid</span></div></div></div>
+        </div>
+        <div class="cardx">
+          <div style="display:flex;justify-content:space-between;align-items:center"><div class="muted">Your money</div><span class="chip">Agent on</span></div>
+          <div class="mid">ARS 1,784 <span class="muted" style="font-weight:400">≈ US$1.10</span></div>
+          <div style="margin-top:8px;font-size:13px;color:#0F766E;text-decoration:underline">Withdraw</div>
+        </div>
+      </div>
+      <div class="ph-nav"><b>Home</b><span>Invoices</span><span>Agent</span><span>Settings</span></div>
+    </div>
+  </div>
+
+  <!-- C -->
+  <div>
+    <div class="label-top"><h3>C · Agent kể chuyện</h3><p>Một câu tóm tắt agent đã làm gì cho bạn, kèm số dư và 2 nút. Không có danh sách trên Home.</p></div>
+    <div class="phone" data-choice="c" onclick="toggleSelect(this)">
+      <div class="ph-body">
+        <p class="hi">Hi, testmee</p>
+        <div class="cardx">
+          <div class="muted">Your money</div>
+          <div class="big">ARS 1,784</div>
+          <div class="muted">≈ US$1.10</div>
+          <div class="btns"><div class="bp">+ New invoice</div><div class="bo">Withdraw</div></div>
+        </div>
+        <div class="cardx" style="background:#F0FDFA;border-color:#99F6E4">
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px"><span class="dot"></span><b style="font-size:14px">Your agent this week</b></div>
+          <div style="font-size:14px;line-height:1.5">You were paid <b>US$1.10</b>. I kept <b>ARS 1,718</b> ready for spending and saved the rest in dollars. Nothing needs your attention.</div>
+          <div style="margin-top:8px;font-size:13px;color:#0F766E;text-decoration:underline">See what I did</div>
+        </div>
+        <div class="cardx">
+          <div style="display:flex;justify-content:space-between"><span>1 invoice waiting</span><b style="font-variant-numeric:tabular-nums">US$1.00</b></div>
+          <div class="muted" style="margin-top:4px">VANHUY · due Oct 23</div>
+        </div>
+      </div>
+      <div class="ph-nav"><b>Home</b><span>Invoices</span><span>Agent</span><span>Settings</span></div>
+    </div>
+  </div>
+
+</div>
+
+<div class="notes">
+  <h3>Thay đổi chung cho cả 3 bản</h3>
+  <ul>
+    <li>Thêm tab <b>Invoices</b> vào menu dưới. Danh sách đầy đủ hoá đơn và lịch sử agent chuyển sang tab Invoices và tab Agent.</li>
+    <li>Hoá đơn hiện bằng <b>đúng loại tiền đã tính</b> (US$1.00), không đổi sang peso.</li>
+    <li>Bỏ dấu "≈" ở số chính, chỉ giữ ở số phụ. Bỏ số lẻ ở số peso lớn.</li>
+    <li>Viết lại chữ khó hiểu: "Behind holding pesos", "1 of 1 requests filled", "Converted … to pesos". Sửa "10 minutes" thành 20.</li>
+    <li>Gộp "Conversions" vào lịch sử agent. Bỏ "Repeat clients" khỏi Home.</li>
+  </ul>
+</div>
