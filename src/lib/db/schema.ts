@@ -243,11 +243,50 @@ export const treasuryTxs = pgTable(
     asset: payAsset("asset"),
     amountAtomic: atomic("amount_atomic"),
     toAddress: text("to_address"),
+    /** Withdrawals to a saved address: the label it had when the money left. */
+    toLabel: text("to_label"),
     usdCents: integer("usd_cents"),
     createdAt: createdAt(),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   },
   (t) => [index("treasury_txs_user_status_idx").on(t.userId, t.status)],
+);
+
+/** Addresses a freelancer may withdraw to besides their own wallet. Usable 24 h after saving; removal is immediate. */
+export const withdrawalAddresses = pgTable(
+  "withdrawal_addresses",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    /** Checksummed. */
+    address: text("address").notNull(),
+    createdAt: createdAt(),
+    usableAt: timestamp("usable_at", { withTimezone: true }).notNull(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+  },
+  (t) => [uniqueIndex("withdrawal_addresses_active_uq").on(t.userId, t.address).where(sql`removed_at is null`)],
+);
+
+/** Emailed confirmation codes for adding an address; only an HMAC of the code is stored. */
+export const emailCodes = pgTable(
+  "email_codes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    label: text("label").notNull(),
+    address: text("address").notNull(),
+    attempts: integer("attempts").notNull().default(0),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("email_codes_user_created_idx").on(t.userId, t.createdAt)],
 );
 
 export const AGENT_EVENT_TYPES = [
@@ -307,6 +346,8 @@ export type RecurringInterval = (typeof recurringInterval.enumValues)[number];
 export type FxIntentRow = typeof fxIntents.$inferSelect;
 export type FxTradeRow = typeof fxTrades.$inferSelect;
 export type TreasuryTxRow = typeof treasuryTxs.$inferSelect;
+export type WithdrawalAddressRow = typeof withdrawalAddresses.$inferSelect;
+export type EmailCodeRow = typeof emailCodes.$inferSelect;
 export type AgentEventRow = typeof agentEvents.$inferSelect;
 export type ApprovalMode = (typeof approvalMode.enumValues)[number];
 export type IntentReason = (typeof intentReason.enumValues)[number];
