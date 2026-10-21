@@ -1,5 +1,5 @@
 import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
-import { and, count, desc, eq, gt, isNull, lt, ne, sql } from "drizzle-orm";
+import { and, count, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { getAddress, type Address } from "viem";
 import type { Db } from "@/lib/db/client";
 import { emailCodes } from "@/lib/db/schema";
@@ -50,33 +50,40 @@ export async function requestAddressCode(
   const { db } = deps;
   const now = deps.now();
 
-  // Rows count by created_at; a failed send deletes its row, so it never counts.
-  const [latest] = await db
-    .select({ createdAt: emailCodes.createdAt })
-    .from(emailCodes)
-    .where(eq(emailCodes.userId, user.id))
-    .orderBy(desc(emailCodes.createdAt))
-    .limit(1);
-  if (latest && latest.createdAt.getTime() > now.getTime() - CODE_COOLDOWN_MS) return { ok: false, error: "cooldown" };
-  const [{ n }] = await db
-    .select({ n: count() })
-    .from(emailCodes)
-    .where(and(eq(emailCodes.userId, user.id), gt(emailCodes.createdAt, new Date(now.getTime() - DAY_MS))));
-  if (n >= CODES_PER_DAY) return { ok: false, error: "daily_limit" };
-
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const expiresAt = new Date(now.getTime() + CODE_TTL_MS);
-  const [row] = await db
-    .insert(emailCodes)
-    .values({
-      userId: user.id,
-      codeHash: hashCode(deps.secret, user.id, code),
-      label: pending.label,
-      address: getAddress(pending.address),
-      expiresAt,
-      createdAt: now,
-    })
-    .returning({ id: emailCodes.id });
+  // Checks and insert run under a per-user advisory lock, so parallel requests are serialised and
+  // the cooldown and daily cap hold. The send stays outside the transaction.
+  // Rows count by created_at; a failed send deletes its row, so it never counts.
+  const reserved = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${user.id}))`);
+    const [latest] = await tx
+      .select({ createdAt: emailCodes.createdAt })
+      .from(emailCodes)
+      .where(eq(emailCodes.userId, user.id))
+      .orderBy(desc(emailCodes.createdAt))
+      .limit(1);
+    if (latest && latest.createdAt.getTime() > now.getTime() - CODE_COOLDOWN_MS) return { id: null, error: "cooldown" } as const;
+    const [{ n }] = await tx
+      .select({ n: count() })
+      .from(emailCodes)
+      .where(and(eq(emailCodes.userId, user.id), gt(emailCodes.createdAt, new Date(now.getTime() - DAY_MS))));
+    if (n >= CODES_PER_DAY) return { id: null, error: "daily_limit" } as const;
+    const [inserted] = await tx
+      .insert(emailCodes)
+      .values({
+        userId: user.id,
+        codeHash: hashCode(deps.secret, user.id, code),
+        label: pending.label,
+        address: getAddress(pending.address),
+        expiresAt,
+        createdAt: now,
+      })
+      .returning({ id: emailCodes.id });
+    return { id: inserted.id, error: null } as const;
+  });
+  if (reserved.id === null) return { ok: false, error: reserved.error };
+  const row = { id: reserved.id };
 
   try {
     const mail = addressCodeEmail(code, { label: pending.label, address: getAddress(pending.address) });
@@ -88,11 +95,11 @@ export async function requestAddressCode(
     return { ok: false, error: "send_failed" };
   }
 
-  // Supersede earlier unused codes only once the new one is out, so a failed send keeps the old code.
+  // Supersede only codes created before this one, and only once the new one is out, so a failed send keeps the old code.
   await db
     .update(emailCodes)
     .set({ expiresAt: now })
-    .where(and(eq(emailCodes.userId, user.id), ne(emailCodes.id, row.id), isNull(emailCodes.usedAt), gt(emailCodes.expiresAt, now)));
+    .where(and(eq(emailCodes.userId, user.id), lt(emailCodes.createdAt, now), isNull(emailCodes.usedAt), gt(emailCodes.expiresAt, now)));
   return { ok: true, expiresAt };
 }
 

@@ -117,6 +117,16 @@ describe("address codes", () => {
     expect(await requestAddressCode(deps, user, A)).toEqual({ ok: false, error: "daily_limit" });
   });
 
+  it("serialises parallel requests: one code, one email, and it works", async () => {
+    // PGlite is single-connection, so this cannot prove the real race; it checks the logic.
+    const user = await seedFreelancer(db);
+    const results = await Promise.all([requestAddressCode(deps, user, A), requestAddressCode(deps, user, A)]);
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => !r.ok && r.error === "cooldown")).toHaveLength(1);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect((await confirmAddressCode(deps, user, codeOf(sent[0]))).ok).toBe(true);
+  });
+
   it("a failed send leaves nothing behind", async () => {
     const user = await seedFreelancer(db);
     send.mockRejectedValueOnce(new Error("boom"));
