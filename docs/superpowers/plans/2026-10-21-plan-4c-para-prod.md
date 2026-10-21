@@ -254,11 +254,21 @@ Merge `plan-4c-para-prod` into `main` with `--no-ff`; full gate on the merge. Ap
 
 - [ ] **Step 4: Retire BETA data on Neon main (explicit yes required)**
 
-Dry run: `npx tsx --env-file=.env.main scripts/retire-para-beta.ts --created-before=<now, ISO>`. Show the user the summary and the masked emails. Only after "yes": rerun with `--apply`. Keep the cutoff value in the progress ledger.
+Dry run: `npx tsx --env-file=.env.main scripts/retire-para-beta.ts --created-before=<now, ISO with Z, e.g. 2026-10-21T10:00:00Z>` (a value without `Z` or `±HH:MM` is rejected). Show the user the summary and the masked emails. Only after "yes": rerun with `--apply`. Keep the cutoff value in the progress ledger.
 
 - [ ] **Step 5: Switch Vercel production env (stdin only), then redeploy**
 
-For each of `PARA_API_KEY` (from `PARA_PROD_API_KEY`), `NEXT_PUBLIC_PARA_API_KEY` (from `NEXT_PUBLIC_PARA_PROD_API_KEY`), `NEXT_PUBLIC_PARA_ENVIRONMENT` (`PROD`), and `SESSION_SECRET` (new: `openssl rand -base64 48`): `vercel env rm NAME production --yes`, then pipe the value into `vercel env add NAME production` without echoing it, e.g. `grep '^PARA_PROD_API_KEY=' .env.para-prod.local | cut -d= -f2- | tr -d '\n' | vercel env add PARA_API_KEY production`. Remove `PARA_REST_BASE_URL` and `PARA_JWKS_URL` (no longer read). Verify with `vercel env ls production` (names only). Redeploy production with a fresh build (NEXT_PUBLIC values are inlined at build). Rotating `SESSION_SECRET` also voids unused emailed address codes; only retired users have any.
+Pre-flight first, before pushing anything. `vercel env pull` returns sensitive values redacted, so production cannot be checked by pulling afterwards, and a mismatched server key would pass the build and 500 every page. Validate the exact values to be pushed, locally, without printing them: run `parseServerEnv` and `parsePublicEnv` (`src/lib/config/server.ts`, `public.ts`) with `NEXT_PUBLIC_PARA_ENVIRONMENT=PROD`, `PARA_API_KEY` = `PARA_PROD_API_KEY` and `NEXT_PUBLIC_PARA_API_KEY` = `NEXT_PUBLIC_PARA_PROD_API_KEY` from `.env.para-prod.local`, plus the other public vars `parsePublicEnv` requires from `.env.local`. Print only "ok" or the variable names that failed. Stop on any failure.
+
+For each of `PARA_API_KEY` (from `PARA_PROD_API_KEY`), `NEXT_PUBLIC_PARA_API_KEY` (from `NEXT_PUBLIC_PARA_PROD_API_KEY`), `NEXT_PUBLIC_PARA_ENVIRONMENT` (`PROD`), and `SESSION_SECRET` (new: `openssl rand -base64 48`): `vercel env rm NAME production --yes`, then pipe the value into `vercel env add NAME production` without echoing it, e.g. `grep '^PARA_PROD_API_KEY=' .env.para-prod.local | cut -d= -f2- | tr -d '\n' | vercel env add PARA_API_KEY production`. `vercel env rm NAME production` fails harmlessly when NAME is not set yet; carry on. Remove `PARA_REST_BASE_URL` and `PARA_JWKS_URL` (no longer read). Verify with `vercel env ls production` (names only). Redeploy production with a fresh build (NEXT_PUBLIC values are inlined at build). Rotating `SESSION_SECRET` also voids unused emailed address codes; only retired users have any.
+
+Once the PROD deployment is live, close the gap between Step 4 and the switch:
+
+- [ ] Dry-run again with `--created-before=<time the PROD alias went live, ISO with Z>`. If it finds anyone, show the user and run `--apply` only after a "yes".
+- [ ] Record that second cutoff in the progress ledger. Any later run uses it.
+- [ ] Re-run the Task 0 inventory after `--apply` and again after the switch, to catch deposits that arrived after Step 2.
+
+Rollback: Vercel instant rollback to the Step 3 deployment. Env changes apply to new builds only, so that deployment keeps the BETA env it was built with. Retired data stays retired, no money is at risk, and old users would see the failed-setup banner.
 
 - [ ] **Step 6: Live checks (spec §6 step 7)**
 
