@@ -184,6 +184,18 @@ describe("address codes", () => {
     expect(done.ok && done.address.address).toBe(A.address);
   });
 
+  it("an unsent code is dead even when another instance's clock is behind", async () => {
+    const user = await seedFreelancer(db);
+    const behind: CodeDeps = { ...deps, now: () => new Date(clock - 1000) };
+    const during: unknown[] = [];
+    send.mockImplementationOnce(async (m: EmailMessage) => {
+      during.push(await confirmAddressCode(behind, user, codeOf(m)));
+    });
+    expect(await requestAddressCode(deps, user, A)).toMatchObject({ ok: true });
+    expect(during).toEqual([{ ok: false, error: "no_code" }]);
+    expect(await listSavedAddresses(db, user.id)).toHaveLength(0);
+  });
+
   it(`caps wrong attempts at ${WRONG_ATTEMPTS_PER_DAY} a day across codes`, async () => {
     const user = await seedFreelancer(db);
     const ask = async () => {

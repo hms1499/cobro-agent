@@ -100,6 +100,11 @@ async function withdrawUnguarded(deps: ExecutorDeps, userId: string, input: With
     const { feeToken } = await ensureFeeToken(deps, ctx, balances, { asset: input.asset, amount: input.amount });
     if (!feeToken) return { ok: false, error: "needs_gas" };
 
+    // The slow rate lookup comes first, so only synchronous work sits between the last address check and signing.
+    const usdCents = await deps
+      .rates()
+      .then((rates) => Number(usdWad(input.asset, input.amount, rates) / 10n ** 16n))
+      .catch(() => null);
     // Checked again just before signing: a saved address removed while the steps above ran is refused here.
     if (input.to !== "personal" && !(await usableSavedAddress(deps.db, ctx.userId, input.to, deps.now()))) {
       return { ok: false, error: "destination_not_ready" };
@@ -109,10 +114,6 @@ async function withdrawUnguarded(deps: ExecutorDeps, userId: string, input: With
       { kind: "withdraw", asset: input.asset, to, amount: input.amount },
       { allowedSpenders: deps.allowedSpenders, personalWallet: ctx.personalWallet, withdrawalAddresses: input.to === "personal" ? [] : [to] },
     );
-    const usdCents = await deps
-      .rates()
-      .then((rates) => Number(usdWad(input.asset, input.amount, rates) / 10n ** 16n))
-      .catch(() => null);
     const extra = { asset: input.asset, amountAtomic: input.amount.toString(), toAddress: to, toLabel, usdCents };
     const sent = await sendTreasuryTx(deps, ctx, deps.signer(ctx), "withdraw", call, feeToken, extra);
     // A missing receipt is settled (and announced) by the next run's reconciliation.

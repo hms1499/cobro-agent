@@ -165,6 +165,21 @@ describe("withdraw", () => {
     expect(await db.select().from(treasuryTxs)).toHaveLength(0);
   });
 
+  it("honours a removal made while the USD rate was being fetched, right before signing", async () => {
+    const user = await freelancerWithWallet();
+    const saved = await insertSavedAddress(db, user.id, { label: "Binance", address: SAVED }, new Date(NOW.getTime() - 24 * 3_600_000));
+    const { deps: d, signed } = deps({ USDT: 2_000_000n });
+    const rates = d.rates;
+    d.rates = async () => {
+      await removeSavedAddress(db, user.id, saved.id, NOW);
+      return rates();
+    };
+    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1_000_000n, to: saved.id })).toEqual({ ok: false, error: "destination_not_ready" });
+    expect(signed).toHaveLength(0);
+    expect(d.signTx).not.toHaveBeenCalled();
+    expect(await db.select().from(treasuryTxs)).toHaveLength(0);
+  });
+
   it("refuses a bad destination before any chain work", async () => {
     const user = await freelancerWithWallet();
     const { deps: d } = deps({ USDT: 2_000_000n });

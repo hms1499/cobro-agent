@@ -78,7 +78,7 @@ export async function requestAddressCode(
   // Checks and insert run under a per-user advisory lock, so parallel requests are serialised and
   // the cooldown and daily caps hold. The send stays outside the transaction.
   // Rows count by created_at; a failed send deletes its row, so it never counts.
-  // The row is inserted dead (expires_at = now): nobody can guess against a code before its email is out.
+  // The row is inserted dead (expires_at = epoch, which no server clock is behind): nobody can guess against a code before its email is out.
   const reserved = await db.transaction(async (tx) => {
     await lockUser(tx, user.id);
     if ((await wrongAttemptsToday(tx, user.id, now)) >= WRONG_ATTEMPTS_PER_DAY) return { id: null, error: "daily_limit" } as const;
@@ -101,7 +101,7 @@ export async function requestAddressCode(
         codeHash: hashCode(deps.secret, user.id, code),
         label: pending.label,
         address: getAddress(pending.address),
-        expiresAt: now,
+        expiresAt: new Date(0),
         createdAt: now,
       })
       .returning({ id: emailCodes.id });
