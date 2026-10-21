@@ -3,7 +3,7 @@ import type { ReferenceRates } from "@/lib/fx/rates";
 import { parseDecimal } from "@/lib/money/decimal";
 import type { TreasuryBalances } from "@/lib/treasury/balances";
 import type { SavedAddress } from "@/lib/addresses/repo";
-import { withdrawDestinations, withdrawOptions } from "./options";
+import { destinationName, withdrawDestinations, withdrawOptions } from "./options";
 
 const NBSP = " ";
 const rates: ReferenceRates = { perUsd: { ARS: parseDecimal("1600", 18), BRL: parseDecimal("5", 18) }, fetchedAt: 0 };
@@ -37,5 +37,16 @@ describe("withdrawDestinations", () => {
 
   it("lists only saved rows when there is no personal wallet", () => {
     expect(withdrawDestinations(null, [a25], now).map((d) => d.value)).toEqual(["a25"]);
+  });
+});
+
+describe("destinationName", () => {
+  const list = withdrawDestinations(personal, [a25], now);
+  it("uses the lower-case phrase for the personal wallet so it reads mid-sentence", () => {
+    expect(destinationName(list, "personal")).toBe("your Cobro wallet");
+  });
+  it("uses the saved label, and falls back to the personal phrase for an unknown value", () => {
+    expect(destinationName(list, "a25")).toBe("L-a25");
+    expect(destinationName(list, undefined)).toBe("your Cobro wallet");
   });
 });

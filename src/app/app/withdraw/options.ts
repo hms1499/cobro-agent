@@ -46,3 +46,9 @@ export function withdrawDestinations(personalWallet: Address | null, saved: read
   if (!personalWallet) return rows;
   return [{ value: "personal", label: t("withdraw.personalLabel"), address: personalWallet, usableInHours: null }, ...rows];
 }
+
+/** The destination as it reads mid-sentence: "your Cobro wallet" or the saved address's name. */
+export function destinationName(destinations: readonly WithdrawDestination[], to: string | undefined): string {
+  const found = destinations.find((d) => d.value === to);
+  return !found || found.value === "personal" ? t("withdraw.yourWallet") : found.label;
+}

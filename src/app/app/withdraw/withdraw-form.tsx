@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import type { PayAsset } from "@/lib/money/currencies";
 import type { DisplayAmount } from "@/lib/money/display";
-import type { WithdrawDestination } from "./options";
+import { destinationName, type WithdrawDestination } from "./options";
 import { withdrawAction, type WithdrawState } from "./actions";
 
 export interface WithdrawOption {
@@ -27,7 +27,7 @@ export function WithdrawForm({ options, destinations }: { options: WithdrawOptio
   } satisfies WithdrawState);
   const firstUsable = destinations.find((d) => d.usableInHours === null)?.value;
   const chosenTo = destinations.find((d) => d.value === state.values.to && d.usableInHours === null)?.value ?? firstUsable;
-  const sentTo = destinations.find((d) => d.value === state.values.to)?.label ?? t("withdraw.yourWallet");
+  const sentTo = destinationName(destinations, state.values.to);
   const hasSaved = destinations.some((d) => d.value !== "personal");
   const amountHelp = t("withdraw.amountHelp");
 
