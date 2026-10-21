@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { ParaProviders } from "@/components/providers/para-provider";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
+import { listSavedAddresses } from "@/lib/addresses/repo";
 import { requireUser } from "@/lib/auth/current-user";
 import { readPublicEnv } from "@/lib/config/public";
+import { getDb } from "@/lib/db/client";
 import { MyWalletButton } from "./my-wallet";
 import { SignOutButton } from "./sign-out";
 
@@ -25,6 +28,7 @@ export default function SettingsPage() {
 async function Settings() {
   const user = await requireUser({ allowOnboarding: true });
   const env = readPublicEnv();
+  const savedCount = (await listSavedAddresses(getDb(), user.id)).length;
   const rows = [
     { label: t("settings.email"), value: user.email ?? t("settings.notSet") },
     { label: t("settings.name"), value: user.displayName ?? t("settings.notSet") },
@@ -42,6 +46,18 @@ async function Settings() {
               </div>
             ))}
           </dl>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="flex flex-col gap-2">
+          <h2 className="text-lg font-semibold">{t("settings.addresses.title")}</h2>
+          <p className="text-muted-foreground">{t("settings.addresses.count", { count: savedCount })}</p>
+          <Link
+            href="/app/settings/addresses"
+            className="inline-flex min-h-11 w-fit items-center text-primary underline underline-offset-4"
+          >
+            {t("settings.addresses.manage")}
+          </Link>
         </CardContent>
       </Card>
       {env.NEXT_PUBLIC_PARA_API_KEY && (
