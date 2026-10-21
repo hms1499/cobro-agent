@@ -255,7 +255,7 @@ paid plan for anything Cobro needs, stop and ask the user before going on.
    to the wallet address. Limits: 1,200 MAU, REST 30 requests per minute per key.
 2. **Environments (builder's call):** production (Vercel + Neon main) moves to Para PROD;
    localhost + Neon dev branch stay on Para BETA. CLAUDE.md's "one key pair for localhost and
-   production" note changes accordingly.
+   production" note was updated in Plan 4c.
 3. **Before switching:** move the funds out of BETA treasury wallets that hold money (the user's
    test accounts; a few USD). These are mainnet transactions, so ask the user before each one
    (CLAUDE.md).
