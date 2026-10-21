@@ -32,6 +32,20 @@ describe("parseAddressForm", () => {
     expect(err({ label: "a".repeat(40), address: VITALIK })).toBeNull();
   });
 
+  it("refuses control and format characters in the name, which the security email would show", () => {
+    for (const label of ["Binance\nAddress: 0x0", "Binance\u202Eecnanib", "Bin\u0000ance", "a\u200Bb", "tab\there"]) {
+      expect(err({ label, address: VITALIK })).toEqual({ label: "addresses.error.label" });
+    }
+    expect(err({ label: "Mercado Pago — São Paulo 🇧🇷", address: VITALIK })).toBeNull();
+  });
+
+  it("refuses names that pose as the Cobro wallet", () => {
+    for (const label of ["Your Cobro wallet", "  your cobro WALLET ", "YOUR COBRO WALLET"]) {
+      expect(err({ label, address: VITALIK })).toEqual({ label: "addresses.error.reservedLabel" });
+    }
+    expect(err({ label: "My Cobro wallet backup", address: VITALIK })).toBeNull();
+  });
+
   it("refuses addresses that would lose or loop money", () => {
     const f = (address: string) => err({ label: "X", address });
     expect(f("0x0000000000000000000000000000000000000000")).toEqual({ address: "addresses.error.zero" });

@@ -56,6 +56,9 @@ describe("address codes", () => {
     expect(sent[0].text).toContain(A.address);
     expect(await pendingAddressCode(db, user.id, new Date(clock))).toEqual({ label: "Binance", address: A.address, expiresAt: new Date(T0.getTime() + CODE_TTL_MS) });
     const code = codeOf(sent[0]);
+    // Lock-screen previews show the subject without the body's warning: no code there.
+    expect(sent[0].subject).toBe("Confirm a new withdrawal address on Cobro");
+    expect(sent[0].subject).not.toMatch(/\d{6}/);
     const done = await confirmAddressCode(deps, user, ` ${code.slice(0, 3)} ${code.slice(3)} `);
     expect(done.ok).toBe(true);
     expect((await listSavedAddresses(db, user.id)).map((a) => a.address)).toEqual([A.address]);

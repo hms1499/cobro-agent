@@ -44,9 +44,9 @@ export function AddressList({ items }: { items: AddressItem[] }) {
           </details>
           <form action={removeAddressAction}>
             <input type="hidden" name="id" value={item.id} />
-            <Button type="submit" variant="outline" size="lg" className="min-h-11">
+            <SubmitButton variant="outline" pendingLabel={t("addresses.removing")}>
               {t("addresses.remove")}
-            </Button>
+            </SubmitButton>
           </form>
         </li>
       ))}

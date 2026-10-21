@@ -1,5 +1,5 @@
 import { getAddress, isAddress, isAddressEqual, zeroAddress, type Address } from "viem";
-import type { MessageKey } from "@/i18n";
+import { t, type MessageKey } from "@/i18n";
 import { TOKENS } from "@/lib/chain/tokens";
 import { TEXTILE_REACTOR } from "@/lib/chain/treasury-tx";
 import type { FormResult } from "@/lib/forms";
@@ -22,6 +22,12 @@ const CONTRACTS: Address[] = [
   TEXTILE_REACTOR,
 ];
 
+/** Control, format (bidi, zero-width), private-use and unassigned characters: they could forge lines or reorder text in the security email. */
+const HIDDEN_CHARS = /\p{C}/u;
+
+/** Names the UI uses for the Cobro wallet; a saved address must not pose as it. */
+const RESERVED_LABELS = [t("withdraw.personalLabel"), t("withdraw.yourWallet")].map((l) => l.trim().toLowerCase());
+
 export function parseAddressForm(
   fields: Record<string, string>,
   ctx: { treasury: Address | null; personalWallet: Address | null; saved: readonly Address[] },
@@ -30,7 +36,8 @@ export function parseAddressForm(
   const raw = (fields.address ?? "").trim();
   const errors: Partial<Record<AddressField, MessageKey>> = {};
 
-  if (label.length < 1 || label.length > ADDRESS_LABEL_MAX) errors.label = "addresses.error.label";
+  if (label.length < 1 || label.length > ADDRESS_LABEL_MAX || HIDDEN_CHARS.test(label)) errors.label = "addresses.error.label";
+  else if (RESERVED_LABELS.includes(label.toLowerCase())) errors.label = "addresses.error.reservedLabel";
 
   // `isAddress` is strict: all-lowercase is accepted, mixed case must carry a valid checksum.
   if (!isAddress(raw)) {

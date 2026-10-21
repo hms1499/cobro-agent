@@ -1,6 +1,7 @@
 // src/lib/treasury/withdraw.ts
 import { getAddress, type Address, type Hex } from "viem";
 import { usableSavedAddress } from "@/lib/addresses/repo";
+import { safeErrorTag } from "@/lib/addresses/safe-error";
 import { TOKENS } from "@/lib/chain/tokens";
 import { encodeTreasuryCall, GAS_FLOOR_ATOMIC, GAS_TOKENS, pickGasToken, type GasToken } from "@/lib/chain/treasury-tx";
 import type { FieldErrors, FormResult } from "@/lib/forms";
@@ -62,11 +63,22 @@ export type WithdrawResult = { ok: true; txHash: Hex; pending: boolean } | { ok:
  * (encodeTreasuryCall).
  */
 export async function withdraw(deps: ExecutorDeps, userId: string, input: WithdrawInput): Promise<WithdrawResult> {
+  // The hash, once signed, so the log can name the transaction to look up.
+  let txHash: Hex | null = null;
+  const traced: ExecutorDeps = {
+    ...deps,
+    signTx: async (...args) => {
+      const signed = await deps.signTx(...args);
+      txHash = signed.hash;
+      return signed;
+    },
+  };
   try {
-    return await withdrawUnguarded(deps, userId, input);
+    return await withdrawUnguarded(traced, userId, input);
   } catch (error) {
     // Signing or the RPC failed, possibly after the transaction was stored and broadcast: money may have moved.
-    console.error(`Withdrawal for ${userId} ended with an error:`, error);
+    // Only a tag: a failed insert's message carries the destination address and label.
+    console.error(`Withdrawal for ${userId} ended with an error (tx ${txHash ?? "none"}):`, safeErrorTag(error));
     return { ok: false, error: "unconfirmed" };
   }
 }
@@ -77,7 +89,7 @@ async function withdrawUnguarded(deps: ExecutorDeps, userId: string, input: With
   const holder = crypto.randomUUID();
   if (!(await acquireWalletLock(deps.db, ctx.walletId, holder, deps.now()))) return { ok: false, error: "busy" };
   try {
-    // Resolved inside the lock, at the moment of signing: a removed or still-waiting address is refused here.
+    // Resolved inside the lock first, so a bad destination is refused before any drip or chain work.
     const destination = await resolveDestination(deps, ctx.userId, ctx.personalWallet, input.to);
     if ("error" in destination) return { ok: false, error: destination.error };
     const { address: to, label: toLabel } = destination;
@@ -87,6 +99,11 @@ async function withdrawUnguarded(deps: ExecutorDeps, userId: string, input: With
 
     const { feeToken } = await ensureFeeToken(deps, ctx, balances, { asset: input.asset, amount: input.amount });
     if (!feeToken) return { ok: false, error: "needs_gas" };
+
+    // Checked again just before signing: a saved address removed while the steps above ran is refused here.
+    if (input.to !== "personal" && !(await usableSavedAddress(deps.db, ctx.userId, input.to, deps.now()))) {
+      return { ok: false, error: "destination_not_ready" };
+    }
 
     const call = encodeTreasuryCall(
       { kind: "withdraw", asset: input.asset, to, amount: input.amount },

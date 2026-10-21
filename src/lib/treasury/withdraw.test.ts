@@ -149,6 +149,32 @@ describe("withdraw", () => {
     expect(await db.select().from(treasuryTxs)).toHaveLength(0);
   });
 
+  it("honours a removal made while the withdrawal was already under way", async () => {
+    const user = await freelancerWithWallet();
+    const saved = await insertSavedAddress(db, user.id, { label: "Binance", address: SAVED }, new Date(NOW.getTime() - 24 * 3_600_000));
+    const { deps: d, signed } = deps({ USDT: 2_000_000n });
+    const read = d.chain.readBalances;
+    d.chain.readBalances = async (address) => {
+      // The owner removes the address after the early check passed, before anything is signed.
+      await removeSavedAddress(db, user.id, saved.id, NOW);
+      return read(address);
+    };
+    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1_000_000n, to: saved.id })).toEqual({ ok: false, error: "destination_not_ready" });
+    expect(signed).toHaveLength(0);
+    expect(d.signTx).not.toHaveBeenCalled();
+    expect(await db.select().from(treasuryTxs)).toHaveLength(0);
+  });
+
+  it("refuses a bad destination before any chain work", async () => {
+    const user = await freelancerWithWallet();
+    const { deps: d } = deps({ USDT: 2_000_000n });
+    const readBalances = vi.fn(d.chain.readBalances);
+    d.chain.readBalances = readBalances;
+    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1_000_000n, to: crypto.randomUUID() })).toEqual({ ok: false, error: "destination_not_ready" });
+    expect(readBalances).not.toHaveBeenCalled();
+    expect(d.drip).not.toHaveBeenCalled();
+  });
+
   it("a saved address works without a personal wallet", async () => {
     const user = await freelancerWithWallet(null);
     const saved = await insertSavedAddress(db, user.id, { label: "Binance", address: SAVED }, new Date(NOW.getTime() - 24 * 3_600_000));
@@ -201,6 +227,28 @@ describe("withdraw", () => {
     const b = deps({ USDT: 2_000_000n });
     b.deps.signTx = vi.fn(async (_signer, _call, feeToken) => ({ hash: `0x${"78".repeat(32)}` as Hex, raw: "0x78" as Hex, nonce: 1, feeToken }));
     expect(await withdraw(b.deps, user.id, { asset: "USDT", amount: 1_000_000n, to: "personal" })).toMatchObject({ ok: true, pending: false });
+  });
+
+  it("logs no destination address or label when recording the transaction fails, only the user and hash", async () => {
+    const user = await freelancerWithWallet();
+    const saved = await insertSavedAddress(db, user.id, { label: "Binance", address: SAVED }, new Date(NOW.getTime() - 24 * 3_600_000));
+    await db.execute(sql`CREATE OR REPLACE FUNCTION fail_tx() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'tx insert failed'; END $$ LANGUAGE plpgsql`);
+    await db.execute(sql`CREATE TRIGGER fail_tx BEFORE INSERT ON treasury_txs FOR EACH ROW EXECUTE FUNCTION fail_tx()`);
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await withdraw(deps({ USDT: 2_000_000n }).deps, user.id, { asset: "USDT", amount: 1_000_000n, to: saved.id })).toEqual({
+        ok: false,
+        error: "unconfirmed",
+      });
+      const text = JSON.stringify(logged.mock.calls);
+      expect(text).toContain(user.id);
+      expect(text).toContain("77".repeat(32));
+      expect(text.toLowerCase()).not.toContain(SAVED.toLowerCase().slice(2));
+      expect(text).not.toContain("Binance");
+    } finally {
+      logged.mockRestore();
+      await db.execute(sql`DROP TRIGGER fail_tx ON treasury_txs`);
+    }
   });
 
   it("leaves the withdrawal pending, not settled without its event, when the settlement cannot be written", async () => {
