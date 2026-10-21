@@ -495,6 +495,10 @@ export const en = {
   "rules.error.wait": "Enter whole hours from 0 to 48.",
   "rules.error.perTrade": "Enter whole dollars from 1 to 1,000.",
   "rules.error.daily": "Enter whole dollars, at least the largest conversion and at most 5,000.",
+  "email.code.subject": "Your Cobro confirmation code: {code}",
+  "email.code.body": "Your code is {code}.\n\nYou asked to save this withdrawal address:\n\nName: {label}\nAddress: {address}\n\nThe code works for 10 minutes. If you didn't ask for this, someone may be in your account. Don't share this code with anyone and don't enter it.",
+  "email.added.subject": "A withdrawal address was added to Cobro",
+  "email.added.body": "The address \"{label}\" was added to your Cobro account:\n\n{address}\n\nIt becomes usable for withdrawals in 24 hours. If this wasn't you, remove it now in Settings → Withdrawal addresses.",
 } as const;
 
 export type MessageKey = keyof typeof en;
