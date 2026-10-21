@@ -16,6 +16,9 @@ function maskEmail(email: string | null): string {
 function parseArgs(argv: string[]): { createdBefore: Date; apply: boolean } {
   const raw = argv.find((a) => a.startsWith("--created-before="))?.slice("--created-before=".length);
   if (!raw) throw new Error("Missing --created-before=<ISO 8601 timestamp>");
+  if (!/(Z|[+-]\d{2}:\d{2})$/.test(raw)) {
+    throw new Error(`--created-before needs an explicit timezone (Z or ±HH:MM), e.g. 2026-10-21T10:00:00Z. Got: ${raw}`);
+  }
   const createdBefore = new Date(raw);
   if (Number.isNaN(createdBefore.getTime())) throw new Error(`Invalid --created-before value: ${raw}`);
   return { createdBefore, apply: argv.includes("--apply") };

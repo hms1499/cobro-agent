@@ -115,6 +115,35 @@ describe("retireParaBetaData", () => {
     expect((await snapshot(a.user.id)).wallet).toBe("ready");
   });
 
+  it("rolls back when an invoice is claimed between the pre-check and the write", async () => {
+    const a = await seedAt("2026-10-10T00:00:00Z");
+    const before = await snapshot(a.user.id);
+    const summary = await retireParaBetaData(db, {
+      createdBefore: CUTOFF,
+      apply: true,
+      // The payer claims the open invoice after the pre-check saw no blockers.
+      onBeforeTransaction: async () => {
+        await db
+          .update(schema.invoices)
+          .set({ status: "settling", settlingUntil: new Date(Date.now() + 60_000) })
+          .where(eq(schema.invoices.id, a.open.id));
+      },
+    });
+    expect(summary).toEqual({
+      wallets: 0,
+      rulesDisabled: 0,
+      recurringStopped: 0,
+      invoicesCancelled: 0,
+      blockers: [`invoice ${a.open.slug} is settling`],
+    });
+    const after = await snapshot(a.user.id);
+    expect(after.wallet).toBe("ready");
+    expect(after.rule).toBe(true);
+    expect(after.rec).toBe(true);
+    expect(after.invs).toEqual([`${a.open.slug}:settling`, `${a.paid.slug}:paid`].sort());
+    expect(before.wallet).toBe("ready");
+  });
+
   it("apply is idempotent", async () => {
     await seedAt("2026-10-10T00:00:00Z");
     await retireParaBetaData(db, { createdBefore: CUTOFF, apply: true });
