@@ -22,7 +22,7 @@ export const localCurrency = pgEnum("local_currency", ["ARS", "BRL"]);
 export const payAsset = pgEnum("pay_asset", ["USAT", "USDT", "WARS", "WBRL"]);
 export const invoiceStatus = pgEnum("invoice_status", ["open", "settling", "paid", "cancelled"]);
 export const recurringInterval = pgEnum("recurring_interval", ["weekly", "monthly"]);
-export const walletStatus = pgEnum("wallet_status", ["creating", "ready", "failed"]);
+export const walletStatus = pgEnum("wallet_status", ["creating", "ready", "failed", "retired"]);
 export const signerType = pgEnum("signer_type", ["para", "local"]);
 export const intentStatus = pgEnum("intent_status", ["proposed", "waiting", "executing", "filled", "blocked", "cancelled"]);
 /** Trade approvals spec §2: what the agent may convert without asking the freelancer. */

@@ -17,6 +17,15 @@ const publicEnvSchema = z.object({
   NEXT_PUBLIC_AGENT_ID: z.preprocess(emptyToUndefined, z.coerce.number().int().nonnegative().optional()),
   NEXT_PUBLIC_PARA_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
   NEXT_PUBLIC_PARA_ENVIRONMENT: z.preprocess(emptyToUndefined, z.enum(["BETA", "PROD"]).default("BETA")),
+}).superRefine((env, ctx) => {
+  const prefix = env.NEXT_PUBLIC_PARA_ENVIRONMENT === "PROD" ? "prod_" : "beta_";
+  if (env.NEXT_PUBLIC_PARA_API_KEY !== undefined && !env.NEXT_PUBLIC_PARA_API_KEY.startsWith(prefix)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["NEXT_PUBLIC_PARA_API_KEY"],
+      message: `NEXT_PUBLIC_PARA_API_KEY must be a ${env.NEXT_PUBLIC_PARA_ENVIRONMENT} key (${prefix}…)`,
+    });
+  }
 });
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;

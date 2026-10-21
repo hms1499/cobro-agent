@@ -29,7 +29,8 @@ export async function loadAppUser(db: Db, userId: string): Promise<AppUser | nul
     id: row.user.id,
     email: row.user.email,
     displayName: row.user.displayName,
-    treasuryStatus: row.wallet?.status ?? "missing",
+    // A retired (Para BETA) wallet can no longer be signed for; the app treats it like a failed one.
+    treasuryStatus: row.wallet ? (row.wallet.status === "retired" ? "failed" : row.wallet.status) : "missing",
     treasuryAddress: ready ? getAddress(row.wallet!.address!) : null,
     personalWallet: row.user.personalWallet ? getAddress(row.user.personalWallet) : null,
     localCurrency: row.localCurrency ?? null,

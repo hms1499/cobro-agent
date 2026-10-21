@@ -270,6 +270,15 @@ exposes `version()`. USDT has no `eip712Domain()`; its version "1" comes from th
   `sign-transaction` accepts only types 0 and 2, so the CIP-64 digest is signed raw and normalised
   to low-s) and `/sign-typed-data` (Textile's `takerProof`); we broadcast ourselves. Verified on
   mainnet in Smoke D and E ([treasury smoke results](../smoke/2026-10-treasury.md)).
+- Environments: production (Vercel + Neon main) uses Para PROD; localhost and Neon dev use Para BETA
+  (Plan 4c). `NEXT_PUBLIC_PARA_ENVIRONMENT` (`BETA` or `PROD`, default `BETA`) picks the REST base
+  URL (`https://api.beta.getpara.com` or `https://api.getpara.com`) and the JWKS URL
+  (`<base>/.well-known/jwks.json`). The secret key must start with `sk_beta_` or `sk_prod_` and the
+  public key with `beta_` or `prod_`, matching the environment; config refuses anything else.
+  Wallets and users cannot move between environments. Free plan: 1,200 MAU, REST 30 requests per
+  minute per key, no card asked. Probe on 2026-10-21: with the PROD secret key, a CUSTOM_ID wallet
+  was created and found by custom id, and it signed EIP-712 typed data and an EIP-1559 transaction;
+  both signatures recovered to the wallet address.
 - Guardrails: allow calls to the Textile reactor and `approve(reactor)` on the four tokens. Allow
   token transfers (the per-user recipient check stays in code). Spike result (2026-10-08,
   `docs/superpowers/spikes/2026-10-11-para.md`): an active Development Guardrail was not enforced
@@ -543,7 +552,7 @@ Independent payer: a wallet that is not ours, was not first funded by us, and ha
 - Thin wARS liquidity (about $850/day) → small trades, `no_quote` handling, wBRL as the second corridor.
 - No existing users → outreach in week 4; the Track 2 P&L and Track 1 demo do not depend on outside users.
 - Free LLM quotas → Groq fallback, then forms; LLM is not on any money path.
-- Treasury wallets live in Para **BETA** for the hackathon (decided 2026-10-09). BETA's durability and SLA are unverified and wallets cannot move to PROD, so balances stay at a few USD and Cobro moves to Para PROD before inviting real users. Resolved in Plan 3: a lost user row no longer leads to a second Para wallet, because the custom id is now `para:<Para user id>` and an existing wallet is adopted before a new one is created (§8.4).
+- Treasury wallets live in Para **BETA** for the hackathon (decided 2026-10-09). BETA's durability and SLA are unverified and wallets cannot move to PROD, so balances stay at a few USD and Cobro moves to Para PROD before inviting real users. Plan 4c moves production to Para PROD and keeps localhost on BETA (§8.4). At the cutover, `scripts/retire-para-beta.ts` (dry run by default, `--apply` to write) marks the wallets of users created before the cutoff `retired`, disables their rules, stops recurring templates and cancels open invoices; it refuses while money is in flight, and nothing is deleted. Resolved earlier in Plan 3: a lost user row no longer leads to a second Para wallet, because the custom id is now `para:<Para user id>` and an existing wallet is adopted before a new one is created (§8.4).
 - Para `sign-typed-data` does not normalise signatures to low-s. If Textile ever verifies the `takerProof` with OpenZeppelin-style ECDSA, about half of RFQs would be refused (no money moves). Smoke D's proof was accepted, but that is one sample; watch for RFQ errors and normalise if they appear.
 
 **Questions for the organisers** (Telegram or office hours, Thursdays 12:00 GMT):

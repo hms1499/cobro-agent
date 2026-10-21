@@ -38,6 +38,42 @@ describe("parsePublicEnv", () => {
   });
 });
 
+describe("Para environment", () => {
+  it("derives PROD endpoints from the Para environment", () => {
+    const env = parseServerEnv({ NEXT_PUBLIC_PARA_ENVIRONMENT: "PROD" });
+    expect(env.PARA_REST_BASE_URL).toBe("https://api.getpara.com");
+    expect(env.PARA_JWKS_URL).toBe("https://api.getpara.com/.well-known/jwks.json");
+  });
+  it("ignores a stale endpoint variable", () => {
+    const env = parseServerEnv({
+      NEXT_PUBLIC_PARA_ENVIRONMENT: "PROD",
+      PARA_REST_BASE_URL: "https://api.beta.getpara.com",
+    });
+    expect(env.PARA_REST_BASE_URL).toBe("https://api.getpara.com");
+  });
+  it("refuses a secret key from the other Para environment", () => {
+    expect(() => parseServerEnv({ NEXT_PUBLIC_PARA_ENVIRONMENT: "PROD", PARA_API_KEY: "sk_beta_abc" })).toThrow(
+      /PARA_API_KEY.*PROD/,
+    );
+    expect(() => parseServerEnv({ PARA_API_KEY: "sk_prod_abc" })).toThrow(/PARA_API_KEY.*BETA/);
+    expect(parseServerEnv({ NEXT_PUBLIC_PARA_ENVIRONMENT: "PROD", PARA_API_KEY: "sk_prod_abc" }).PARA_API_KEY).toBe(
+      "sk_prod_abc",
+    );
+  });
+  it("never echoes the rejected key", () => {
+    expect(() => parseServerEnv({ PARA_API_KEY: "sk_prod_secretvalue" })).toThrow(/^(?!.*secretvalue)/);
+  });
+  it("refuses a public key from the other Para environment", () => {
+    expect(() =>
+      parsePublicEnv({ ...validPublic, NEXT_PUBLIC_PARA_ENVIRONMENT: "PROD", NEXT_PUBLIC_PARA_API_KEY: "beta_abc" }),
+    ).toThrow(/NEXT_PUBLIC_PARA_API_KEY.*PROD/);
+    expect(
+      parsePublicEnv({ ...validPublic, NEXT_PUBLIC_PARA_ENVIRONMENT: "PROD", NEXT_PUBLIC_PARA_API_KEY: "prod_abc" })
+        .NEXT_PUBLIC_PARA_API_KEY,
+    ).toBe("prod_abc");
+  });
+});
+
 describe("parseServerEnv", () => {
   it("applies defaults when nothing is set", () => {
     const env = parseServerEnv({});

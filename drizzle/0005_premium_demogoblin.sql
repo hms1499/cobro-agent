@@ -1,0 +1,1 @@
+ALTER TYPE "public"."wallet_status" ADD VALUE 'retired';
