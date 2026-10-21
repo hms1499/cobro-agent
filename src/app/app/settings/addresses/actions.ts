@@ -4,6 +4,7 @@ import { refresh } from "next/cache";
 import type { MessageKey } from "@/i18n";
 import { confirmAddressCode, requestAddressCode, type CodeDeps } from "@/lib/addresses/codes";
 import { listSavedAddresses, removeSavedAddress } from "@/lib/addresses/repo";
+import { safeErrorTag } from "@/lib/addresses/safe-error";
 import { parseAddressForm, type AddressField } from "@/lib/addresses/validate";
 import { requireUser } from "@/lib/auth/current-user";
 import { parseServerEnv, requireValue } from "@/lib/config/server";
@@ -52,8 +53,8 @@ export async function requestCodeAction(_previous: AddressState, formData: FormD
     refresh();
     return { step: "code", errors: {}, values: { label: parsed.data.label, address: parsed.data.address }, message: null };
   } catch (error) {
-    console.error("Address code action failed:", error instanceof Error ? error.message : "unknown error");
-    return { step: resend ? "code" : "form", errors: {}, values, message: "addresses.error.send_failed" };
+    console.error("Address code action failed:", safeErrorTag(error));
+    return { step: resend ? "code" : "form", errors: {}, values, message: "addresses.error.unavailable" };
   }
 }
 
@@ -73,8 +74,8 @@ export async function confirmCodeAction(_previous: AddressState, formData: FormD
     refresh();
     return { step: "added", errors: {}, values: {}, message: "addresses.added" };
   } catch (error) {
-    console.error("Address confirm action failed:", error instanceof Error ? error.message : "unknown error");
-    return { step: "code", errors: { code: "addresses.error.invalid" }, values, message: null };
+    console.error("Address confirm action failed:", safeErrorTag(error));
+    return { step: "code", errors: {}, values, message: "addresses.error.unavailable" };
   }
 }
 
@@ -86,7 +87,7 @@ export async function removeAddressAction(formData: FormData): Promise<void> {
   try {
     await removeSavedAddress(getDb(), user.id, id, new Date());
   } catch (error) {
-    console.error("Remove address failed:", error instanceof Error ? error.message : "unknown error");
+    console.error("Remove address failed:", safeErrorTag(error));
     return;
   }
   refresh();

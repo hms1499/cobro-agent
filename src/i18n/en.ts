@@ -212,6 +212,7 @@ export const en = {
   "addresses.error.no_code": "That code expired or was already used. Send a new code.",
   "addresses.error.invalid": "That code is not right. Check the email and try again.",
   "addresses.error.too_many": "Too many wrong codes. Ask for a new one.",
+  "addresses.error.unavailable": "Something went wrong on our side. Try again in a minute.",
   "addresses.title": "Withdrawal addresses",
   "addresses.intro": "Save the wallets and exchange accounts you withdraw to. We email you a code to confirm each one, and a new address can receive money only after 24 hours. We also email you when one is added.",
   "addresses.warning": "Only use an address that accepts this money on the Celo network. If the exchange or wallet does not support Celo, the money can be lost.",

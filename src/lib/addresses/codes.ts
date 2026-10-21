@@ -6,6 +6,7 @@ import { emailCodes } from "@/lib/db/schema";
 import type { EmailSender } from "@/lib/email/send";
 import { addressAddedEmail, addressCodeEmail } from "./emails";
 import { insertSavedAddress, listSavedAddresses, type SavedAddress } from "./repo";
+import { safeErrorTag } from "./safe-error";
 import { MAX_SAVED_ADDRESSES, type NewAddress } from "./validate";
 
 export const CODE_TTL_MS = 600_000;
@@ -90,7 +91,7 @@ export async function requestAddressCode(
     await deps.send({ to: user.email, ...mail });
   } catch (err) {
     // Never log the address, email or code.
-    console.error("address code email failed:", err instanceof Error ? err.message : "unknown error");
+    console.error("address code email failed:", safeErrorTag(err));
     await db.delete(emailCodes).where(eq(emailCodes.id, row.id));
     return { ok: false, error: "send_failed" };
   }
@@ -188,7 +189,7 @@ export async function confirmAddressCode(
     try {
       await deps.send({ to: user.email, ...addressAddedEmail(outcome.address) });
     } catch (err) {
-      console.error("address added notice failed:", err instanceof Error ? err.message : "unknown error");
+      console.error("address added notice failed:", safeErrorTag(err));
     }
   }
   return outcome;

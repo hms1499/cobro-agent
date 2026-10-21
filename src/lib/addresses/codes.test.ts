@@ -161,6 +161,21 @@ describe("address codes", () => {
     expect(errorSpy).toHaveBeenCalled();
   });
 
+  it("never logs the email, address or code when a send fails", async () => {
+    const user = await seedFreelancer(db);
+    const leaky = () => new Error(`rejected ana@example.com ${A.address} 123456`);
+    send.mockRejectedValueOnce(leaky());
+    expect(await requestAddressCode(deps, user, A)).toEqual({ ok: false, error: "send_failed" });
+    await requestAddressCode(deps, user, A);
+    send.mockRejectedValueOnce(leaky());
+    expect((await confirmAddressCode(deps, user, codeOf(sent[0]))).ok).toBe(true);
+    expect(errorSpy).toHaveBeenCalledTimes(2);
+    const logged = JSON.stringify(errorSpy.mock.calls);
+    expect(logged).not.toContain("ana@example.com");
+    expect(logged).not.toContain(A.address);
+    expect(logged).not.toContain("123456");
+  });
+
   it("rechecks the limit at confirm time", async () => {
     const user = await seedFreelancer(db);
     for (let i = 0; i < 9; i++) {
