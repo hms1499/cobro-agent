@@ -246,10 +246,13 @@ v1 checklist said PROD needs a paid plan and BETA allows 50 users per project.
 The user chose PROD **on the condition that it is free (user)**. If the Portal asks for billing or a
 paid plan for anything Cobro needs, stop and ask the user before going on.
 
-1. **Check first, before any code:** that PROD supports what Cobro's treasury needs: server-side
+1. **Check first, before any code (done 2026-10-21, passed):** that PROD supports what Cobro's treasury needs: server-side
    wallet creation through the REST API with Cobro's custom id, and server signing (transactions and
    typed data). The docs page did not cover it. If PROD cannot do this, stop and bring it back to
    the user; do not work around it silently.
+   Result: on the Free plan (no card asked) the PROD secret key created a CUSTOM_ID wallet, found it
+   by custom id, and signed EIP-712 typed data and an EIP-1559 transaction; both signers recovered
+   to the wallet address. Limits: 1,200 MAU, REST 30 requests per minute per key.
 2. **Environments (builder's call):** production (Vercel + Neon main) moves to Para PROD;
    localhost + Neon dev branch stay on Para BETA. CLAUDE.md's "one key pair for localhost and
    production" note changes accordingly.
