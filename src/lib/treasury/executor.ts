@@ -456,7 +456,7 @@ async function trade(
   }
 
   await updateIntent(deps.db, intent.id, { status: "executing", attempts, lastSlippageBps: slippage }, deps.now());
-  const policy: TreasuryPolicy = { allowedSpenders: deps.allowedSpenders, personalWallet: ctx.personalWallet };
+  const policy: TreasuryPolicy = { allowedSpenders: deps.allowedSpenders, personalWallet: ctx.personalWallet, withdrawalAddresses: [] };
 
   // Spec §10.4 step 5: approve up to what is left of the daily cap; USD₮ needs a reset to 0 first.
   const allowance = await deps.chain.allowance(TOKENS[d.from].address, ctx.address, q.spender);
@@ -564,7 +564,7 @@ export async function sendTreasuryTx(
   kind: TxKind,
   call: GuardedCall,
   feeToken: GasToken,
-  extra: Pick<typeof treasuryTxs.$inferInsert, "asset" | "amountAtomic" | "toAddress" | "usdCents"> = {},
+  extra: Pick<typeof treasuryTxs.$inferInsert, "asset" | "amountAtomic" | "toAddress" | "toLabel" | "usdCents"> = {},
 ): Promise<{ hash: Hex; status: "success" | "reverted" | "rejected" | null }> {
   const signed = await deps.signTx(signer, call, feeToken);
   await recordTreasuryTx(deps.db, {
@@ -633,7 +633,7 @@ export async function settleSwap(
 /** Settles a withdrawal's transaction and its event together. */
 export async function settleWithdrawal(
   deps: Pick<ExecutorDeps, "db" | "now">,
-  tx: Pick<TreasuryTxRow, "userId" | "hash" | "asset" | "amountAtomic">,
+  tx: Pick<TreasuryTxRow, "userId" | "hash" | "asset" | "amountAtomic" | "toLabel">,
   status: TxOutcome,
   detail?: string,
 ): Promise<void> {
@@ -644,7 +644,7 @@ export async function settleWithdrawal(
       db,
       tx.userId,
       status === "success" ? "withdrawn" : "withdraw_failed",
-      { asset: tx.asset, amount: tx.amountAtomic, ...outcomeData(tx.hash, status, detail) },
+      { asset: tx.asset, amount: tx.amountAtomic, toLabel: tx.toLabel ?? null, ...outcomeData(tx.hash, status, detail) },
       now,
     );
   });

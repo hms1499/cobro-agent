@@ -156,7 +156,7 @@ export function describeEvent(
     case "withdrawn":
       return {
         tone: "success",
-        title: t("event.withdrawn.title", { amount }),
+        title: t("event.withdrawn.title", { amount, destination: typeof d.toLabel === "string" && d.toLabel ? d.toLabel : t("withdraw.yourWallet") }),
         why: t("event.withdrawn.why"),
         txHash,
       };

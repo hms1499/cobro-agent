@@ -194,6 +194,13 @@ screenshot review of every app screen on desktop and mobile before merging.
 
 ## 5. Workstream 2: withdraw to an address of your choice
 
+> **Status (2026-10-21):** built in Plan 4b (`docs/superpowers/plans/2026-10-21-plan-4b-address-book.md`).
+> Email goes through Resend from `no-reply@mail.huyne.me` (free tier, 10 codes per user per day, at most
+> 20 wrong code attempts per user per day). Checked end to end on localhost: emailed code, notice
+> email, 24-hour wait, and a mainnet withdrawal to a saved address (tx `0x915c96bd…96dfe`, tagged). No
+> exchange is named in the help text: none of Ripio, Lemon or Binance was confirmed to accept these
+> tokens on Celo.
+
 Today `encodeTreasuryCall` (`src/lib/chain/treasury-tx.ts`) only allows an ERC-20 `transfer` to the
 user's `personalWallet`. That stays as the default destination.
 

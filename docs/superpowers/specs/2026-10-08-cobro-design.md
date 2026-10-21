@@ -85,7 +85,8 @@ Track 4 ("Build with buy") is out of scope for the MVP.
   signed in the owner's browser wallet.
 - Treasury rules, decision engine, Textile RFQ executor, scheduled and payment-triggered runs.
 - Dashboard: balances, invoices, conversions, P&L, activity feed with explanations.
-- Withdrawal from the treasury wallet to the freelancer's personal wallet.
+- Withdrawal from the treasury wallet to the freelancer's personal wallet, or to a saved address
+  confirmed by email and past a 24-hour wait (Plan 4b).
 - Chat that turns natural language into invoice drafts (Gemini, Groq fallback).
 - ERC-8004 registration script and agent card.
 - English UI; every user-facing string in `src/i18n/en.ts`.
@@ -105,9 +106,14 @@ not convert USDC that it receives.
 Each freelancer has two wallets:
 
 - **Personal wallet:** created by Para's client SDK when the freelancer signs in with email. The
-  freelancer owns it. The server cannot sign with it. It is the only withdrawal destination.
+  freelancer owns it. The server cannot sign with it. It is the default withdrawal destination.
+- **Saved withdrawal addresses (Plan 4b):** addresses the freelancer adds in Settings → Withdrawal
+  addresses. Adding one needs a 6-digit code emailed to the account address; a new address can
+  receive withdrawals only 24 hours after it was added; Cobro emails a notice for every add. Removing
+  one takes effect at once.
 - **Treasury wallet:** an app-owned wallet created through Para's REST API. Clients pay into it. The
-  agent signs with it to swap on Textile and to send funds to the personal wallet, and nothing else.
+  agent signs with it to swap on Textile, and signs withdrawals the freelancer asks for to the personal
+  wallet or a saved address past its wait, and nothing else. The agent never withdraws on its own.
   The executor enforces this in code (`encodeTreasuryCall`). Para Guardrails were meant to enforce it
   again inside Para's enclave, but the spike found them not enforced for REST signing (§8.4).
 
@@ -128,7 +134,8 @@ Each freelancer has two wallets:
    balances with the rules and creates, executes or waits on conversions (§10). The cron is scheduled
    every 10 minutes but GitHub runs it every 2–5 hours in practice (§7.1).
 5. **Dashboard and withdrawal.** Freelancer sees balances, invoices, conversions, P&L and the activity
-   feed, and can withdraw any treasury balance to the personal wallet. Every amount is shown in the
+   feed, and can withdraw any treasury balance to the personal wallet or to a saved address past its
+   24-hour wait (§6.1). Every amount is shown in the
    freelancer's local currency (ARS or BRL) first, with the USD value next to it, using the Textile
    reference rate.
 
@@ -488,7 +495,7 @@ Added with trade approvals: `rules.approval_mode` (`auto|sell_usd|all`, default 
 | Primary RPC (forno) failing | Screens read balances through a second free RPC (`CELO_RPC_FALLBACK_URL`, default Ankr's public endpoint; dRPC's free tier refuses `eth_call` on Celo); money paths wait for the primary, so nothing is signed from a lagging node |
 | A cron tick reports errors | The tick logs `CRON TICK HAD ERRORS`; the GitHub workflow's run fails and GitHub emails the owner; cron-job.org emails on a failed call |
 
-Secrets (`PARA_API_KEY`, `X402_API_KEY`, `OPERATOR_PRIVATE_KEY`, `CRON_SECRET`, LLM keys,
+Secrets (`PARA_API_KEY`, `X402_API_KEY`, `OPERATOR_PRIVATE_KEY`, `CRON_SECRET`, `RESEND_API_KEY`, LLM keys,
 `LOCAL_KEY_ENCRYPTION_SECRET` for the fallback) live only in environment variables. The repo contains `.env.example`.
 `AGENT_WALLET` and `ATTRIBUTION_CODE` are public values and appear in `.env.example` as they are. The
 agent wallet's private key is never stored anywhere in the app.

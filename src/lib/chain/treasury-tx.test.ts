@@ -37,7 +37,8 @@ const CODE = "celo_bc3965e128ba";
 const PERSONAL: Address = "0x3333333333333333333333333333333333333333";
 const STRANGER: Address = "0x000000000000000000000000000000000000dEaD";
 const SECP256K1_N = 0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141n;
-const POLICY = { allowedSpenders: [TEXTILE_REACTOR], personalWallet: PERSONAL };
+const POLICY = { allowedSpenders: [TEXTILE_REACTOR], personalWallet: PERSONAL, withdrawalAddresses: [] };
+const SAVED: Address = "0x4444444444444444444444444444444444444444";
 
 describe("pickGasToken", () => {
   const none = { USDT: 0n, USAT: 0n, USDC: 0n };
@@ -79,6 +80,15 @@ describe("encodeTreasuryCall", () => {
       encodeTreasuryCall({ kind: "withdraw", asset: "USDT", to: PERSONAL, amount: 7n }, { ...POLICY, personalWallet: null }),
     ).toThrow(TreasuryPolicyError);
     expect(() => encodeTreasuryCall({ kind: "withdraw", asset: "USDT", to: PERSONAL, amount: 0n }, POLICY)).toThrow(TreasuryPolicyError);
+  });
+
+  it("sends withdrawals to the personal wallet or a saved address", () => {
+    const policy = { ...POLICY, withdrawalAddresses: [SAVED] };
+    const call = encodeTreasuryCall({ kind: "withdraw", asset: "USDT", to: SAVED, amount: 7n }, policy);
+    expect(decodeFunctionData({ abi: erc20Abi, data: call.data }).args).toEqual([SAVED, 7n]);
+    expect(() => encodeTreasuryCall({ kind: "withdraw", asset: "USDT", to: STRANGER, amount: 7n }, policy)).toThrow(TreasuryPolicyError);
+    expect(() => encodeTreasuryCall({ kind: "withdraw", asset: "USDT", to: SAVED, amount: 7n }, POLICY)).toThrow(TreasuryPolicyError);
+    expect(() => encodeTreasuryCall({ kind: "withdraw", asset: "USDT", to: SAVED, amount: 0n }, policy)).toThrow(TreasuryPolicyError);
   });
 });
 

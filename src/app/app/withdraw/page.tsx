@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
+import { listSavedAddresses } from "@/lib/addresses/repo";
 import { requireUser } from "@/lib/auth/current-user";
+import { getDb } from "@/lib/db/client";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { readDisplayBalances } from "@/lib/treasury/live";
-import { withdrawOptions } from "./options";
+import { withdrawDestinations, withdrawOptions } from "./options";
 import { WithdrawForm } from "./withdraw-form";
 
 export const metadata: Metadata = { title: `${t("withdraw.title")} · ${t("app.name")}` };
@@ -30,11 +33,25 @@ export default function WithdrawPage() {
 async function Withdraw() {
   const user = await requireUser();
   if (!user.treasuryAddress) return <p role="status">{t("withdraw.notReady")}</p>;
-  const [balances, rates] = await Promise.all([
+  const [balances, rates, saved] = await Promise.all([
     readDisplayBalances(user.treasuryAddress),
     getReferenceRatesOrNull(),
+    listSavedAddresses(getDb(), user.id),
   ]);
   const options = withdrawOptions(balances, user.localCurrency, rates);
   if (options.length === 0) return <p className="text-muted-foreground">{t("withdraw.empty")}</p>;
-  return <WithdrawForm options={options} destination={user.personalWallet} />;
+  const destinations = withdrawDestinations(user.personalWallet, saved, new Date());
+  // No usable destination (no Cobro wallet known yet and every saved address still waiting): a plain note with the
+  // way out, instead of a form that could only end in an error.
+  if (!destinations.some((d) => d.usableInHours === null)) {
+    return (
+      <div className="flex flex-col gap-2">
+        <p role="status">{t("withdraw.noDestination")}</p>
+        <Link href="/app/settings/addresses" className="inline-flex min-h-11 w-fit items-center text-primary underline underline-offset-4">
+          {t("withdraw.addAddress")}
+        </Link>
+      </div>
+    );
+  }
+  return <WithdrawForm options={options} destinations={destinations} />;
 }

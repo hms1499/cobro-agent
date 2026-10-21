@@ -14,7 +14,7 @@ export async function createTestDb(): Promise<Db> {
 
 export async function resetDb(db: Db): Promise<void> {
   await db.execute(
-    sql`TRUNCATE users, treasury_wallets, rules, recurring_invoices, invoices, invoice_quotes, payments, fx_intents, fx_trades, treasury_txs, agent_events, wallet_locks CASCADE`,
+    sql`TRUNCATE users, treasury_wallets, rules, recurring_invoices, invoices, invoice_quotes, payments, fx_intents, fx_trades, treasury_txs, agent_events, wallet_locks, withdrawal_addresses, email_codes CASCADE`,
   );
 }
 

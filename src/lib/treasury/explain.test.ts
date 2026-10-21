@@ -55,8 +55,14 @@ describe("describeEvent", () => {
     expect(waiting.why).toContain("5.00% below the market rate. Your limit is 0.50%");
     expect(describeEvent({ type: "blocked", data: {} }, ctx).tone).toBe("alert");
     expect(describeEvent({ type: "withdrawn", data: { asset: "USDT", amount: "2000000", txHash: "0x1" } }, ctx).title).toBe(
-      "Sent US$2.00 to your wallet",
+      "Sent US$2.00 to your Cobro wallet",
     );
+  });
+
+  it("names the destination of a withdrawal", () => {
+    const data = { asset: "USDT", amount: "1000000", txHash: "0x1" };
+    expect(describeEvent({ type: "withdrawn", data: { ...data, toLabel: "Lemon" } }, ctx).title).toBe("Sent US$1.00 to Lemon");
+    expect(describeEvent({ type: "withdrawn", data: { ...data, toLabel: null } }, ctx).title).toBe("Sent US$1.00 to your Cobro wallet");
   });
 });
 

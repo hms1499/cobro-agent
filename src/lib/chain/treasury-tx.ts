@@ -58,6 +58,8 @@ export type TreasuryCall =
 export interface TreasuryPolicy {
   allowedSpenders: readonly Address[];
   personalWallet: Address | null;
+  /** Saved addresses past their wait, resolved by the caller. Only a user's own withdrawal ever passes any. */
+  withdrawalAddresses: readonly Address[];
 }
 
 const isAllowed = (policy: TreasuryPolicy, address: Address) =>
@@ -88,13 +90,13 @@ function encodeUnchecked(call: TreasuryCall, policy: TreasuryPolicy): { to: Addr
       }
       return { to: getAddress(call.to), data: call.data };
     case "withdraw":
-      if (!policy.personalWallet || !isAddressEqual(call.to, policy.personalWallet)) {
-        throw new TreasuryPolicyError("withdrawals go only to the freelancer's personal wallet");
+      if (![policy.personalWallet, ...policy.withdrawalAddresses].some((a) => a && isAddressEqual(call.to, a))) {
+        throw new TreasuryPolicyError("withdrawals go only to the freelancer's personal wallet or a saved address");
       }
       if (call.amount <= 0n) throw new TreasuryPolicyError("a withdrawal must move a positive amount");
       return {
         to: TOKENS[call.asset].address,
-        data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [policy.personalWallet, call.amount] }),
+        data: encodeFunctionData({ abi: erc20Abi, functionName: "transfer", args: [getAddress(call.to), call.amount] }),
       };
   }
 }
