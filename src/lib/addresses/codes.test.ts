@@ -4,7 +4,16 @@ import type { Db } from "@/lib/db/client";
 import { createTestDb, resetDb, seedFreelancer } from "@/lib/db/testing";
 import type { EmailMessage, EmailSender } from "@/lib/email/send";
 import { insertSavedAddress, listSavedAddresses } from "./repo";
-import { CODE_COOLDOWN_MS, CODE_TTL_MS, CODES_PER_DAY, confirmAddressCode, pendingAddressCode, requestAddressCode, type CodeDeps } from "./codes";
+import {
+  CODE_COOLDOWN_MS,
+  CODE_TTL_MS,
+  CODES_PER_DAY,
+  confirmAddressCode,
+  pendingAddressCode,
+  requestAddressCode,
+  WRONG_ATTEMPTS_PER_DAY,
+  type CodeDeps,
+} from "./codes";
 
 const T0 = new Date("2026-10-21T12:00:00Z");
 const SECRET = "s".repeat(48);
@@ -143,6 +152,58 @@ describe("address codes", () => {
     send.mockRejectedValueOnce(new Error("boom"));
     expect(await requestAddressCode(deps, user, B)).toEqual({ ok: false, error: "send_failed" });
     expect((await confirmAddressCode(deps, user, codeOf(sent[0]))).ok).toBe(true);
+  });
+
+  it("a code cannot be confirmed while its email is still being sent, and dies with a failed send", async () => {
+    const user = await seedFreelancer(db);
+    const during: unknown[] = [];
+    send.mockImplementationOnce(async (m: EmailMessage) => {
+      during.push(await confirmAddressCode(deps, user, codeOf(m)));
+      during.push(await pendingAddressCode(db, user.id, new Date(clock)));
+      throw new Error("boom");
+    });
+    expect(await requestAddressCode(deps, user, A)).toEqual({ ok: false, error: "send_failed" });
+    expect(during).toEqual([{ ok: false, error: "no_code" }, null]);
+    expect(await listSavedAddresses(db, user.id)).toHaveLength(0);
+  });
+
+  it("a code goes live only once its email is sent", async () => {
+    const user = await seedFreelancer(db);
+    let code = "";
+    const during: unknown[] = [];
+    send.mockImplementationOnce(async (m: EmailMessage) => {
+      code = codeOf(m);
+      during.push(await confirmAddressCode(deps, user, code));
+    });
+    expect(await requestAddressCode(deps, user, A)).toEqual({ ok: true, expiresAt: new Date(T0.getTime() + CODE_TTL_MS) });
+    expect(during).toEqual([{ ok: false, error: "no_code" }]);
+    const done = await confirmAddressCode(deps, user, code);
+    expect(done.ok && done.address.address).toBe(A.address);
+  });
+
+  it(`caps wrong attempts at ${WRONG_ATTEMPTS_PER_DAY} a day across codes`, async () => {
+    const user = await seedFreelancer(db);
+    const ask = async () => {
+      const res = await requestAddressCode(deps, user, A);
+      clock += 61_000;
+      return res;
+    };
+    // Three codes locked after five wrong tries each, then four wrong on a fourth: 19.
+    for (let i = 0; i < 4; i++) {
+      expect((await ask()).ok).toBe(true);
+      const bad = wrongFor(codeOf(sent.at(-1)!));
+      for (let j = 0; j < (i < 3 ? 5 : 4); j++) await confirmAddressCode(deps, user, bad);
+    }
+    // A fifth code takes the twentieth wrong try; its right code is then refused without a comparison.
+    expect((await ask()).ok).toBe(true);
+    const code = codeOf(sent.at(-1)!);
+    expect(await confirmAddressCode(deps, user, wrongFor(code))).toEqual({ ok: false, error: "invalid" });
+    expect(await confirmAddressCode(deps, user, code)).toEqual({ ok: false, error: "too_many" });
+    expect(await listSavedAddresses(db, user.id)).toHaveLength(0);
+    expect(await requestAddressCode(deps, user, A)).toEqual({ ok: false, error: "daily_limit" });
+    // A day after the first wrong tries, the window has moved on.
+    clock = T0.getTime() + 24 * 3_600_000 + 1;
+    expect((await requestAddressCode(deps, user, A)).ok).toBe(true);
   });
 
   it("needs an account email", async () => {
