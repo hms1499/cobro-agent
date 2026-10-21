@@ -14,7 +14,8 @@ export interface WithdrawState {
 
 export async function withdrawAction(_previous: WithdrawState, formData: FormData): Promise<WithdrawState> {
   const user = await requireUser();
-  const fields = formFields(formData);
+  // Task 5 adds the destination field to the form and removes this default.
+  const fields: Record<string, string> = { to: "personal", ...formFields(formData) };
   if (!user.treasuryAddress) return { errors: {}, values: fields, outcome: { kind: "error", error: "not_ready" } };
   try {
     const deps = liveExecutorDeps();

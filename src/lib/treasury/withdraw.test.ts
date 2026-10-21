@@ -11,6 +11,7 @@ import { parseDecimal } from "@/lib/money/decimal";
 import type { TreasuryBalances } from "./balances";
 import { TxRejectedError, type ExecutorDeps } from "./executor";
 import { acquireWalletLock } from "./repo";
+import { insertSavedAddress, removeSavedAddress } from "@/lib/addresses/repo";
 import { parseWithdrawForm, withdraw, withdrawableAmount } from "./withdraw";
 
 let db: Db;
@@ -23,6 +24,7 @@ beforeEach(async () => {
 
 const NOW = new Date("2026-10-15T12:00:00Z");
 const PERSONAL: Address = "0x3333333333333333333333333333333333333333";
+const SAVED: Address = "0x4444444444444444444444444444444444444444";
 const ZERO: TreasuryBalances = { USDT: 0n, USAT: 0n, USDC: 0n, WARS: 0n, WBRL: 0n };
 
 describe("withdrawableAmount", () => {
@@ -37,21 +39,27 @@ describe("withdrawableAmount", () => {
 describe("parseWithdrawForm", () => {
   const balances = { ...ZERO, USDT: 2_000_000n, WARS: 10n ** 22n };
   it("reads an amount in the asset's own currency, with a dot or a comma", () => {
-    expect(parseWithdrawForm({ asset: "USDT", amount: "1.5" }, balances)).toEqual({ ok: true, data: { asset: "USDT", amount: 1_500_000n } });
-    expect(parseWithdrawForm({ asset: "WARS", amount: "1000,50" }, balances)).toEqual({
+    expect(parseWithdrawForm({ asset: "USDT", amount: "1.5", to: "personal" }, balances)).toEqual({ ok: true, data: { asset: "USDT", amount: 1_500_000n, to: "personal" } });
+    expect(parseWithdrawForm({ asset: "WARS", amount: "1000,50", to: "personal" }, balances)).toEqual({
       ok: true,
-      data: { asset: "WARS", amount: 1_000_500_000_000_000_000_000n },
+      data: { asset: "WARS", amount: 1_000_500_000_000_000_000_000n, to: "personal" },
     });
   });
 
   it("takes everything available when asked", () => {
-    expect(parseWithdrawForm({ asset: "USDT", all: "on" }, balances)).toEqual({ ok: true, data: { asset: "USDT", amount: 1_980_000n } });
+    expect(parseWithdrawForm({ asset: "USDT", all: "on", to: "personal" }, balances)).toEqual({ ok: true, data: { asset: "USDT", amount: 1_980_000n, to: "personal" } });
   });
 
   it("names the field that is wrong", () => {
-    expect(parseWithdrawForm({ asset: "USAT", amount: "1" }, balances)).toEqual({ ok: false, errors: { asset: "withdraw.error.asset" } });
-    expect(parseWithdrawForm({ asset: "USDT", amount: "1.995" }, balances)).toEqual({ ok: false, errors: { amount: "money.error.decimals" } });
-    expect(parseWithdrawForm({ asset: "USDT", amount: "1.99" }, balances)).toEqual({ ok: false, errors: { amount: "withdraw.error.tooMuch" } });
+    expect(parseWithdrawForm({ asset: "USAT", amount: "1", to: "personal" }, balances)).toEqual({ ok: false, errors: { asset: "withdraw.error.asset" } });
+    expect(parseWithdrawForm({ asset: "USDT", amount: "1.995", to: "personal" }, balances)).toEqual({ ok: false, errors: { amount: "money.error.decimals" } });
+    expect(parseWithdrawForm({ asset: "USDT", amount: "1.99", to: "personal" }, balances)).toEqual({ ok: false, errors: { amount: "withdraw.error.tooMuch" } });
+  });
+
+  it("needs a destination", () => {
+    expect(parseWithdrawForm({ asset: "USDT", amount: "1" }, balances)).toEqual({ ok: false, errors: { to: "withdraw.error.to" } });
+    expect(parseWithdrawForm({ asset: "USDT", amount: "1", to: "" }, balances)).toEqual({ ok: false, errors: { to: "withdraw.error.to" } });
+    expect(parseWithdrawForm({ asset: "USDT", amount: "1", to: "abc" }, balances)).toMatchObject({ ok: true, data: { to: "abc" } });
   });
 });
 
@@ -94,7 +102,7 @@ describe("withdraw", () => {
   it("sends the amount to the personal wallet, tagged and recorded, even while the agent is off", async () => {
     const user = await freelancerWithWallet();
     const { deps: d, signed } = deps({ USDT: 2_000_000n });
-    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1_000_000n })).toEqual({
+    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1_000_000n, to: "personal" })).toEqual({
       ok: true,
       txHash: `0x${"77".repeat(32)}`,
       pending: false,
@@ -106,20 +114,61 @@ describe("withdraw", () => {
     expect((await db.select().from(agentEvents)).map((e) => e.type)).toEqual(["withdrawn"]);
   });
 
+  it("sends to a saved address past its wait, with its label on record", async () => {
+    const user = await freelancerWithWallet();
+    const saved = await insertSavedAddress(db, user.id, { label: "Binance", address: SAVED }, new Date(NOW.getTime() - 24 * 3_600_000));
+    const { deps: d, signed } = deps({ USDT: 2_000_000n });
+    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1_000_000n, to: saved.id })).toMatchObject({ ok: true, pending: false });
+    expect(decodeFunctionData({ abi: erc20Abi, data: signed[0].data }).args).toEqual([SAVED, 1_000_000n]);
+    const [tx] = await db.select().from(treasuryTxs);
+    expect(tx).toMatchObject({ toAddress: SAVED, toLabel: "Binance" });
+    const [event] = await db.select().from(agentEvents);
+    expect(event.data).toMatchObject({ toLabel: "Binance" });
+  });
+
+  it("records no label for the personal wallet", async () => {
+    const user = await freelancerWithWallet();
+    await withdraw(deps({ USDT: 2_000_000n }).deps, user.id, { asset: "USDT", amount: 1_000_000n, to: "personal" });
+    expect((await db.select().from(treasuryTxs))[0].toLabel).toBeNull();
+    expect((await db.select().from(agentEvents))[0].data.toLabel ?? null).toBeNull();
+  });
+
+  it("refuses a saved address still waiting, removed, belonging to someone else, or not an id", async () => {
+    const user = await freelancerWithWallet();
+    const other = await seedFreelancer(db, { treasuryAddress: null });
+    const day = 24 * 3_600_000;
+    const waiting = await insertSavedAddress(db, user.id, { label: "New", address: SAVED }, new Date(NOW.getTime() - day + 1000));
+    const removed = await insertSavedAddress(db, user.id, { label: "Old", address: "0x5555555555555555555555555555555555555555" }, new Date(NOW.getTime() - 2 * day));
+    await removeSavedAddress(db, user.id, removed.id, NOW);
+    const theirs = await insertSavedAddress(db, other.id, { label: "Theirs", address: SAVED }, new Date(NOW.getTime() - 2 * day));
+    const { deps: d, signed } = deps({ USDT: 2_000_000n });
+    for (const to of [waiting.id, removed.id, theirs.id, "not-a-uuid"]) {
+      expect(await withdraw(d, user.id, { asset: "USDT", amount: 1_000_000n, to })).toEqual({ ok: false, error: "destination_not_ready" });
+    }
+    expect(signed).toHaveLength(0);
+    expect(await db.select().from(treasuryTxs)).toHaveLength(0);
+  });
+
+  it("a saved address works without a personal wallet", async () => {
+    const user = await freelancerWithWallet(null);
+    const saved = await insertSavedAddress(db, user.id, { label: "Binance", address: SAVED }, new Date(NOW.getTime() - 24 * 3_600_000));
+    expect(await withdraw(deps({ USDT: 2_000_000n }).deps, user.id, { asset: "USDT", amount: 1_000_000n, to: saved.id })).toMatchObject({ ok: true });
+  });
+
   it("refuses without a personal wallet, above the available amount, or while the wallet is busy", async () => {
     const noWallet = await freelancerWithWallet(null);
-    expect(await withdraw(deps({ USDT: 2_000_000n }).deps, noWallet.id, { asset: "USDT", amount: 1n })).toEqual({
+    expect(await withdraw(deps({ USDT: 2_000_000n }).deps, noWallet.id, { asset: "USDT", amount: 1n, to: "personal" })).toEqual({
       ok: false,
       error: "no_personal_wallet",
     });
 
     const user = await freelancerWithWallet();
     const { deps: d, signed } = deps({ USDT: 2_000_000n });
-    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1_990_000n })).toEqual({ ok: false, error: "insufficient" });
+    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1_990_000n, to: "personal" })).toEqual({ ok: false, error: "insufficient" });
 
     const [wallet] = await db.select().from(treasuryWallets).where(eq(treasuryWallets.userId, user.id));
     await acquireWalletLock(db, wallet.id, crypto.randomUUID(), NOW);
-    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1n })).toEqual({ ok: false, error: "busy" });
+    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1n, to: "personal" })).toEqual({ ok: false, error: "busy" });
     expect(signed).toHaveLength(0);
   });
 
@@ -129,13 +178,13 @@ describe("withdraw", () => {
     a.deps.signTx = vi.fn(async () => {
       throw new Error("para down");
     });
-    expect(await withdraw(a.deps, user.id, { asset: "USDT", amount: 1_000_000n })).toEqual({ ok: false, error: "unconfirmed" });
+    expect(await withdraw(a.deps, user.id, { asset: "USDT", amount: 1_000_000n, to: "personal" })).toEqual({ ok: false, error: "unconfirmed" });
 
     const b = deps({ USDT: 2_000_000n });
     b.deps.chain.sendRaw = async () => {
       throw new Error("rpc 500");
     };
-    expect(await withdraw(b.deps, user.id, { asset: "USDT", amount: 1_000_000n })).toEqual({ ok: false, error: "unconfirmed" });
+    expect(await withdraw(b.deps, user.id, { asset: "USDT", amount: 1_000_000n, to: "personal" })).toEqual({ ok: false, error: "unconfirmed" });
   });
 
   it("marks a withdrawal the node refuses as failed at once, says so, and does not block the next one", async () => {
@@ -144,14 +193,14 @@ describe("withdraw", () => {
     a.deps.chain.sendRaw = async () => {
       throw new TxRejectedError("invalid sender");
     };
-    expect(await withdraw(a.deps, user.id, { asset: "USDT", amount: 1_000_000n })).toEqual({ ok: false, error: "failed" });
+    expect(await withdraw(a.deps, user.id, { asset: "USDT", amount: 1_000_000n, to: "personal" })).toEqual({ ok: false, error: "failed" });
     const [tx] = await db.select().from(treasuryTxs);
     expect(tx.status).toBe("failed");
     expect((await db.select().from(agentEvents)).map((e) => [e.type, e.data.detail])).toEqual([["withdraw_failed", "rejected"]]);
 
     const b = deps({ USDT: 2_000_000n });
     b.deps.signTx = vi.fn(async (_signer, _call, feeToken) => ({ hash: `0x${"78".repeat(32)}` as Hex, raw: "0x78" as Hex, nonce: 1, feeToken }));
-    expect(await withdraw(b.deps, user.id, { asset: "USDT", amount: 1_000_000n })).toMatchObject({ ok: true, pending: false });
+    expect(await withdraw(b.deps, user.id, { asset: "USDT", amount: 1_000_000n, to: "personal" })).toMatchObject({ ok: true, pending: false });
   });
 
   it("leaves the withdrawal pending, not settled without its event, when the settlement cannot be written", async () => {
@@ -160,7 +209,7 @@ describe("withdraw", () => {
     await db.execute(sql`CREATE TRIGGER fail_event BEFORE INSERT ON agent_events FOR EACH ROW EXECUTE FUNCTION fail_event()`);
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-      expect(await withdraw(deps({ USDT: 2_000_000n }).deps, user.id, { asset: "USDT", amount: 1_000_000n })).toEqual({
+      expect(await withdraw(deps({ USDT: 2_000_000n }).deps, user.id, { asset: "USDT", amount: 1_000_000n, to: "personal" })).toEqual({
         ok: false,
         error: "unconfirmed",
       });
