@@ -1,4 +1,6 @@
+import type { Address } from "viem";
 import { t } from "@/i18n";
+import { isUsable, type SavedAddress } from "@/lib/addresses/repo";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { PAY_ASSETS, type LocalCurrency } from "@/lib/money/currencies";
 import { displayAmount, type DisplayAmount } from "@/lib/money/display";
@@ -22,4 +24,25 @@ export function withdrawOptions(balances: TreasuryBalances, local: LocalCurrency
     const { amount, currency } = tokenFiatAmount(asset, withdrawableAmount(asset, balances));
     return { asset, label: t(`asset.${asset}.name` as const), available: displayAmount(amount, currency, local, rates, "billed") };
   });
+}
+
+export interface WithdrawDestination {
+  /** "personal" or a saved-address id: exactly what the withdraw form posts as `to`. */
+  value: string;
+  label: string;
+  address: Address;
+  /** Null when usable now, else whole hours left (rounded up). */
+  usableInHours: number | null;
+}
+
+/** Your own wallet first (when known), then the saved addresses, oldest first. */
+export function withdrawDestinations(personalWallet: Address | null, saved: readonly SavedAddress[], now: Date): WithdrawDestination[] {
+  const rows: WithdrawDestination[] = saved.map((a) => ({
+    value: a.id,
+    label: a.label,
+    address: a.address,
+    usableInHours: isUsable(a, now) ? null : Math.ceil((a.usableAt.getTime() - now.getTime()) / 3_600_000),
+  }));
+  if (!personalWallet) return rows;
+  return [{ value: "personal", label: t("withdraw.personalLabel"), address: personalWallet, usableInHours: null }, ...rows];
 }

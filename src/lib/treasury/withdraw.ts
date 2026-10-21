@@ -56,7 +56,11 @@ export function parseWithdrawForm(
 export type WithdrawError = "not_ready" | "no_personal_wallet" | "destination_not_ready" | "busy" | "insufficient" | "needs_gas" | "failed" | "unconfirmed";
 export type WithdrawResult = { ok: true; txHash: Hex; pending: boolean } | { ok: false; error: WithdrawError };
 
-/** Spec §6.2 flow 5: treasury → the freelancer's own wallet, never anywhere else (encodeTreasuryCall). */
+/**
+ * Spec §6.2 flow 5: treasury → the freelancer's own Cobro wallet, or one of their saved addresses once its
+ * 24-hour wait has passed. The destination is resolved on the server from `to`; anything else is refused
+ * (encodeTreasuryCall).
+ */
 export async function withdraw(deps: ExecutorDeps, userId: string, input: WithdrawInput): Promise<WithdrawResult> {
   try {
     return await withdrawUnguarded(deps, userId, input);

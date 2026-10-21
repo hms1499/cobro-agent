@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import type { PayAsset } from "@/lib/money/currencies";
 import type { DisplayAmount } from "@/lib/money/display";
+import type { WithdrawDestination } from "./options";
 import { withdrawAction, type WithdrawState } from "./actions";
 
 export interface WithdrawOption {
@@ -18,12 +19,16 @@ export interface WithdrawOption {
   available: DisplayAmount;
 }
 
-export function WithdrawForm({ options, destination }: { options: WithdrawOption[]; destination: string | null }) {
+export function WithdrawForm({ options, destinations }: { options: WithdrawOption[]; destinations: WithdrawDestination[] }) {
   const [state, action] = useActionState(withdrawAction, {
     errors: {},
     values: { asset: options[0].asset },
     outcome: null,
   } satisfies WithdrawState);
+  const firstUsable = destinations.find((d) => d.usableInHours === null)?.value;
+  const chosenTo = destinations.find((d) => d.value === state.values.to && d.usableInHours === null)?.value ?? firstUsable;
+  const sentTo = destinations.find((d) => d.value === state.values.to)?.label ?? t("withdraw.yourWallet");
+  const hasSaved = destinations.some((d) => d.value !== "personal");
   const amountHelp = t("withdraw.amountHelp");
 
   return (
@@ -72,16 +77,51 @@ export function WithdrawForm({ options, destination }: { options: WithdrawOption
         {t("withdraw.all")}
       </label>
 
-      <div className="flex flex-col gap-1 text-sm">
-        <p>{t("withdraw.destination")}</p>
-        {destination && (
-          <details>
-            <summary className="min-h-11 cursor-pointer py-2 text-primary">{t("common.details")}</summary>
-            <p className="text-muted-foreground">{t("withdraw.address")}</p>
-            <p className="break-all font-mono">{destination}</p>
-          </details>
+      <fieldset className="flex flex-col gap-2" aria-describedby={state.errors.to ? "to-error" : undefined}>
+        <legend className="mb-2 text-sm font-medium">{t("withdraw.to")}</legend>
+        {destinations.map((d) => {
+          const waiting = d.usableInHours !== null;
+          return (
+            <label
+              key={d.value}
+              className={`flex min-h-11 items-center justify-between gap-3 rounded-lg border border-input bg-card px-4 py-3 transition-colors duration-[20ms] ease-in has-checked:border-primary has-checked:bg-tint/35 has-checked:ring-2 has-checked:ring-primary has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring ${waiting ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-primary/6"}`}
+            >
+              <span className="flex items-center gap-3">
+                <input
+                  type="radio"
+                  name="to"
+                  value={d.value}
+                  disabled={waiting}
+                  defaultChecked={d.value === chosenTo}
+                  className="size-4 accent-primary"
+                />
+                <span className="font-medium">{d.label}</span>
+              </span>
+              {waiting && <span className="text-xs text-muted-foreground">{t("withdraw.waiting", { hours: d.usableInHours ?? 0 })}</span>}
+            </label>
+          );
+        })}
+        {state.errors.to && (
+          <p id="to-error" role="alert" className="text-sm text-destructive">
+            {t(state.errors.to)}
+          </p>
         )}
-      </div>
+        <details>
+          <summary className="min-h-11 cursor-pointer py-2 text-sm text-primary">{t("common.details")}</summary>
+          <ul className="flex flex-col gap-2 text-sm">
+            {destinations.map((d) => (
+              <li key={d.value}>
+                <span className="text-muted-foreground">{d.label}</span>
+                <p className="break-all font-mono">{d.address}</p>
+              </li>
+            ))}
+          </ul>
+        </details>
+        {hasSaved && <p className="text-sm text-muted-foreground">{t("addresses.warning")}</p>}
+        <Link href="/app/settings/addresses" className="inline-flex min-h-11 w-fit items-center text-sm text-primary underline underline-offset-4">
+          {t("withdraw.addAddress")}
+        </Link>
+      </fieldset>
 
       <SubmitButton pendingLabel={t("withdraw.sending")}>{t("withdraw.submit")}</SubmitButton>
 
@@ -90,7 +130,7 @@ export function WithdrawForm({ options, destination }: { options: WithdrawOption
           <div className="flex flex-col gap-2 rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
             <p className="flex items-start gap-2 text-success">
               <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-              {state.outcome.pending ? t("withdraw.pending") : t("withdraw.sent")}
+              {state.outcome.pending ? t("withdraw.pending", { destination: sentTo }) : t("withdraw.sent", { destination: sentTo })}
             </p>
             <a
               href={`https://celoscan.io/tx/${state.outcome.txHash}`}

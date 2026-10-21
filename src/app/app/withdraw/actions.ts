@@ -14,8 +14,7 @@ export interface WithdrawState {
 
 export async function withdrawAction(_previous: WithdrawState, formData: FormData): Promise<WithdrawState> {
   const user = await requireUser();
-  // Task 5 adds the destination field to the form and removes this default.
-  const fields: Record<string, string> = { to: "personal", ...formFields(formData) };
+  const fields: Record<string, string> = formFields(formData);
   if (!user.treasuryAddress) return { errors: {}, values: fields, outcome: { kind: "error", error: "not_ready" } };
   try {
     const deps = liveExecutorDeps();
@@ -24,7 +23,7 @@ export async function withdrawAction(_previous: WithdrawState, formData: FormDat
     const result = await withdraw(deps, user.id, parsed.data);
     if (!result.ok) return { errors: {}, values: fields, outcome: { kind: "error", error: result.error } };
     refresh();
-    return { errors: {}, values: { asset: fields.asset }, outcome: { kind: "sent", txHash: result.txHash, pending: result.pending } };
+    return { errors: {}, values: { asset: fields.asset, to: fields.to }, outcome: { kind: "sent", txHash: result.txHash, pending: result.pending } };
   } catch (error) {
     console.error("Withdraw action failed:", error);
     return { errors: {}, values: fields, outcome: { kind: "error", error: "unconfirmed" } };
