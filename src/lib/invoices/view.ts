@@ -1,6 +1,7 @@
 import type { InvoiceRow } from "@/lib/db/schema";
 import { convertFiat } from "@/lib/fx/convert";
 import { RatesUnavailableError, type ReferenceRates } from "@/lib/fx/rates";
+import type { FiatCurrency } from "@/lib/money/currencies";
 import { parseDecimal } from "@/lib/money/decimal";
 import { isoDate } from "./dates";
 
@@ -35,8 +36,8 @@ export function filterInvoices<T extends Pick<InvoiceRow, "status" | "dueDate">>
 
 export interface SummaryFigure {
   count: number;
-  /** Dollars with two decimals, or null when an amount could not be converted (no rates). */
-  usd: string | null;
+  /** The total in the summary's currency, two decimals; null when an amount could not be converted (no rates). */
+  amount: string | null;
 }
 
 export interface InvoiceSummary {
@@ -45,27 +46,31 @@ export interface InvoiceSummary {
   receivedThisMonth: SummaryFigure;
 }
 
-function figure(rows: InvoiceRow[], rates: ReferenceRates | null): SummaryFigure {
+function figure(rows: InvoiceRow[], rates: ReferenceRates | null, currency: FiatCurrency): SummaryFigure {
   let cents = 0n;
   try {
-    for (const row of rows) cents += parseDecimal(convertFiat(row.amount, row.currency, "USD", rates), 2);
+    for (const row of rows) cents += parseDecimal(convertFiat(row.amount, row.currency, currency, rates), 2);
   } catch (error) {
-    if (error instanceof RatesUnavailableError) return { count: rows.length, usd: null };
+    if (error instanceof RatesUnavailableError) return { count: rows.length, amount: null };
     throw error;
   }
-  return { count: rows.length, usd: `${cents / 100n}.${(cents % 100n).toString().padStart(2, "0")}` };
+  return { count: rows.length, amount: `${cents / 100n}.${(cents % 100n).toString().padStart(2, "0")}` };
 }
 
-/** Home and Invoices summary cards (spec 4f §4.1): totals in dollars, converted with the reference rates. */
-export function summarizeInvoices(rows: InvoiceRow[], rates: ReferenceRates | null, now: Date): InvoiceSummary {
+/**
+ * Home and Invoices summary cards (spec 4f §4.1). Totals are summed in `currency` (the freelancer's
+ * local currency when set): invoices already in it add up exactly, others convert at the reference rates.
+ */
+export function summarizeInvoices(rows: InvoiceRow[], rates: ReferenceRates | null, now: Date, currency: FiatCurrency = "USD"): InvoiceSummary {
   const today = isoDate(now);
   const month = today.slice(0, 7);
   return {
-    open: figure(filterInvoices(rows, "open", today), rates),
-    overdue: figure(filterInvoices(rows, "overdue", today), rates),
+    open: figure(filterInvoices(rows, "open", today), rates, currency),
+    overdue: figure(filterInvoices(rows, "overdue", today), rates, currency),
     receivedThisMonth: figure(
       rows.filter((row) => row.paidAt !== null && isoDate(row.paidAt).slice(0, 7) === month),
       rates,
+      currency,
     ),
   };
 }

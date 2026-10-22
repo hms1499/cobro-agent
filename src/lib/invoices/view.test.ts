@@ -80,7 +80,7 @@ describe("filterInvoices", () => {
 
 describe("summarizeInvoices", () => {
   it("is all zeros for no invoices", () => {
-    const zero = { count: 0, usd: "0.00" };
+    const zero = { count: 0, amount: "0.00" };
     expect(summarizeInvoices([], null, NOW)).toEqual({ open: zero, overdue: zero, receivedThisMonth: zero });
   });
 
@@ -96,20 +96,25 @@ describe("summarizeInvoices", () => {
       null,
       NOW,
     );
-    expect(summary.open).toEqual({ count: 2, usd: "200.00" });
-    expect(summary.overdue).toEqual({ count: 1, usd: "50.00" });
-    expect(summary.receivedThisMonth).toEqual({ count: 1, usd: "100.00" });
+    expect(summary.open).toEqual({ count: 2, amount: "200.00" });
+    expect(summary.overdue).toEqual({ count: 1, amount: "50.00" });
+    expect(summary.receivedThisMonth).toEqual({ count: 1, amount: "100.00" });
   });
 
   it("shows counts only when a conversion needs rates that are missing", () => {
     const summary = summarizeInvoices([row({ currency: "ARS", amount: "1500.00" }), row()], null, NOW);
-    expect(summary.open).toEqual({ count: 2, usd: null });
+    expect(summary.open).toEqual({ count: 2, amount: null });
   });
 
   it("converts local-currency invoices to dollars with rates", () => {
     const rates: ReferenceRates = { perUsd: { ARS: 1500n * 10n ** 18n, BRL: 5n * 10n ** 18n }, fetchedAt: 0 };
     const summary = summarizeInvoices([row({ currency: "ARS", amount: "1500.00" })], rates, NOW);
-    expect(summary.open).toEqual({ count: 1, usd: "1.00" });
+    expect(summary.open).toEqual({ count: 1, amount: "1.00" });
+  });
+
+  it("sums in the freelancer's currency without a round trip through dollars", () => {
+    const rows = [row({ currency: "ARS", amount: "1200.00" }), row({ currency: "ARS", amount: "850.00" })];
+    expect(summarizeInvoices(rows, null, NOW, "ARS").open).toEqual({ count: 2, amount: "2050.00" });
   });
 });
 

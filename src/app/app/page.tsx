@@ -60,7 +60,7 @@ function HomeSkeleton() {
 /** Spec 4f item A: what clients owe, what is late and what came in this month. */
 async function Summary({ user }: { user: AppUser }) {
   const [rows, rates] = await Promise.all([listInvoices(getDb(), user.id, 500), getReferenceRatesOrNull()]);
-  return <SummaryCards summary={summarizeInvoices(rows, rates, new Date())} local={user.localCurrency} rates={rates} />;
+  return <SummaryCards summary={summarizeInvoices(rows, rates, new Date(), user.localCurrency ?? "USD")} local={user.localCurrency} rates={rates} />;
 }
 
 /** Spec §4.2, layout A: money first, one agent line, then Recent; two columns from 1024px (A2). */

@@ -23,7 +23,7 @@ function Cell({
   rates: ReferenceRates | null;
   alert?: boolean;
 }) {
-  const amount = figure.usd === null ? null : displayAmount(figure.usd, "USD", local, rates);
+  const amount = figure.amount === null ? null : displayAmount(figure.amount, local ?? "USD", local, rates);
   const warn = alert && figure.count > 0;
   // Below 640px each figure is one compact line (label left, amount right) so the strip stays short.
   return (
