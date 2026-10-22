@@ -20,6 +20,7 @@ import { displayStatus, invoiceTimeline } from "@/lib/invoices/view";
 import { isPayAsset } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 import { formatTokenAmount } from "@/lib/money/format";
+import { InvoiceControls } from "./invoice-controls";
 import { Timeline } from "./timeline";
 
 export const metadata: Metadata = { title: `${t("invoices.title")} · ${t("app.name")}` };
@@ -81,7 +82,9 @@ async function Invoice({
           />
           {recurring && (
             <p className="px-1 text-sm text-muted-foreground">
-              {t(recurring.interval === "weekly" ? "invoice.repeatsWeekly" : "invoice.repeatsMonthly")}
+              {recurring.active
+                ? t(recurring.interval === "weekly" ? "invoice.repeatsWeekly" : "invoice.repeatsMonthly")
+                : t("invoice.repeatStopped")}
             </p>
           )}
         </div>
@@ -94,6 +97,17 @@ async function Invoice({
               </div>
               <Money amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates, "billed")} size="lg" />
               <Timeline steps={invoiceTimeline(invoice, today)} />
+              {invoice.status === "cancelled" && (
+                <p role="status" className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+                  {t("invoice.cancelledNote")}
+                </p>
+              )}
+              <InvoiceControls
+                invoiceId={invoice.id}
+                canCancel={invoice.status === "open"}
+                recurring={recurring ? { id: recurring.id, active: recurring.active } : null}
+                clientName={invoice.clientName}
+              />
             </CardContent>
           </Card>
           {invoice.status !== "paid" && invoice.status !== "cancelled" && (

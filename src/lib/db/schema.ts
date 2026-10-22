@@ -122,6 +122,8 @@ export const invoices = pgTable(
     settlingUntil: timestamp("settling_until", { withTimezone: true }),
     createdAt: createdAt(),
     paidAt: timestamp("paid_at", { withTimezone: true }),
+    /** When the freelancer cancelled it (only an open invoice can be cancelled). */
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("invoices_recurring_period_uq").on(t.recurringId, t.periodStart),

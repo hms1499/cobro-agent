@@ -35,7 +35,7 @@ const numberedColumns = { ...getTableColumns(invoices), number: invoiceNumber };
 
 export interface OwnedInvoice {
   invoice: NumberedInvoice;
-  recurring: { slug: string; interval: RecurringInterval } | null;
+  recurring: { id: string; slug: string; interval: RecurringInterval; active: boolean } | null;
   payments: PaymentRow[];
 }
 
@@ -177,7 +177,7 @@ export async function listRecentInvoices(db: Db, userId: string, limit = 10): Pr
 export async function getOwnedInvoice(db: Db, userId: string, invoiceId: string): Promise<OwnedInvoice | null> {
   if (!UUID.test(invoiceId)) return null;
   const [row] = await db
-    .select({ invoice: numberedColumns, recurringSlug: recurringInvoices.slug, interval: recurringInvoices.interval })
+    .select({ invoice: numberedColumns, recurring: recurringInvoices })
     .from(invoices)
     .leftJoin(recurringInvoices, eq(recurringInvoices.id, invoices.recurringId))
     .where(and(eq(invoices.id, invoiceId), eq(invoices.userId, userId)));
@@ -185,9 +185,44 @@ export async function getOwnedInvoice(db: Db, userId: string, invoiceId: string)
   const paid = await db.select().from(payments).where(eq(payments.invoiceId, invoiceId)).orderBy(asc(payments.settledAt));
   return {
     invoice: row.invoice,
-    recurring: row.recurringSlug && row.interval ? { slug: row.recurringSlug, interval: row.interval } : null,
+    recurring: row.recurring
+      ? { id: row.recurring.id, slug: row.recurring.slug, interval: row.recurring.interval, active: row.recurring.active }
+      : null,
     payments: paid,
   };
+}
+
+export type CancelResult = "cancelled" | "not_found" | "not_cancellable";
+
+/**
+ * The freelancer cancels an invoice nobody is paying (status open, overdue included). The status check
+ * sits in the UPDATE, so it cannot race a payer: `claimInvoice` moves open → settling the same way, and
+ * a settling, paid or cancelled invoice is left alone. Rows are never deleted (numbers and history stay).
+ */
+export async function cancelInvoice(db: Db, userId: string, invoiceId: string, now: Date): Promise<CancelResult> {
+  if (!UUID.test(invoiceId)) return "not_found";
+  const [row] = await db
+    .update(invoices)
+    .set({ status: "cancelled", cancelledAt: now, settlingUntil: null })
+    .where(and(eq(invoices.id, invoiceId), eq(invoices.userId, userId), eq(invoices.status, "open")))
+    .returning({ id: invoices.id });
+  if (row) return "cancelled";
+  const [exists] = await db
+    .select({ id: invoices.id })
+    .from(invoices)
+    .where(and(eq(invoices.id, invoiceId), eq(invoices.userId, userId)));
+  return exists ? "not_cancellable" : "not_found";
+}
+
+/** No more periods for this recurring invoice; issued ones stay as they are. False if it is not the user's. */
+export async function stopRecurring(db: Db, userId: string, recurringId: string): Promise<boolean> {
+  if (!UUID.test(recurringId)) return false;
+  const rows = await db
+    .update(recurringInvoices)
+    .set({ active: false })
+    .where(and(eq(recurringInvoices.id, recurringId), eq(recurringInvoices.userId, userId)))
+    .returning({ id: recurringInvoices.id });
+  return rows.length > 0;
 }
 
 export async function findPublicInvoice(db: Db, slug: string): Promise<PublicInvoice | null> {

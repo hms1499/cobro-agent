@@ -43,6 +43,13 @@
       "when": 1792588514579,
       "tag": "0005_premium_demogoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792641159319,
+      "tag": "0006_friendly_bromley",
+      "breakpoints": true
     }
   ]
 }
