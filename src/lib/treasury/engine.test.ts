@@ -94,6 +94,39 @@ describe("decide", () => {
   });
 });
 
+describe("decide for a freelancer who lives in dollars", () => {
+  const usd = (b: Partial<Balances>, rules: Partial<EngineRules> = {}) => run(b, { localCurrency: "USD", reserveAmount: "0", ...rules });
+
+  it("converts pesos to USD₮", () => {
+    expect(usd({ WARS: pesos(4_800n) })).toMatchObject({ kind: "convert", from: "WARS", to: "USDT", reason: "save_other", usdWad: 3n * WAD });
+  });
+
+  it("converts reais to USD₮", () => {
+    expect(usd({ WBRL: pesos(15n) })).toMatchObject({ kind: "convert", from: "WBRL", to: "USDT", reason: "save_other", usdWad: 3n * WAD });
+  });
+
+  it("converts pesos first when it holds both, one conversion per run", () => {
+    expect(usd({ WARS: pesos(4_800n), WBRL: pesos(15n) })).toMatchObject({ from: "WARS" });
+  });
+
+  it("moves on to reais when the pesos are only dust", () => {
+    expect(usd({ WARS: pesos(800n), WBRL: pesos(15n) })).toMatchObject({ kind: "convert", from: "WBRL" });
+  });
+
+  it("ignores pesos worth less than US$1", () => {
+    expect(usd({ WARS: pesos(1_584n) })).toEqual({ kind: "none", reason: "below_minimum" });
+  });
+
+  it("leaves dollars alone and never buys pesos", () => {
+    expect(usd({ USDT: dollars(50n), USAT: dollars(50n) })).toEqual({ kind: "none", reason: "within_band" });
+    expect(usd({ USDT: dollars(50n) }, { reserveAmount: "160000.00" })).toEqual({ kind: "none", reason: "within_band" });
+  });
+
+  it("caps one conversion at perTradeMaxUsd", () => {
+    expect(usd({ WARS: pesos(128_000n) })).toMatchObject({ amount: pesos(80_000n), usdWad: 50n * WAD });
+  });
+});
+
 describe("planIntent", () => {
   const convert = run({ WARS: pesos(200_000n) });
   const open = { id: "i1", fromAsset: "WARS", toAsset: "USDT" } as const;

@@ -244,6 +244,16 @@ describe("runTreasuryForUser: converting", () => {
     expect((await db.select().from(treasuryTxs)).map((t) => t.status)).toEqual(["success", "success"]);
   });
 
+  it("converts pesos for a dollars freelancer without asking, even in ask-every-time mode", async () => {
+    const user = await freelancer("0.00", "all");
+    await db.update(rules).set({ localCurrency: "USD" }).where(eq(rules.userId, user.id));
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas });
+
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "converted" });
+    expect(deps.rfq.request).toHaveBeenCalledWith(expect.objectContaining({ sellAmount: pesos(3_200n) }));
+    expect(await eventTypes(user.id)).toEqual(["converted"]);
+  });
+
   it("resets a USD₮ allowance to 0 before raising it", async () => {
     // Reserve ARS 16,000 (US$10), nothing held: buy US$10 of wARS with USD₮.
     const user = await freelancer("16000.00");
