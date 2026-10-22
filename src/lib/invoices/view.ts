@@ -82,7 +82,7 @@ export function invoiceTimeline(inv: InvoiceRow, today: string): TimelineStep[] 
   const steps: TimelineStep[] = [{ key: "created", at: inv.createdAt, done: true }];
   if (inv.dueDate) steps.push({ key: "due", at: inv.dueDate, done: inv.status === "paid" || inv.dueDate < today });
   if (inv.status === "cancelled") {
-    steps.push({ key: "cancelled", at: null, done: true });
+    steps.push({ key: "cancelled", at: inv.cancelledAt, done: true });
     return steps;
   }
   if (inv.status === "settling") steps.push({ key: "settling", at: inv.settlingUntil, done: false });

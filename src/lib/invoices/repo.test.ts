@@ -5,6 +5,7 @@ import { invoices, payments, recurringInvoices } from "@/lib/db/schema";
 import { createTestDb, resetDb, seedFreelancer, TEST_TREASURY } from "@/lib/db/testing";
 import type { InvoiceInput } from "./input";
 import {
+  cancelInvoice,
   createInvoice,
   createRecurring,
   findPublicInvoice,
@@ -13,6 +14,7 @@ import {
   listInvoices,
   listRecentInvoices,
   resolveRecurringLink,
+  stopRecurring,
 } from "./repo";
 
 let db: Db;
@@ -182,5 +184,56 @@ describe("invoice numbers", () => {
     const second = await createAt(a.id, "2026-10-02T00:00:00Z");
     expect((await getOwnedInvoice(db, a.id, second.id))?.invoice.number).toBe(2);
     expect((await findPublicInvoice(db, second.slug))?.number).toBe(2);
+  });
+});
+
+describe("cancelInvoice", () => {
+  it("cancels an open invoice and records when", async () => {
+    const user = await seedFreelancer(db);
+    const invoice = await createInvoice(db, user.id, input);
+    expect(await cancelInvoice(db, user.id, invoice.id, NOW)).toBe("cancelled");
+    const [row] = await db.select().from(invoices).where(eq(invoices.id, invoice.id));
+    expect(row).toMatchObject({ status: "cancelled", cancelledAt: NOW });
+  });
+
+  it("refuses an invoice whose payment is being confirmed, paid or already cancelled", async () => {
+    const user = await seedFreelancer(db);
+    for (const status of ["settling", "paid", "cancelled"] as const) {
+      const invoice = await createInvoice(db, user.id, input);
+      await db.update(invoices).set({ status }).where(eq(invoices.id, invoice.id));
+      expect(await cancelInvoice(db, user.id, invoice.id, NOW)).toBe("not_cancellable");
+      const [row] = await db.select().from(invoices).where(eq(invoices.id, invoice.id));
+      expect(row.status).toBe(status);
+    }
+  });
+
+  it("does not touch another freelancer's invoice", async () => {
+    const owner = await seedFreelancer(db);
+    const other = await seedFreelancer(db);
+    const invoice = await createInvoice(db, owner.id, input);
+    expect(await cancelInvoice(db, other.id, invoice.id, NOW)).toBe("not_found");
+    expect(await cancelInvoice(db, other.id, "not-a-uuid", NOW)).toBe("not_found");
+    const [row] = await db.select().from(invoices).where(eq(invoices.id, invoice.id));
+    expect(row.status).toBe("open");
+  });
+
+  it("stops the pay flow from claiming a cancelled invoice", async () => {
+    const user = await seedFreelancer(db);
+    const invoice = await createInvoice(db, user.id, input);
+    await cancelInvoice(db, user.id, invoice.id, NOW);
+    expect((await findPublicInvoice(db, invoice.slug))?.status).toBe("cancelled");
+  });
+});
+
+describe("stopRecurring", () => {
+  it("stops future periods for the owner only and reports it on the owned invoice", async () => {
+    const owner = await seedFreelancer(db);
+    const other = await seedFreelancer(db);
+    const { first, recurring } = await createRecurring(db, owner.id, { ...input, repeat: "monthly" }, NOW);
+    expect(await stopRecurring(db, other.id, recurring.id)).toBe(false);
+    expect((await getOwnedInvoice(db, owner.id, first.id))?.recurring?.active).toBe(true);
+    expect(await stopRecurring(db, owner.id, recurring.id)).toBe(true);
+    expect((await getOwnedInvoice(db, owner.id, first.id))?.recurring?.active).toBe(false);
+    expect(await issueDueRecurring(db, new Date("2026-12-31T00:00:00Z"))).toBe(0);
   });
 });

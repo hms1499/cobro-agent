@@ -20,6 +20,7 @@ function invoice(id: string, createdAt: string, paidAt: string | null = null): I
     settlingUntil: null,
     createdAt: at(createdAt),
     paidAt: paidAt ? at(paidAt) : null,
+    cancelledAt: null,
   };
 }
 

@@ -29,6 +29,7 @@ function row(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
     settlingUntil: null,
     createdAt: new Date("2026-10-01T00:00:00Z"),
     paidAt: null,
+    cancelledAt: null,
     ...overrides,
   };
 }
@@ -134,8 +135,16 @@ describe("invoiceTimeline", () => {
     expect(steps[2].at).toEqual(paidAt);
   });
 
-  it("ends with cancelled for a cancelled invoice", () => {
-    expect(invoiceTimeline(row({ status: "cancelled" }), TODAY).map((s) => s.key)).toEqual(["created", "cancelled"]);
+  it("ends with cancelled, dated, for a cancelled invoice", () => {
+    const cancelledAt = new Date("2026-10-20T09:00:00Z");
+    const steps = invoiceTimeline(row({ status: "cancelled", cancelledAt }), TODAY);
+    expect(steps.map((s) => s.key)).toEqual(["created", "cancelled"]);
+    expect(steps[1]).toMatchObject({ at: cancelledAt, done: true });
+  });
+
+  it("leaves the due step out of a cancelled invoice's late check", () => {
+    const steps = invoiceTimeline(row({ status: "cancelled", dueDate: "2026-10-01", cancelledAt: NOW }), TODAY);
+    expect(steps.map((s) => s.key)).toEqual(["created", "due", "cancelled"]);
   });
 
   it("shows the payment in progress while settling", () => {
