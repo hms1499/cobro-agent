@@ -66,6 +66,14 @@ export async function MoneyCard({ user, primaryAction }: { user: AppUser; primar
 
 function Figures({ view, rates }: NonNullable<Awaited<ReturnType<typeof loadTreasuryView>>>) {
   const local = view.local;
+  if (local === "USD") {
+    return (
+      <>
+        <Money size="xl" countUp amount={displayAmount(view.totalUsd, "USD", local, rates)} />
+        <DollarPockets view={view} rates={rates} />
+      </>
+    );
+  }
   return (
     <>
       <Money size="xl" countUp amount={displayAmount(view.totalUsd, "USD", local, rates)} />
@@ -109,6 +117,31 @@ function Figures({ view, rates }: NonNullable<Awaited<ReturnType<typeof loadTrea
   );
 }
 
+/** USD home: one dollars bucket, plus the pesos/reais the agent is about to convert (USD home spec §4.3). */
+function DollarPockets({ view, rates }: NonNullable<Awaited<ReturnType<typeof loadTreasuryView>>>) {
+  const waiting = Number(view.waitingUsd) > 0;
+  return (
+    <ul className="flex flex-col divide-y divide-border border-y border-border">
+      <li className="flex items-center justify-between gap-3 py-3">
+        <span className="flex items-center gap-2.5 text-sm">
+          <CurrencyBadge code="USD" size="sm" />
+          {t("treasury.dollars")}
+        </span>
+        <span className="font-semibold tabular-nums">{displayAmount(view.savingsUsd, "USD", "USD", rates).primary}</span>
+      </li>
+      {waiting && (
+        <li className="flex items-center justify-between gap-3 py-3">
+          <span className="flex flex-col text-sm">
+            {t("treasury.waiting")}
+            <span className="text-xs text-muted-foreground">{t("treasury.waitingHelp")}</span>
+          </span>
+          <span className="font-semibold tabular-nums">{displayAmount(view.waitingUsd, "USD", "USD", rates).primary}</span>
+        </li>
+      )}
+    </ul>
+  );
+}
+
 /**
  * How the dollar savings compare with keeping every payment in the local currency (spec §10.5), on the
  * Agent tab. The RFQ volume sits behind "Details".
@@ -124,6 +157,8 @@ export async function ProtectedCard({ user }: { user: AppUser }) {
   }
   if (!loaded || loaded === "error") return null;
   const { view, rates } = loaded;
+  // Nothing is held in a local currency, so there is no inflation comparison to show.
+  if (view.local === "USD") return null;
   const currencyName = t(`event.target.${view.local}` as const);
   return (
     <Card>

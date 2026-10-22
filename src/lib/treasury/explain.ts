@@ -5,7 +5,7 @@ import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import type { AgentEventType, FxIntentRow } from "@/lib/db/schema";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { formatDecimal } from "@/lib/money/decimal";
-import { isPayAsset, type LocalCurrency } from "@/lib/money/currencies";
+import { isHomeCurrency, isLocalCurrency, isPayAsset, type HomeCurrency } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 import { formatMoney } from "@/lib/money/format";
 import type { Decision, IdleReason } from "./engine";
@@ -14,7 +14,7 @@ import { DRIP_AMOUNT_ATOMIC } from "./gas";
 import { formatCents, tokenFiatAmount, usdWadToDollars } from "./value";
 
 export interface ExplainContext {
-  local: LocalCurrency | null;
+  local: HomeCurrency | null;
   rates: ReferenceRates | null;
 }
 
@@ -52,8 +52,8 @@ function targetText(asset: unknown): string {
 }
 
 /** A refill through USD₮ (hub_route) is for the spending currency, though its first leg buys USD₮. */
-function proposalTarget(to: unknown, reason: unknown, local: LocalCurrency | null): string {
-  if (reason === "hub_route" && local) return t(`event.target.${local}`);
+function proposalTarget(to: unknown, reason: unknown, local: HomeCurrency | null): string {
+  if (reason === "hub_route" && isLocalCurrency(local)) return t(`event.target.${local}`);
   return targetText(to);
 }
 
@@ -181,6 +181,13 @@ export function describeEvent(
       return simple("info", "resumed");
     case "payment_reconciled":
       return simple("success", "payment_reconciled");
+    case "home_currency_changed":
+      return {
+        tone: "info",
+        title: t("event.home_currency_changed.title", { to: isHomeCurrency(d.to) ? t(`currency.${d.to}`) : String(d.to) }),
+        why: t("event.home_currency_changed.why"),
+        txHash: null,
+      };
   }
 }
 
@@ -238,8 +245,10 @@ export function describeDecision(
   ctx: ExplainContext,
   opts: { askFirst?: boolean } = {},
 ): string {
-  if (decision.kind === "none")
+  if (decision.kind === "none") {
+    if (ctx.local === "USD" && decision.reason === "within_band") return t("preview.usd_idle");
     return t(IDLE[decision.reason], { amount: MINIMUM_TEXT });
+  }
   return t(opts.askFirst ? "preview.propose" : "preview.convert", {
     amount: moneyText(decision.from, decision.amount.toString(), ctx),
     target: targetText(decision.to),

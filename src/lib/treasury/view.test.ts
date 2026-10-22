@@ -27,6 +27,28 @@ describe("buildTreasuryView", () => {
       savingsUsd: "60.00",
       protectedUsd: "47.50",
       protectedNegative: false,
+      waitingUsd: "0.00",
+    });
+  });
+
+  it("keeps a dollars freelancer's money in one bucket, with pesos waiting to convert", () => {
+    const view = buildTreasuryView({
+      balances: { ...ZERO, USDT: 10_000_000n, USAT: 5_000_000n, WARS: pesos(1_600n) },
+      rates,
+      rules: { localCurrency: "USD", reserveAmount: "0" },
+      payments: [{ asset: "USDT", amountAtomic: 100_000_000n, ratesSnapshot: { ARS: "1000" } }],
+      withdrawnUsdWad: 0n,
+    });
+    expect(view).toEqual({
+      local: "USD",
+      totalUsd: "16.00",
+      spending: "0",
+      reserve: "0",
+      reservePercent: null,
+      savingsUsd: "15.00",
+      protectedUsd: "0",
+      protectedNegative: false,
+      waitingUsd: "1.00",
     });
   });
 

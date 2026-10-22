@@ -50,6 +50,13 @@
       "when": 1792641159319,
       "tag": "0006_friendly_bromley",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1792643134484,
+      "tag": "0007_sloppy_tiger_shark",
+      "breakpoints": true
     }
   ]
 }

@@ -9,7 +9,7 @@ export type RecentItem =
 const NOT_RECENT: readonly AgentEventType[] = ["paused", "resumed", "gas_dripped", "payment_reconciled"];
 
 /** Events whose title says everything, so the history shows no "Why?" for them. */
-export const HIDE_WHY_EVENTS: readonly AgentEventType[] = ["paused", "resumed"];
+export const HIDE_WHY_EVENTS: readonly AgentEventType[] = ["paused", "resumed", "home_currency_changed"];
 
 /** Invoices (by payment time once paid) and agent events, newest first; on a tie the agent's action comes first. */
 export function buildRecent(invoices: InvoiceRow[], events: AgentEventRow[], limit = 5): RecentItem[] {

@@ -11,7 +11,15 @@ import { t } from "@/i18n";
 import { listSavedAddresses } from "@/lib/addresses/repo";
 import { requireUser } from "@/lib/auth/current-user";
 import { readPublicEnv } from "@/lib/config/public";
+import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import { getDb } from "@/lib/db/client";
+import { getReferenceRatesOrNull } from "@/lib/fx/rates";
+import { HOME_CURRENCIES, type HomeCurrency } from "@/lib/money/currencies";
+import { readDisplayBalances } from "@/lib/treasury/live";
+import { getRulesRow } from "@/lib/treasury/request-reads";
+import { switchConsequences, type SwitchConsequences } from "@/lib/users/home-currency";
+import type { AppUser } from "@/lib/users/queries";
+import { CurrencyForm } from "./currency-form";
 import { MyWalletButton } from "./my-wallet";
 import { SignOutButton } from "./sign-out";
 
@@ -35,7 +43,6 @@ async function Settings() {
   const rows = [
     { label: t("settings.email"), value: user.email ?? t("settings.notSet") },
     { label: t("settings.name"), value: user.displayName ?? t("settings.notSet") },
-    { label: t("settings.currency"), value: user.localCurrency ? t(`currency.${user.localCurrency}` as const) : t("settings.notSet") },
   ];
   return (
     <>
@@ -55,6 +62,19 @@ async function Settings() {
           </dl>
         </CardContent>
       </Card>
+      {user.localCurrency && (
+        <Card>
+          <CardContent className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <h2 className="text-lg font-semibold">{t("settings.currencyTitle")}</h2>
+              <p className="max-w-prose text-sm text-muted-foreground">{t("settings.currencyIntro")}</p>
+            </div>
+            <Suspense fallback={<Skeleton className="h-40 w-full" />}>
+              <Currency user={user} current={user.localCurrency} />
+            </Suspense>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardContent className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
@@ -88,4 +108,18 @@ async function Settings() {
       )}
     </>
   );
+}
+
+/** The currency form with what each switch would convert, from live balances (USD home currency spec §4.3). */
+async function Currency({ user, current }: { user: AppUser; current: HomeCurrency }) {
+  const [row, rates, balances] = await Promise.all([
+    getRulesRow(user.id),
+    getReferenceRatesOrNull(),
+    user.treasuryAddress ? readDisplayBalances(user.treasuryAddress).catch(() => null) : null,
+  ]);
+  const none: SwitchConsequences = { converts: [] };
+  const consequences = Object.fromEntries(
+    HOME_CURRENCIES.map((code) => [code, balances ? switchConsequences(code, balances, rates) : none]),
+  ) as Record<HomeCurrency, SwitchConsequences>;
+  return <CurrencyForm current={current} reserve={row?.reserveAmount ?? "0"} consequences={consequences} minutes={CHECK_INTERVAL_MINUTES} />;
 }

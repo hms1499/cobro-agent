@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { getAddress, type Address } from "viem";
 import type { Db } from "@/lib/db/client";
 import { rules, treasuryWallets, users } from "@/lib/db/schema";
-import type { LocalCurrency } from "@/lib/money/currencies";
+import type { HomeCurrency } from "@/lib/money/currencies";
 
 export interface AppUser {
   id: string;
@@ -13,7 +13,7 @@ export interface AppUser {
   /** The freelancer's own Para wallet, the only withdrawal destination (spec §6.1). */
   personalWallet: Address | null;
   /** Null until onboarding (Task 7) creates the rules row. */
-  localCurrency: LocalCurrency | null;
+  localCurrency: HomeCurrency | null;
 }
 
 export async function loadAppUser(db: Db, userId: string): Promise<AppUser | null> {

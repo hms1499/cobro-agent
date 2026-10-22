@@ -18,7 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const fiatCurrency = pgEnum("fiat_currency", ["USD", "ARS", "BRL"]);
-export const localCurrency = pgEnum("local_currency", ["ARS", "BRL"]);
+export const localCurrency = pgEnum("local_currency", ["ARS", "BRL", "USD"]);
 export const payAsset = pgEnum("pay_asset", ["USAT", "USDT", "WARS", "WBRL"]);
 export const invoiceStatus = pgEnum("invoice_status", ["open", "settling", "paid", "cancelled"]);
 export const recurringInterval = pgEnum("recurring_interval", ["weekly", "monthly"]);
@@ -309,6 +309,7 @@ export const AGENT_EVENT_TYPES = [
   "proposed",
   "approved",
   "dismissed",
+  "home_currency_changed",
 ] as const;
 export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];
 

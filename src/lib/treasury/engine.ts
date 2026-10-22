@@ -1,6 +1,6 @@
 // src/lib/treasury/engine.ts
 import type { ReferenceRates } from "@/lib/fx/rates";
-import type { LocalCurrency, PayAsset } from "@/lib/money/currencies";
+import type { HomeCurrency, PayAsset } from "@/lib/money/currencies";
 import { atomicForUsdWad, dollarsToWad, fiatToAtomic, LOCAL_ASSET, usdWad, WAD } from "./value";
 
 /** Spendable balances: the gas reserve has already been taken out (see spendableBalances). */
@@ -9,7 +9,8 @@ export type ConvertReason = "save_excess" | "save_other" | "top_up" | "hub_route
 export type IdleReason = "within_band" | "daily_cap" | "below_minimum" | "no_dollars";
 
 export interface EngineRules {
-  localCurrency: LocalCurrency;
+  /** USD: the freelancer lives in dollars and keeps no spending reserve (USD home currency spec). */
+  localCurrency: HomeCurrency;
   reserveAmount: string;
   autoTopUp: boolean;
   perTradeMaxUsd: number;
@@ -48,8 +49,6 @@ const min = (a: bigint, b: bigint) => (a < b ? a : b);
  */
 export function decide(input: EngineInput): Decision {
   const { balances, rules, rates } = input;
-  const local = LOCAL_ASSET[rules.localCurrency];
-  const other = local === "WARS" ? "WBRL" : "WARS";
   const capLeft = min(dollarsToWad(rules.perTradeMaxUsd), max(0n, dollarsToWad(rules.dailyMaxUsd) - input.filledUsdWad24h));
 
   const sized = (from: PayAsset, to: PayAsset, wanted: bigint, reason: ConvertReason): Decision => {
@@ -64,6 +63,17 @@ export function decide(input: EngineInput): Decision {
     return { kind: "convert", from, to, amount, usdWad: usd, reason };
   };
 
+  // A freelancer who lives in dollars: pesos and reais are only ever saved in dollars, one per run.
+  if (rules.localCurrency === "USD") {
+    for (const asset of ["WARS", "WBRL"] as const) {
+      if (usdWad(asset, balances[asset], rates) >= MIN_NOTIONAL_WAD) return sized(asset, "USDT", balances[asset], "save_other");
+    }
+    // Dust under US$1 stays (Textile refuses it); say so instead of "nothing to do".
+    return balances.WARS > 0n || balances.WBRL > 0n ? none("below_minimum") : none("within_band");
+  }
+
+  const local = LOCAL_ASSET[rules.localCurrency];
+  const other = local === "WARS" ? "WBRL" : "WARS";
   // Paid in the other local currency: not spendable for this freelancer, so it is saved in dollars.
   if (usdWad(other, balances[other], rates) >= MIN_NOTIONAL_WAD) {
     return sized(other, "USDT", balances[other], "save_other");

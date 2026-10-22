@@ -1,6 +1,6 @@
 import { convertFiat } from "@/lib/fx/convert";
 import type { ReferenceRates } from "@/lib/fx/rates";
-import type { FiatCurrency, LocalCurrency } from "./currencies";
+import type { FiatCurrency, HomeCurrency } from "./currencies";
 import { formatMoney } from "./format";
 
 export interface DisplayAmount {
@@ -32,11 +32,13 @@ function converted(source: string, amount: string, currency: FiatCurrency): stri
 export function displayAmount(
   amount: string,
   currency: FiatCurrency,
-  local: LocalCurrency | null,
+  local: HomeCurrency | null,
   rates: ReferenceRates | null,
   lead: AmountLead = "local",
 ): DisplayAmount {
   if (!local || !rates) return { primary: formatMoney(amount, currency) };
+  // A freelancer who lives in dollars sees dollar amounts alone: there is nothing to convert them to.
+  if (local === "USD" && currency === "USD") return { primary: formatMoney(amount, "USD") };
   if (lead === "billed") {
     const other = currency === local ? "USD" : local;
     return { primary: formatMoney(amount, currency), secondary: converted(amount, convertFiat(amount, currency, other, rates), other) };

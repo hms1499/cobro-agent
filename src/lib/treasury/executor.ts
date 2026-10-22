@@ -287,7 +287,8 @@ async function approvalFor(
     return { kind: "granted", cap, save: {}, approved: true };
   }
   const mode = ctx.rules.approvalMode;
-  if (mode === "auto") return { kind: "granted", cap: null, save: {}, approved: false };
+  // Selling pesos/reais for dollars is all a dollars freelancer's agent does: it never asks (USD home spec §2.3).
+  if (mode === "auto" || ctx.rules.localCurrency === "USD") return { kind: "granted", cap: null, save: {}, approved: false };
   if (plan.decision.reason === "top_up") {
     const parent = await inheritableApproval(deps.db, ctx.userId, deps.now());
     if (parent) {
