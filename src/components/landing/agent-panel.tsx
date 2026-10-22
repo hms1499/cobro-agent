@@ -16,10 +16,10 @@ export function AgentPanel() {
   return (
     <section className="py-16 md:py-24">
       <div className={container}>
-        <h2 className={sectionTitle}>{t("landing.agent.title")}</h2>
-        <p className={`mt-4 ${sectionIntro}`}>{t("landing.agent.intro")}</p>
+        <h2 data-reveal className={sectionTitle}>{t("landing.agent.title")}</h2>
+        <p data-reveal data-reveal-delay={70} className={`mt-4 ${sectionIntro}`}>{t("landing.agent.intro")}</p>
         <div className="mt-11 grid grid-cols-1 gap-5 md:grid-cols-3">
-          <div className="grid grid-cols-1 items-end gap-8 rounded-2xl bg-foreground p-7 text-primary-foreground md:col-span-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] md:gap-10 md:p-9">
+          <div data-reveal data-reveal-delay={140} className="grid grid-cols-1 items-end gap-8 rounded-2xl bg-foreground p-7 text-primary-foreground md:col-span-3 md:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] md:gap-10 md:p-9">
             <div>
               <span className="grid size-10 place-items-center rounded-xl bg-tint/15 text-tint">
                 <ShieldCheck aria-hidden="true" className="size-5" />
@@ -33,8 +33,8 @@ export function AgentPanel() {
               <p className="text-sm text-primary-foreground/60">{t("landing.agent.protectedNote")}</p>
             </div>
           </div>
-          {RULES.map(({ icon: Icon, title, body }) => (
-            <div key={title} className="rounded-2xl bg-card p-6 ring-1 ring-foreground/8">
+          {RULES.map(({ icon: Icon, title, body }, i) => (
+            <div key={title} data-reveal data-reveal-delay={i * 70} className="rounded-2xl bg-card p-6 ring-1 ring-foreground/8">
               <span className="grid size-10 place-items-center rounded-xl bg-tint/40 text-primary">
                 <Icon aria-hidden="true" className="size-5" />
               </span>

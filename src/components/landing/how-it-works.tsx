@@ -65,10 +65,10 @@ export function HowItWorks() {
     <section id="how" className="scroll-mt-20 pb-16 md:pb-24">
       <div className={`${container} grid grid-cols-[minmax(0,1fr)] items-center gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14`}>
         <div>
-          <h2 className={sectionTitle}>{t("landing.how.title")}</h2>
+          <h2 data-reveal className={sectionTitle}>{t("landing.how.title")}</h2>
           <ol className="mt-8 flex flex-col gap-1.5">
             {STEPS.map((step, i) => (
-              <li key={step.title}>
+              <li key={step.title} data-reveal data-reveal-delay={(i + 1) * 70}>
                 <button
                   type="button"
                   aria-current={i === active ? "step" : undefined}

@@ -190,8 +190,9 @@ subtitle, amount, status), `Money` (`md` / `lg` / `xl`), `EmptyState`, `LoadingR
 
 ## Motion
 
-Notion-like, measured on notion.site on 2026-10-20: transparent "ghost" items, a faint tint that
-appears almost at once on hover, a slightly stronger one on press, radius 4–8px, nothing moves.
+Hover and press are Notion-like, measured on notion.site on 2026-10-20: transparent "ghost" items, a
+faint tint that appears almost at once on hover, a slightly stronger one on press, radius 4–8px,
+nothing moves. Plan 4f (2026-10-22, the user's call) adds a small set of entrance motion on top.
 
 - Rows, nav items, icon buttons: the `.hover-tint` utility (`globals.css`): primary at 6% on hover in
   ~20ms ease-in, 12% on press. Hover applies only under `@media (hover: hover)`.
@@ -199,10 +200,19 @@ appears almost at once on hover, a slightly stronger one on press, radius 4–8p
   translate.
 - Popovers and menus: opacity, a 4px slide and 0.98 → 1 scale in 120ms ease-out, from the trigger's
   corner. Expand and collapse 200–250ms.
-- CSS transitions only (no GSAP).
-- Animate `opacity` and `transform` only. At most one or two animated elements per view.
-- Under `prefers-reduced-motion: reduce`, transitions drop to instant state changes, and skeletons stop pulsing.
-- Loading: skeletons for content longer than about 300ms; button spinners for actions.
+- Landing scroll reveal: mark elements with `data-reveal` (and `data-reveal-delay` in ms for a
+  60–80ms stagger inside a group); `RevealOnScroll` fades them in with a 12px rise, 450ms ease-out,
+  once, when 15% is visible. The hero is never delayed. Content is visible without JavaScript.
+- App navigation: the page area crossfades (out 90ms, in 180ms) through React `<ViewTransition>` in
+  `app/app/layout.tsx`; the nav and the root never animate.
+- Figures: summary and balance figures count up once on first paint (`CountUp`, ≤600ms). The server
+  HTML always holds the real figure, never a placeholder zero.
+- CSS transitions, the View Transitions API and `requestAnimationFrame` only (no GSAP, no motion
+  library). Animate `opacity` and `transform` only, never layout.
+- Under `prefers-reduced-motion: reduce`, all of the above drops to instant state changes, figures show
+  their final value and skeletons stop pulsing.
+- Loading: skeletons shaped like the loaded layout for content longer than about 300ms; button
+  spinners for actions.
 
 ---
 

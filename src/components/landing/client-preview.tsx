@@ -23,11 +23,11 @@ export function ClientPreview() {
     <section id="clients" className="scroll-mt-20 border-y bg-card py-16 md:py-24">
       <div className={`${container} grid grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14`}>
         <div>
-          <h2 className={sectionTitle}>{t("landing.clients.title")}</h2>
-          <p className={`mt-4 ${sectionIntro}`}>{t("landing.clients.intro")}</p>
+          <h2 data-reveal className={sectionTitle}>{t("landing.clients.title")}</h2>
+          <p data-reveal data-reveal-delay={70} className={`mt-4 ${sectionIntro}`}>{t("landing.clients.intro")}</p>
           <ul className="mt-7 grid gap-4">
-            {POINTS.map(({ icon: Icon, title, body }) => (
-              <li key={title} className="grid grid-cols-[24px_1fr] gap-3">
+            {POINTS.map(({ icon: Icon, title, body }, i) => (
+              <li key={title} data-reveal data-reveal-delay={(i + 2) * 70} className="grid grid-cols-[24px_1fr] gap-3">
                 <Icon aria-hidden="true" className="mt-0.5 size-5 text-primary" />
                 <div>
                   <p className="font-semibold">{t(title)}</p>
@@ -37,7 +37,7 @@ export function ClientPreview() {
             ))}
           </ul>
         </div>
-        <div aria-hidden="true" className="w-full max-w-[400px] rounded-2xl bg-card p-5 ring-1 ring-foreground/10 lg:ml-auto">
+        <div aria-hidden="true" data-reveal data-reveal-delay={140} className="w-full max-w-[400px] rounded-2xl bg-card p-5 ring-1 ring-foreground/10 lg:ml-auto">
           <p className="text-sm text-muted-foreground">{t("landing.clients.preview.from")}</p>
           <p className="mt-1 text-[2.1rem] leading-tight font-bold tracking-tight tabular-nums">{formatMoney(String(PAID_USD), "USD")}</p>
           <p className="text-sm text-muted-foreground">{t("landing.clients.preview.for")}</p>

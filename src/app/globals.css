@@ -225,3 +225,16 @@
     animation-delay: 0s !important;
   }
 }
+
+/* Landing scroll reveal (spec 4f §4.3, components/reveal.tsx): once per element, opacity and a 12px rise. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-reveal="pending"] {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  [data-reveal="shown"] {
+    transition:
+      opacity 450ms ease-out var(--reveal-delay, 0ms),
+      transform 450ms ease-out var(--reveal-delay, 0ms);
+  }
+}
