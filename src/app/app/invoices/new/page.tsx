@@ -4,13 +4,14 @@ import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 import { requireUser } from "@/lib/auth/current-user";
+import { isoDate } from "@/lib/invoices/dates";
 import { InvoiceForm } from "./invoice-form";
 
 export const metadata: Metadata = { title: `${t("invoiceForm.title")} · ${t("app.name")}` };
 
 export default function NewInvoicePage(props: PageProps<"/app/invoices/new">) {
   return (
-    <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
+    <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8 md:px-8 lg:max-w-5xl">
       <Suspense fallback={<Skeleton className="h-[32rem] w-full" />}>
         <NewInvoice searchParams={props.searchParams} />
       </Suspense>
@@ -43,7 +44,11 @@ async function NewInvoice({ searchParams }: { searchParams: PageProps<"/app/invo
         )}
       </div>
       {onboarding && <p className="text-muted-foreground">{t("invoiceForm.firstStep")}</p>}
-      <InvoiceForm defaultCurrency={user.localCurrency ?? "USD"} />
+      <InvoiceForm
+        defaultCurrency={user.localCurrency ?? "USD"}
+        from={{ name: user.displayName ?? user.email ?? t("app.name"), email: user.email }}
+        today={isoDate(new Date())}
+      />
     </>
   );
 }

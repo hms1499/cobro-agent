@@ -325,6 +325,7 @@ export const en = {
   "invoice.viewTx": "View on Celoscan",
   "invoice.back": "All invoices",
   "invoice.status": "Status",
+  "invoiceForm.preview": "What your client will see",
   "invoice.share": "Share with your client",
   "doc.invoice": "Invoice",
   "doc.draft": "Draft",
