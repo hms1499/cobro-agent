@@ -10,7 +10,8 @@ export interface InvoiceDocumentProps {
   number: number | null;
   from: { name: string; email?: string | null };
   to: string;
-  issued: Date | string;
+  /** Shown in the full layout; the pay page (compact) has no issue date to show. */
+  issued?: Date | string;
   due: string | null;
   description: string;
   amount: string;
@@ -47,7 +48,7 @@ export function InvoiceDocument(props: InvoiceDocumentProps) {
         </Field>
         {!compact && (
           <>
-            <Field label={t("doc.issued")}>{formatDate(issued)}</Field>
+            {issued && <Field label={t("doc.issued")}>{formatDate(issued)}</Field>}
             <Field label={t("doc.due")}>{due ? formatDate(due) : t("doc.onReceipt")}</Field>
           </>
         )}
