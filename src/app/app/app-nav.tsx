@@ -3,6 +3,8 @@
 import { Bot, FileText, House, Settings } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { InitialAvatar } from "@/components/initial-avatar";
+import { LogoMark } from "@/components/logo-mark";
 import { t, type MessageKey } from "@/i18n";
 
 const ITEMS: { href: string; label: MessageKey; icon: typeof House }[] = [
@@ -12,17 +14,34 @@ const ITEMS: { href: string; label: MessageKey; icon: typeof House }[] = [
   { href: "/app/settings", label: "nav.settings", icon: Settings },
 ];
 
-export function AppNav({ hasProposal }: { hasProposal: boolean }) {
-  return <AppNavLinks pathname={usePathname()} hasProposal={hasProposal} />;
+/** Who is signed in, for the sidebar's account block. */
+export type NavAccount = { name: string; email: string | null };
+
+export function AppNav({ hasProposal, account }: { hasProposal: boolean; account: NavAccount | null }) {
+  return <AppNavLinks pathname={usePathname()} hasProposal={hasProposal} account={account} />;
 }
 
-export function AppNavLinks({ pathname, hasProposal = false }: { pathname: string | null; hasProposal?: boolean }) {
+export function AppNavLinks({
+  pathname,
+  hasProposal = false,
+  account = null,
+}: {
+  pathname: string | null;
+  hasProposal?: boolean;
+  account?: NavAccount | null;
+}) {
   return (
     <nav
       aria-label={t("nav.label")}
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card lg:static lg:w-60 lg:shrink-0 lg:border-r lg:border-t-0"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card lg:sticky lg:top-0 lg:flex lg:h-dvh lg:w-64 lg:shrink-0 lg:flex-col lg:border-r lg:border-t-0"
     >
-      <p className="hidden px-6 py-6 text-lg font-semibold text-primary lg:block">{t("app.name")}</p>
+      <Link
+        href="/app"
+        className="hidden min-h-11 items-center gap-2.5 px-6 pb-6 pt-7 text-lg font-semibold text-foreground focus-visible:outline-2 focus-visible:outline-ring lg:flex"
+      >
+        <LogoMark />
+        {t("app.name")}
+      </Link>
       <ul className="flex lg:flex-col lg:gap-0.5 lg:px-3">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname !== null && (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
@@ -48,6 +67,20 @@ export function AppNavLinks({ pathname, hasProposal = false }: { pathname: strin
           );
         })}
       </ul>
+      {account && (
+        <Link
+          href="/app/settings"
+          className="hover-tint mx-3 mb-4 mt-auto hidden min-h-11 items-center gap-3 rounded-lg border-t border-border px-3 pb-2 pt-4 focus-visible:outline-2 focus-visible:outline-ring lg:flex"
+        >
+          <InitialAvatar name={account.name} size="md" />
+          <span className="flex min-w-0 flex-col">
+            <span className="truncate text-sm font-medium">{account.name}</span>
+            {account.email && account.email !== account.name && (
+              <span className="truncate text-xs text-muted-foreground">{account.email}</span>
+            )}
+          </span>
+        </Link>
+      )}
     </nav>
   );
 }
