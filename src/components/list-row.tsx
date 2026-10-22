@@ -17,6 +17,7 @@ export function ListRow({
   amount,
   status,
   icon,
+  leading,
   wrapTitle = false,
 }: {
   href?: string;
@@ -25,22 +26,26 @@ export function ListRow({
   amount?: DisplayAmount;
   status?: ReactNode;
   icon?: ReactNode;
+  /** A larger leading element, such as a client's initials. */
+  leading?: ReactNode;
   wrapTitle?: boolean;
 }) {
   const body = (
     <>
-      <span className="flex min-w-0 items-start gap-3">
-        {icon}
+      <span className={`flex min-w-0 gap-3 ${leading ? "items-center" : "items-start"}`}>
+        {leading ?? icon}
         <span className="flex min-w-0 flex-col gap-0.5">
-          <span className={`font-medium ${wrapTitle ? "line-clamp-2" : "truncate"}`}>{title}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className={`font-medium ${wrapTitle ? "line-clamp-2" : "truncate"}`}>{title}</span>
+            {status && <span className="shrink-0">{status}</span>}
+          </span>
           {subtitle && <span className="truncate text-sm text-muted-foreground">{subtitle}</span>}
         </span>
       </span>
-      {(amount || status) && (
-        <span className="flex shrink-0 flex-col items-end gap-1 text-right tabular-nums">
-          {amount && <span className="whitespace-nowrap font-semibold">{amount.primary}</span>}
-          {amount?.secondary && <span className="whitespace-nowrap text-sm text-muted-foreground">{amount.secondary}</span>}
-          {status}
+      {amount && (
+        <span className="flex shrink-0 flex-col items-end gap-0.5 text-right tabular-nums">
+          <span className="whitespace-nowrap font-semibold">{amount.primary}</span>
+          {amount.secondary && <span className="whitespace-nowrap text-sm text-muted-foreground">{amount.secondary}</span>}
         </span>
       )}
     </>

@@ -3,9 +3,15 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { LoadingRows } from "@/components/loading-rows";
 import { SubmitButton } from "@/components/submit-button";
+import { SummaryCards } from "@/components/summary-cards";
 import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 import { requireUser } from "@/lib/auth/current-user";
+import { getDb } from "@/lib/db/client";
+import { getReferenceRatesOrNull } from "@/lib/fx/rates";
+import { formatDate } from "@/lib/invoices/dates";
+import { listInvoices } from "@/lib/invoices/repo";
+import { summarizeInvoices } from "@/lib/invoices/view";
 import { getOpenProposal } from "@/lib/treasury/request-reads";
 import type { AppUser } from "@/lib/users/queries";
 import { finishSetup } from "./actions";
@@ -34,14 +40,27 @@ export default function AppHomePage() {
   );
 }
 
+/** Same shape as the loaded page so nothing jumps when it streams in (spec 4f §4.3). */
 function HomeSkeleton() {
   return (
-    <div className="flex flex-col gap-4" aria-busy="true" aria-label={t("common.loading")}>
-      <Skeleton className="h-8 w-48" />
-      <Skeleton className="h-40 w-full lg:w-[330px]" />
-      <Skeleton className="h-20 w-full" />
+    <div className="flex flex-col gap-6" aria-busy="true" aria-label={t("common.loading")}>
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-32" />
+      </div>
+      <Skeleton className="h-28 w-full rounded-xl" />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
+        <Skeleton className="h-72 w-full rounded-xl" />
+        <LoadingRows count={5} />
+      </div>
     </div>
   );
+}
+
+/** Spec 4f item A: what clients owe, what is late and what came in this month. */
+async function Summary({ user }: { user: AppUser }) {
+  const [rows, rates] = await Promise.all([listInvoices(getDb(), user.id, 500), getReferenceRatesOrNull()]);
+  return <SummaryCards summary={summarizeInvoices(rows, rates, new Date())} local={user.localCurrency} rates={rates} />;
 }
 
 /** Spec §4.2, layout A: money first, one agent line, then Recent; two columns from 1024px (A2). */
@@ -52,7 +71,10 @@ async function Home() {
   const primaryAction = user.treasuryStatus === "ready" && !proposal;
   return (
     <>
-      <h1 className="text-2xl font-semibold">{t("app.greeting", { name: user.displayName ?? user.email ?? "" })}</h1>
+      <header className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold">{t("app.greeting", { name: user.displayName ?? user.email ?? "" })}</h1>
+        <p className="text-sm text-muted-foreground">{formatDate(new Date())}</p>
+      </header>
       <SetupBanner status={user.treasuryStatus} />
       <ProposalSlot>
         {proposal && (
@@ -61,7 +83,10 @@ async function Home() {
           </Suspense>
         )}
       </ProposalSlot>
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[330px_minmax(0,1fr)]">
+      <Suspense fallback={<Skeleton className="h-28 w-full rounded-xl" />}>
+        <Summary user={user} />
+      </Suspense>
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
           <Suspense fallback={<Skeleton className="h-48 w-full" />}>
             <MoneyCard user={user} primaryAction={primaryAction} />

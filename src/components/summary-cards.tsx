@@ -25,20 +25,21 @@ function Cell({
 }) {
   const amount = figure.usd === null ? null : displayAmount(figure.usd, "USD", local, rates);
   const warn = alert && figure.count > 0;
+  // Below 640px each figure is one compact line (label left, amount right) so the strip stays short.
   return (
-    <div className="flex flex-col gap-1 px-5 py-4 first:pt-5 last:pb-5 sm:py-5">
-      <dt className="flex items-center justify-between gap-3 text-sm">
+    <div className="flex items-center justify-between gap-3 px-4 py-3 sm:flex-col sm:items-stretch sm:justify-start sm:gap-1 sm:px-5 sm:py-5">
+      <dt className="flex flex-col text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <span className={`flex items-center gap-1.5 ${warn ? "font-medium text-destructive" : "text-muted-foreground"}`}>
           {warn && <CircleAlert aria-hidden="true" className="size-4" />}
           {label}
         </span>
-        {amount && <span className="text-muted-foreground tabular-nums">{countLabel(figure.count)}</span>}
+        {amount && <span className="text-xs text-muted-foreground tabular-nums sm:text-sm">{countLabel(figure.count)}</span>}
       </dt>
-      <dd className="flex flex-col tabular-nums">
-        <span className={`text-2xl font-semibold tracking-tight ${warn ? "text-destructive" : ""}`}>
+      <dd className="flex flex-col items-end tabular-nums sm:items-start">
+        <span className={`text-lg font-semibold tracking-tight sm:text-2xl ${warn ? "text-destructive" : ""}`}>
           {amount ? <CountUp value={amount.primary} /> : countLabel(figure.count)}
         </span>
-        <span className="text-sm text-muted-foreground">{amount ? amount.secondary : t("summary.noRates")}</span>
+        <span className="text-xs text-muted-foreground sm:text-sm">{amount ? amount.secondary : t("summary.noRates")}</span>
       </dd>
     </div>
   );
