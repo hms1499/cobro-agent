@@ -8,6 +8,7 @@ import { HowItWorks } from "@/components/landing/how-it-works";
 import { OnchainProof } from "@/components/landing/onchain-proof";
 import { SiteFooter } from "@/components/landing/site-footer";
 import { SiteNav } from "@/components/landing/site-nav";
+import { RevealOnScroll } from "@/components/reveal";
 import { t } from "@/i18n";
 import { readPublicEnv } from "@/lib/config/public";
 
@@ -29,6 +30,7 @@ export default function Home() {
         <FinalCta />
       </main>
       <SiteFooter />
+      <RevealOnScroll />
     </>
   );
 }

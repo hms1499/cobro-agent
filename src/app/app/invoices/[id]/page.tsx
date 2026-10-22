@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CopyLink } from "@/components/copy-link";
+import { InvoiceDocument } from "@/components/invoice-document";
 import { Money } from "@/components/money";
 import { InvoiceStatusChip } from "@/components/status-chip";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,17 +14,19 @@ import { requireUser } from "@/lib/auth/current-user";
 import { readPublicEnv } from "@/lib/config/public";
 import { getDb } from "@/lib/db/client";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
-import { formatDate } from "@/lib/invoices/dates";
+import { formatDate, isoDate } from "@/lib/invoices/dates";
 import { getOwnedInvoice } from "@/lib/invoices/repo";
+import { displayStatus, invoiceTimeline } from "@/lib/invoices/view";
 import { isPayAsset } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 import { formatTokenAmount } from "@/lib/money/format";
+import { Timeline } from "./timeline";
 
 export const metadata: Metadata = { title: `${t("invoices.title")} · ${t("app.name")}` };
 
 export default function InvoicePage(props: PageProps<"/app/invoices/[id]">) {
   return (
-    <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
+    <main id="main" className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
       <Link
         href="/app/invoices"
         className="hover-tint -ml-3 flex min-h-11 w-fit items-center gap-2 rounded-md px-3 text-primary focus-visible:outline-2 focus-visible:outline-ring"
@@ -52,6 +55,7 @@ async function Invoice({
   const rates = await getReferenceRatesOrNull();
   const appUrl = readPublicEnv().NEXT_PUBLIC_APP_URL;
   const shareUrl = recurring ? `${appUrl}/r/${recurring.slug}` : `${appUrl}/pay/${invoice.slug}`;
+  const today = isoDate(new Date());
 
   return (
     <>
@@ -61,47 +65,55 @@ async function Invoice({
           {t("invoice.created")}
         </p>
       )}
-      <Card>
-        <CardContent className="flex flex-col gap-4">
-          <div className="flex items-start justify-between gap-4">
-            <h1 className="text-xl font-semibold">{invoice.clientName}</h1>
-            <InvoiceStatusChip status={invoice.status} />
-          </div>
-          <Money size="lg" amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates, "billed")} />
-          <dl className="grid gap-3 text-sm">
-            <div>
-              <dt className="text-muted-foreground">{t("invoice.for")}</dt>
-              <dd className="text-base">{invoice.description}</dd>
-            </div>
-            {invoice.dueDate && (
-              <div>
-                <dt className="sr-only">{t("invoiceForm.dueDate")}</dt>
-                <dd>{t("invoices.due", { date: formatDate(invoice.dueDate) })}</dd>
+      {/* Spec 4f item C: the invoice as a document on the left, its status and sharing on the right. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex flex-col gap-2">
+          <h1 className="sr-only">{invoice.clientName}</h1>
+          <InvoiceDocument
+            number={invoice.number}
+            from={{ name: user.displayName ?? user.email ?? t("app.name"), email: user.email }}
+            to={invoice.clientName}
+            issued={invoice.createdAt}
+            due={invoice.dueDate}
+            description={invoice.description}
+            amount={invoice.amount}
+            currency={invoice.currency}
+          />
+          {recurring && (
+            <p className="px-1 text-sm text-muted-foreground">
+              {t(recurring.interval === "weekly" ? "invoice.repeatsWeekly" : "invoice.repeatsMonthly")}
+            </p>
+          )}
+        </div>
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-8">
+          <Card>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-sm text-muted-foreground">{t("invoice.status")}</h2>
+                <InvoiceStatusChip status={displayStatus(invoice, today)} />
               </div>
-            )}
-            {recurring && (
-              <div>
-                <dt className="sr-only">{t("invoiceForm.repeat")}</dt>
-                <dd>{t(recurring.interval === "weekly" ? "invoice.repeatsWeekly" : "invoice.repeatsMonthly")}</dd>
-              </div>
-            )}
-          </dl>
-        </CardContent>
-      </Card>
-
-      {invoice.status !== "paid" && invoice.status !== "cancelled" && (
-        <section className="flex flex-col gap-3">
-          <CopyLink url={shareUrl} label={recurring ? t("invoice.recurringShareLabel") : t("invoice.shareLabel")} />
-          <Link
-            href={`/pay/${invoice.slug}`}
-            target="_blank"
-            className="flex min-h-11 w-fit items-center gap-2 rounded-sm text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
-          >
-            {t("invoice.open")}
-            <ExternalLink aria-hidden="true" className="size-4" />
-          </Link>
-        </section>
-      )}
+              <Money amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates, "billed")} size="lg" />
+              <Timeline steps={invoiceTimeline(invoice, today)} />
+            </CardContent>
+          </Card>
+          {invoice.status !== "paid" && invoice.status !== "cancelled" && (
+            <Card>
+              <CardContent className="flex flex-col gap-3">
+                <h2 className="font-semibold">{t("invoice.share")}</h2>
+                <CopyLink url={shareUrl} label={recurring ? t("invoice.recurringShareLabel") : t("invoice.shareLabel")} />
+                <Link
+                  href={`/pay/${invoice.slug}`}
+                  target="_blank"
+                  className="flex min-h-11 w-fit items-center gap-2 rounded-sm text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
+                >
+                  {t("invoice.open")}
+                  <ExternalLink aria-hidden="true" className="size-4" />
+                </Link>
+              </CardContent>
+            </Card>
+          )}
+        </aside>
+      </div>
 
       <section aria-labelledby="payments-heading" className="flex flex-col gap-3">
         <h2 id="payments-heading" className="text-lg font-semibold">

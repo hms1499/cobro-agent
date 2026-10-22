@@ -2,7 +2,9 @@
 
 import { CircleAlert, CircleCheck, Clock } from "lucide-react";
 import { useActionState } from "react";
+import { EmptyState } from "@/components/empty-state";
 import { FormField, fieldA11y } from "@/components/form-field";
+import { AddressesIllustration } from "@/components/illustrations";
 import { SubmitButton } from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +20,13 @@ export interface AddressItem {
 }
 
 export function AddressList({ items }: { items: AddressItem[] }) {
-  if (items.length === 0) return <p className="text-muted-foreground">{t("addresses.empty")}</p>;
+  if (items.length === 0) {
+    return (
+      <div className="rounded-xl bg-card ring-1 ring-foreground/10">
+        <EmptyState illustration={<AddressesIllustration />} title={t("addresses.emptyTitle")} body={t("addresses.empty")} />
+      </div>
+    );
+  }
   return (
     <ul className="flex flex-col gap-3">
       {items.map((item) => (

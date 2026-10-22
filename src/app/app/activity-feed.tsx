@@ -1,5 +1,7 @@
 // src/app/app/activity-feed.tsx
 import { CircleAlert, CircleCheck, Clock, ExternalLink, Info } from "lucide-react";
+import { EmptyState } from "@/components/empty-state";
+import { ActivityIllustration } from "@/components/illustrations";
 import { ScrollToHash } from "@/components/scroll-to-hash";
 import { t } from "@/i18n";
 import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
@@ -28,7 +30,13 @@ export async function ActivityFeed({ user, limit = 40 }: { user: AppUser; limit?
         {t("activity.title")}
       </h2>
       {events.length === 0 ? (
-        <p className="text-muted-foreground">{t("activity.empty", { minutes: CHECK_INTERVAL_MINUTES })}</p>
+        <div className="rounded-xl bg-card ring-1 ring-foreground/10">
+          <EmptyState
+            illustration={<ActivityIllustration />}
+            title={t("activity.emptyTitle")}
+            body={t("activity.empty", { minutes: CHECK_INTERVAL_MINUTES })}
+          />
+        </div>
       ) : (
         <ul className="flex flex-col divide-y rounded-xl bg-card ring-1 ring-foreground/10">
           {events.map((event) => {
@@ -36,7 +44,9 @@ export async function ActivityFeed({ user, limit = 40 }: { user: AppUser; limit?
             const { icon: Icon, className } = TONES[view.tone];
             return (
               <li key={event.id} className="flex items-start gap-3 px-4 py-3">
-                <Icon aria-hidden="true" className={`mt-0.5 size-5 shrink-0 ${className}`} />
+                <span aria-hidden="true" className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                  <Icon className={`size-4 ${className}`} />
+                </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <p className="font-medium">{view.title}</p>
                   <time dateTime={event.createdAt.toISOString()} className="text-sm text-muted-foreground">

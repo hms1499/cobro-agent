@@ -192,3 +192,49 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* App page crossfade (spec 4f §4.3): only the page area fades; the root and the nav do not move. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+::view-transition {
+  pointer-events: none;
+}
+@keyframes page-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes page-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+::view-transition-old(.app-page) {
+  animation: 90ms ease-in both page-fade-out;
+}
+::view-transition-new(.app-page) {
+  animation: 180ms ease-out 40ms both page-fade-in;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}
+
+/* Landing scroll reveal (spec 4f §4.3, components/reveal.tsx): once per element, opacity and a 12px rise. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-reveal="pending"] {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  [data-reveal="shown"] {
+    transition:
+      opacity 450ms ease-out var(--reveal-delay, 0ms),
+      transform 450ms ease-out var(--reveal-delay, 0ms);
+  }
+}

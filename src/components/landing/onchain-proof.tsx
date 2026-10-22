@@ -20,9 +20,9 @@ export function OnchainProof({ agentId }: { agentId: number | undefined }) {
   return (
     <section className="pb-16 md:pb-24">
       <div className={container}>
-        <h2 className={sectionTitle}>{t("landing.proof.title")}</h2>
+        <h2 data-reveal className={sectionTitle}>{t("landing.proof.title")}</h2>
         <p className={`mt-4 ${sectionIntro}`}>{t("landing.proof.intro")}</p>
-        <ul className="mt-9 divide-y rounded-2xl bg-card ring-1 ring-foreground/8">
+        <ul data-reveal data-reveal-delay={70} className="mt-9 divide-y rounded-2xl bg-card ring-1 ring-foreground/8">
           {rows.map((row) => {
             const body = (
               <>

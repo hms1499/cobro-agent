@@ -1,6 +1,8 @@
-import { FileText, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
+import { InvoicesIllustration } from "@/components/illustrations";
+import { InitialAvatar } from "@/components/initial-avatar";
 import { ListRow } from "@/components/list-row";
 import { InvoiceStatusChip } from "@/components/status-chip";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,8 +11,9 @@ import { buildRecent } from "@/lib/dashboard/recent";
 import { getDb } from "@/lib/db/client";
 import type { InvoiceRow } from "@/lib/db/schema";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
-import { formatDate } from "@/lib/invoices/dates";
+import { formatDate, isoDate } from "@/lib/invoices/dates";
 import { listRecentInvoices } from "@/lib/invoices/repo";
+import { displayStatus } from "@/lib/invoices/view";
 import { displayAmount } from "@/lib/money/display";
 import { describeEvent } from "@/lib/treasury/explain";
 import { listEvents } from "@/lib/treasury/repo";
@@ -34,6 +37,7 @@ export async function Recent({ user }: { user: AppUser }) {
   const db = getDb();
   const [invoices, events, rates] = await Promise.all([listRecentInvoices(db, user.id, 10), listEvents(db, user.id, 10), getReferenceRatesOrNull()]);
   const items = buildRecent(invoices, events);
+  const today = isoDate(new Date());
   return (
     <section aria-labelledby="recent-heading">
       <Card>
@@ -43,7 +47,7 @@ export async function Recent({ user }: { user: AppUser }) {
           </h2>
           {items.length === 0 ? (
             <EmptyState
-              icon={<FileText aria-hidden="true" className="size-6 text-muted-foreground" />}
+              illustration={<InvoicesIllustration />}
               title={t("invoices.emptyTitle")}
               body={t("home.recent.empty")}
               action={
@@ -62,10 +66,11 @@ export async function Recent({ user }: { user: AppUser }) {
                     <li key={`i-${invoice.id}`}>
                       <ListRow
                         href={`/app/invoices/${invoice.id}`}
+                        leading={<InitialAvatar name={invoice.clientName} />}
                         title={invoice.clientName}
                         subtitle={invoiceSubtitle(invoice)}
                         amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates, "billed")}
-                        status={<InvoiceStatusChip status={invoice.status} />}
+                        status={<InvoiceStatusChip status={displayStatus(invoice, today)} size="sm" />}
                       />
                     </li>
                   );
@@ -76,7 +81,11 @@ export async function Recent({ user }: { user: AppUser }) {
                   <li key={`e-${item.event.id}`}>
                     <ListRow
                       href="/app/rules#history"
-                      icon={<Icon aria-hidden="true" className={`mt-0.5 size-5 shrink-0 ${className}`} />}
+                      leading={
+                        <span aria-hidden="true" className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                          <Icon className={`size-4 ${className}`} />
+                        </span>
+                      }
                       title={view.title}
                       wrapTitle
                       subtitle={formatDate(item.event.createdAt)}

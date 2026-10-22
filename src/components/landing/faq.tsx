@@ -9,8 +9,8 @@ export function Faq() {
   return (
     <section id="faq" className="scroll-mt-20 pb-16 md:pb-24">
       <div className={`${container} grid grid-cols-1 items-start gap-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)] lg:gap-14`}>
-        <h2 className={sectionTitle}>{t("landing.faq.title")}</h2>
-        <div className="border-t">
+        <h2 data-reveal className={sectionTitle}>{t("landing.faq.title")}</h2>
+        <div data-reveal data-reveal-delay={70} className="border-t">
           {ITEMS.map((item, i) => (
             <details key={item} open={i === 0} className="group border-b">
               <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-4 rounded-lg px-2 py-5 text-lg font-semibold transition-colors duration-[20ms] ease-in hover:bg-primary/4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">

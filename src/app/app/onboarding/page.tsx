@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 import { requireUser } from "@/lib/auth/current-user";
@@ -18,9 +19,13 @@ export default function OnboardingPage() {
         </div>
       </div>
       <h1 className="text-2xl font-semibold">{t("onboarding.title")}</h1>
-      <Suspense fallback={<Skeleton className="h-96 w-full" />}>
-        <Onboarding />
-      </Suspense>
+      <Card>
+        <CardContent>
+          <Suspense fallback={<Skeleton className="h-96 w-full" />}>
+            <Onboarding />
+          </Suspense>
+        </CardContent>
+      </Card>
     </main>
   );
 }

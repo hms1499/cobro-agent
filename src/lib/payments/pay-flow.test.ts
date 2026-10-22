@@ -18,6 +18,7 @@ const invoice: PublicInvoice = {
   status: "open",
   settlingUntil: null,
   freelancerName: "Ana",
+  number: 1,
   payTo: "0x1111111111111111111111111111111111111111",
   recurringSlug: null,
 };

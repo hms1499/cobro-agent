@@ -1,11 +1,11 @@
 import { CircleAlert, Plus } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { CurrencyBadge } from "@/components/currency-badge";
 import { Money } from "@/components/money";
 import { Card, CardContent } from "@/components/ui/card";
 import { t } from "@/i18n";
 import { getDb } from "@/lib/db/client";
-import { convertFiat } from "@/lib/fx/convert";
 import { displayAmount } from "@/lib/money/display";
 import { volumeStats } from "@/lib/treasury/stats";
 import { loadTreasuryView } from "@/lib/treasury/view";
@@ -66,25 +66,45 @@ export async function MoneyCard({ user, primaryAction }: { user: AppUser; primar
 
 function Figures({ view, rates }: NonNullable<Awaited<ReturnType<typeof loadTreasuryView>>>) {
   const local = view.local;
-  const spendingUsd = Number(convertFiat(view.spending, local, "USD", rates));
-  const savingsUsd = Number(view.savingsUsd);
-  const total = spendingUsd + savingsUsd;
-  const spendingPercent = total > 0 ? Math.round((spendingUsd / total) * 100) : null;
   return (
     <>
-      <Money size="xl" amount={displayAmount(view.totalUsd, "USD", local, rates)} />
-      {spendingPercent !== null && (
-        <div className="flex flex-col gap-1.5">
-          <div className="flex h-2 overflow-hidden rounded-full bg-muted" aria-hidden="true">
-            <div className="bg-primary" style={{ width: `${spendingPercent}%` }} />
-            <div className="flex-1 bg-tint" />
+      <Money size="xl" countUp amount={displayAmount(view.totalUsd, "USD", local, rates)} />
+      {/* Spec 4f item D: the two pockets behind the total, each with its currency badge. */}
+      <ul className="flex flex-col divide-y divide-border border-y border-border">
+        <li className="flex flex-col gap-2 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2.5 text-sm">
+              <CurrencyBadge code={local} size="sm" />
+              {t("treasury.spending", { currency: local })}
+            </span>
+            <span className="font-semibold tabular-nums">{displayAmount(view.spending, local, local, rates).primary}</span>
           </div>
-          <p className="flex justify-between gap-3 text-sm text-muted-foreground tabular-nums">
-            <span>{t("treasury.legend.spending", { amount: displayAmount(view.spending, local, local, rates).primary })}</span>
-            <span>{t("treasury.legend.savings", { amount: displayAmount(view.savingsUsd, "USD", local, rates, "billed").primary })}</span>
-          </p>
-        </div>
-      )}
+          {view.reservePercent !== null && (
+            <div className="flex flex-col gap-1 pl-8.5">
+              <div
+                role="progressbar"
+                aria-label={t("treasury.reserveLabel")}
+                aria-valuenow={view.reservePercent}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                className="h-1.5 overflow-hidden rounded-full bg-muted"
+              >
+                <div className="h-full rounded-full bg-primary" style={{ width: `${view.reservePercent}%` }} />
+              </div>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {t("treasury.reserveOf", { reserve: displayAmount(view.reserve, local, local, rates).primary })}
+              </p>
+            </div>
+          )}
+        </li>
+        <li className="flex items-center justify-between gap-3 py-3">
+          <span className="flex items-center gap-2.5 text-sm">
+            <CurrencyBadge code="USD" size="sm" />
+            {t("treasury.savings")}
+          </span>
+          <span className="font-semibold tabular-nums">{displayAmount(view.savingsUsd, "USD", local, rates, "billed").primary}</span>
+        </li>
+      </ul>
     </>
   );
 }
