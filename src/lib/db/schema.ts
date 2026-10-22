@@ -309,6 +309,7 @@ export const AGENT_EVENT_TYPES = [
   "proposed",
   "approved",
   "dismissed",
+  "home_currency_changed",
 ] as const;
 export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];
 

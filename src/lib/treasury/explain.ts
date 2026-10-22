@@ -5,7 +5,7 @@ import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import type { AgentEventType, FxIntentRow } from "@/lib/db/schema";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { formatDecimal } from "@/lib/money/decimal";
-import { isLocalCurrency, isPayAsset, type HomeCurrency } from "@/lib/money/currencies";
+import { isHomeCurrency, isLocalCurrency, isPayAsset, type HomeCurrency } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 import { formatMoney } from "@/lib/money/format";
 import type { Decision, IdleReason } from "./engine";
@@ -181,6 +181,13 @@ export function describeEvent(
       return simple("info", "resumed");
     case "payment_reconciled":
       return simple("success", "payment_reconciled");
+    case "home_currency_changed":
+      return {
+        tone: "info",
+        title: t("event.home_currency_changed.title", { to: isHomeCurrency(d.to) ? t(`currency.${d.to}`) : String(d.to) }),
+        why: t("event.home_currency_changed.why"),
+        txHash: null,
+      };
   }
 }
 
