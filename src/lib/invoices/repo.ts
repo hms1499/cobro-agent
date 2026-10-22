@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, lte, sql } from "drizzle-orm";
 import { getAddress, type Address } from "viem";
 import type { Db } from "@/lib/db/client";
 import {
@@ -22,8 +22,19 @@ import { newSlug } from "./slug";
 export const RECURRING_DUE_DAYS = 7;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** An invoice with its per-user number (1 = the freelancer's first invoice), see `formatInvoiceNumber`. */
+export type NumberedInvoice = InvoiceRow & { number: number };
+
+/**
+ * Position among the owner's invoices by (created_at, id); computed at read time, invoices are never deleted.
+ * The outer columns are written out: Drizzle leaves them unqualified in single-table selects, where they
+ * would resolve to the subquery's own row.
+ */
+const invoiceNumber = sql<number>`(select count(*) from invoices i2 where i2.user_id = "invoices"."user_id" and (i2.created_at, i2.id) <= ("invoices"."created_at", "invoices"."id"))`.mapWith(Number);
+const numberedColumns = { ...getTableColumns(invoices), number: invoiceNumber };
+
 export interface OwnedInvoice {
-  invoice: InvoiceRow;
+  invoice: NumberedInvoice;
   recurring: { slug: string; interval: RecurringInterval } | null;
   payments: PaymentRow[];
 }
@@ -40,6 +51,7 @@ export interface PublicInvoice {
   status: InvoiceStatus;
   settlingUntil: Date | null;
   freelancerName: string | null;
+  number: number;
   /** The owner's treasury wallet, or null while it is still being created. */
   payTo: Address | null;
   recurringSlug: string | null;
@@ -148,8 +160,8 @@ export async function issueDueRecurring(db: Db, now: Date, limit = 100): Promise
   return issued;
 }
 
-export async function listInvoices(db: Db, userId: string, limit = 50): Promise<InvoiceRow[]> {
-  return db.select().from(invoices).where(eq(invoices.userId, userId)).orderBy(desc(invoices.createdAt)).limit(limit);
+export async function listInvoices(db: Db, userId: string, limit = 50): Promise<NumberedInvoice[]> {
+  return db.select(numberedColumns).from(invoices).where(eq(invoices.userId, userId)).orderBy(desc(invoices.createdAt)).limit(limit);
 }
 
 /** Newest activity first: a paid invoice counts from its payment, so an old invoice paid today comes back to the top. */
@@ -165,7 +177,7 @@ export async function listRecentInvoices(db: Db, userId: string, limit = 10): Pr
 export async function getOwnedInvoice(db: Db, userId: string, invoiceId: string): Promise<OwnedInvoice | null> {
   if (!UUID.test(invoiceId)) return null;
   const [row] = await db
-    .select({ invoice: invoices, recurringSlug: recurringInvoices.slug, interval: recurringInvoices.interval })
+    .select({ invoice: numberedColumns, recurringSlug: recurringInvoices.slug, interval: recurringInvoices.interval })
     .from(invoices)
     .leftJoin(recurringInvoices, eq(recurringInvoices.id, invoices.recurringId))
     .where(and(eq(invoices.id, invoiceId), eq(invoices.userId, userId)));
@@ -182,6 +194,7 @@ export async function findPublicInvoice(db: Db, slug: string): Promise<PublicInv
   const [row] = await db
     .select({
       invoice: invoices,
+      number: invoiceNumber,
       freelancerName: users.displayName,
       walletStatus: treasuryWallets.status,
       walletAddress: treasuryWallets.address,
@@ -205,6 +218,7 @@ export async function findPublicInvoice(db: Db, slug: string): Promise<PublicInv
     status: invoice.status,
     settlingUntil: invoice.settlingUntil,
     freelancerName: row.freelancerName,
+    number: row.number,
     payTo: row.walletStatus === "ready" && row.walletAddress ? getAddress(row.walletAddress) : null,
     recurringSlug: row.recurringSlug,
   };

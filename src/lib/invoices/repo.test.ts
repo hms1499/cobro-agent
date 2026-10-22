@@ -148,3 +148,39 @@ describe("recurring invoices", () => {
     expect(await resolveRecurringLink(db, "unknown")).toBeNull();
   });
 });
+
+describe("invoice numbers", () => {
+  async function createAt(userId: string, iso: string) {
+    const invoice = await createInvoice(db, userId, input);
+    await db.update(invoices).set({ createdAt: new Date(iso) }).where(eq(invoices.id, invoice.id));
+    return invoice;
+  }
+
+  it("numbers a user's invoices in creation order, per user", async () => {
+    const a = await seedFreelancer(db);
+    const b = await seedFreelancer(db);
+    await createAt(a.id, "2026-10-01T00:00:00Z");
+    await createAt(b.id, "2026-10-02T00:00:00Z");
+    await createAt(a.id, "2026-10-03T00:00:00Z");
+    await createAt(b.id, "2026-10-04T00:00:00Z");
+    await createAt(a.id, "2026-10-05T00:00:00Z");
+    expect((await listInvoices(db, a.id)).map((i) => i.number)).toEqual([3, 2, 1]);
+    expect((await listInvoices(db, b.id)).map((i) => i.number)).toEqual([2, 1]);
+  });
+
+  it("keeps numbers when the list is limited", async () => {
+    const a = await seedFreelancer(db);
+    await createAt(a.id, "2026-10-01T00:00:00Z");
+    await createAt(a.id, "2026-10-02T00:00:00Z");
+    await createAt(a.id, "2026-10-03T00:00:00Z");
+    expect((await listInvoices(db, a.id, 1))[0].number).toBe(3);
+  });
+
+  it("gives the owned and public views the same number", async () => {
+    const a = await seedFreelancer(db);
+    await createAt(a.id, "2026-10-01T00:00:00Z");
+    const second = await createAt(a.id, "2026-10-02T00:00:00Z");
+    expect((await getOwnedInvoice(db, a.id, second.id))?.invoice.number).toBe(2);
+    expect((await findPublicInvoice(db, second.slug))?.number).toBe(2);
+  });
+});
