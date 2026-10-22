@@ -393,6 +393,8 @@ export const en = {
   "pay.rateLocked": "Rate locked for {time}",
   "pay.connect": "Connect wallet",
   "pay.switch": "Switch to Celo",
+  "pay.walletConnected": "Wallet connected",
+  "pay.disconnect": "Disconnect",
   "pay.newRate": "Get a new rate",
   "pay.expired": "The rate expired. Get a new one to continue.",
   "pay.noWallet": "Open this page in a wallet app (MiniPay, MetaMask or Rabby), or install a browser wallet, to pay.",

@@ -1,12 +1,13 @@
 "use client";
 
-import { CircleAlert, CircleCheck, ExternalLink, LoaderCircle } from "lucide-react";
+import { CircleAlert, CircleCheck, ExternalLink, LoaderCircle, Unplug } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi } from "viem";
 import {
   useConnect,
   useConnection,
   useConnectors,
+  useDisconnect,
   usePublicClient,
   useReadContract,
   useSwitchChain,
@@ -47,6 +48,7 @@ export function PayInvoice({ slug }: { slug: string }) {
   const connection = useConnection();
   const connectors = useConnectors();
   const { connectAsync } = useConnect();
+  const { disconnectAsync } = useDisconnect();
   const { switchChainAsync } = useSwitchChain();
   const { data: walletClient } = useWalletClient({ chainId: celo.id });
   const publicClient = usePublicClient({ chainId: celo.id });
@@ -125,6 +127,13 @@ export function PayInvoice({ slug }: { slug: string }) {
     } catch (error) {
       setPhase({ kind: "error", key: payExceptionKind(error) === "declined" ? "pay.error.declined" : "pay.error.connect" });
     }
+  }
+
+  // wagmi's injected connector revokes the site permission where the wallet supports it, and the next
+  // connect asks the wallet to pick an account, so this is also how a payer switches accounts.
+  async function disconnect() {
+    setPhase({ kind: "idle" });
+    await disconnectAsync().catch(() => {});
   }
 
   async function pay() {
@@ -279,6 +288,20 @@ export function PayInvoice({ slug }: { slug: string }) {
                 {busy && <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
                 {phase.kind === "signing" ? t("pay.signing") : phase.kind === "settling" ? t("pay.settling") : t("pay.pay", { amount: amountLabel })}
               </Button>
+            )}
+            {connection.address && !busy && (
+              <div className="flex flex-wrap items-start justify-between gap-x-4 text-sm">
+                <details>
+                  <summary className="hover-tint -mx-2 flex min-h-11 w-fit cursor-pointer items-center rounded-md px-2 text-muted-foreground">
+                    {t("pay.walletConnected")}
+                  </summary>
+                  <p className="font-mono break-all text-muted-foreground">{connection.address}</p>
+                </details>
+                <Button variant="ghost" className="min-h-11 text-primary" onClick={() => void disconnect()}>
+                  <Unplug aria-hidden="true" className="size-4" />
+                  {t("pay.disconnect")}
+                </Button>
+              </div>
             )}
           </div>
         )
