@@ -22,8 +22,14 @@ export default function AppLayout({ children }: LayoutProps<"/app">) {
             {t("app.name")}
           </Link>
         </header>
-        {/* Spec 4f §4.3: the page area crossfades on navigation while the nav stays put (CSS in globals.css). */}
-        <ViewTransition default="app-page">{children}</ViewTransition>
+        {/*
+          Spec 4f §4.3: the page area crossfades when the nav switches pages, while the nav stays put (CSS in
+          globals.css). Only navigations tagged "app-nav" animate: Suspense reveals and form actions inside the
+          page must not, or every streamed section would flicker and block clicks for the fade's duration.
+        */}
+        <ViewTransition default="none" update={{ "app-nav": "app-page", default: "none" }}>
+          {children}
+        </ViewTransition>
       </div>
     </div>
   );

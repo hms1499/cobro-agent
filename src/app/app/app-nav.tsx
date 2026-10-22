@@ -14,6 +14,9 @@ const ITEMS: { href: string; label: MessageKey; icon: typeof House }[] = [
   { href: "/app/settings", label: "nav.settings", icon: Settings },
 ];
 
+/** Tags nav clicks so the layout's ViewTransition crossfades the page area (app/app/layout.tsx). */
+const NAV_TRANSITION = ["app-nav"];
+
 /** Who is signed in, for the sidebar's account block. */
 export type NavAccount = { name: string; email: string | null };
 
@@ -49,6 +52,7 @@ export function AppNavLinks({
             <li key={href} className="flex-1 lg:flex-none">
               <Link
                 href={href}
+                transitionTypes={NAV_TRANSITION}
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-14 flex-col items-center justify-center gap-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:min-h-11 lg:flex-row lg:justify-start lg:gap-3 lg:rounded-md lg:px-3 lg:text-sm ${
                   active ? "text-primary lg:bg-tint/35" : "hover-tint text-muted-foreground"
