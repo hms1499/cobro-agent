@@ -188,6 +188,7 @@ export const en = {
   "onboarding.step": "Step {step} of {total}",
   "onboarding.name": "Your name or business",
   "onboarding.nameHelp": "Clients see this on your invoices.",
+  "onboarding.usdHelp": "Your agent keeps everything in dollars. If a client pays in pesos or reais, it converts them to dollars for you.",
   "onboarding.currency": "What do you spend in?",
   "onboarding.reserveBefore": "Keep",
   "onboarding.reserveAfter": "for spending. Save the rest in dollars.",

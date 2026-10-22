@@ -18,8 +18,16 @@ describe("parseOnboardingForm", () => {
     expect(result).toMatchObject({ ok: true, data: { reserveAmount: "0.00" } });
   });
 
+  it("accepts US dollars and stores no reserve, whatever was posted", () => {
+    expect(parseOnboardingForm({ displayName: "Ana", localCurrency: "USD", reserveAmount: "5000" })).toEqual({
+      ok: true,
+      data: { displayName: "Ana", localCurrency: "USD", reserveAmount: "0" },
+    });
+    expect(parseOnboardingForm({ displayName: "Ana", localCurrency: "USD", reserveAmount: "300.000,00" })).toMatchObject({ ok: true });
+  });
+
   it("names every problem at once", () => {
-    expect(parseOnboardingForm({ displayName: " ", localCurrency: "USD", reserveAmount: "300.000,00" })).toEqual({
+    expect(parseOnboardingForm({ displayName: " ", localCurrency: "EUR", reserveAmount: "300.000,00" })).toEqual({
       ok: false,
       errors: {
         displayName: "onboarding.error.name",
@@ -51,5 +59,12 @@ describe("saveOnboarding", () => {
     const [userRules] = await db.select().from(rules).where(eq(rules.userId, user.id));
     expect(saved.displayName).toBe("Ana D.");
     expect(userRules).toMatchObject({ localCurrency: "BRL", reserveAmount: "1500.00" });
+  });
+
+  it("stores a dollars freelancer with a zero reserve", async () => {
+    const [user] = await db.insert(users).values({ paraUserId: "para-2" }).returning();
+    await saveOnboarding(db, user.id, { displayName: "Ana", localCurrency: "USD", reserveAmount: "0" });
+    const [userRules] = await db.select().from(rules).where(eq(rules.userId, user.id));
+    expect(userRules).toMatchObject({ localCurrency: "USD", reserveAmount: "0.00" });
   });
 });
