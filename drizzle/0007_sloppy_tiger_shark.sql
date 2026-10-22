@@ -1,0 +1,1 @@
+ALTER TYPE "public"."local_currency" ADD VALUE 'USD';

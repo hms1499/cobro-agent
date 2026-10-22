@@ -3,7 +3,7 @@ import { CountUp } from "@/components/count-up";
 import { t } from "@/i18n";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import type { InvoiceSummary, SummaryFigure } from "@/lib/invoices/view";
-import type { LocalCurrency } from "@/lib/money/currencies";
+import type { HomeCurrency } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 
 function countLabel(count: number): string {
@@ -19,7 +19,7 @@ function Cell({
 }: {
   label: string;
   figure: SummaryFigure;
-  local: LocalCurrency | null;
+  local: HomeCurrency | null;
   rates: ReferenceRates | null;
   alert?: boolean;
 }) {
@@ -55,7 +55,7 @@ export function SummaryCards({
   rates,
 }: {
   summary: InvoiceSummary;
-  local: LocalCurrency | null;
+  local: HomeCurrency | null;
   rates: ReferenceRates | null;
 }) {
   return (

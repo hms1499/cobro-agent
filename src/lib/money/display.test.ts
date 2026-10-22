@@ -37,3 +37,20 @@ describe("displayAmount", () => {
     expect(displayAmount("300.00", "USD", null, rates)).toEqual({ primary: "US$300.00" });
   });
 });
+
+describe("displayAmount for a freelancer who lives in dollars", () => {
+  const flat: ReferenceRates = { perUsd: { ARS: 1600n * 10n ** 18n, BRL: 5n * 10n ** 18n }, fetchedAt: 0 };
+
+  it("shows dollars alone, with no converted line", () => {
+    expect(displayAmount("12.50", "USD", "USD", flat)).toEqual({ primary: "US$12.50" });
+    expect(displayAmount("12.50", "USD", "USD", flat, "billed")).toEqual({ primary: "US$12.50" });
+  });
+
+  it("leads a peso invoice with pesos and dollars underneath", () => {
+    expect(displayAmount("1600.00", "ARS", "USD", flat, "billed")).toEqual({ primary: `ARS${NBSP}1,600`, secondary: "≈ US$1.00" });
+  });
+
+  it("leads a peso balance with its dollar value", () => {
+    expect(displayAmount("1600.00", "ARS", "USD", flat)).toEqual({ primary: "US$1.00", secondary: `ARS${NBSP}1,600` });
+  });
+});

@@ -6,7 +6,7 @@ import type { ReferenceRates } from "@/lib/fx/rates";
 import { formatDate } from "@/lib/invoices/dates";
 import type { NumberedInvoice } from "@/lib/invoices/repo";
 import { displayStatus, formatInvoiceNumber } from "@/lib/invoices/view";
-import type { LocalCurrency } from "@/lib/money/currencies";
+import type { HomeCurrency } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 
 const th = "px-4 py-3 text-left text-xs font-medium text-muted-foreground";
@@ -23,7 +23,7 @@ export function InvoiceTable({
   today,
 }: {
   rows: NumberedInvoice[];
-  local: LocalCurrency | null;
+  local: HomeCurrency | null;
   rates: ReferenceRates | null;
   today: string;
 }) {
