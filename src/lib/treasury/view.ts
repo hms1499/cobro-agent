@@ -1,7 +1,7 @@
 // src/lib/treasury/view.ts
 import { getDb } from "@/lib/db/client";
 import { getReferenceRates, type ReferenceRates } from "@/lib/fx/rates";
-import type { LocalCurrency } from "@/lib/money/currencies";
+import type { HomeCurrency } from "@/lib/money/currencies";
 import type { AppUser } from "@/lib/users/queries";
 import type { TreasuryBalances } from "./balances";
 import { readDisplayBalances } from "./live";
@@ -12,7 +12,7 @@ import { fiatToAtomic, LOCAL_ASSET, tokenFiatAmount, usdWad, usdWadToDollars } f
 
 /** Dashboard figures as decimal strings ready for displayAmount (spec §17.2 Dashboard). */
 export interface TreasuryView {
-  local: LocalCurrency;
+  local: HomeCurrency;
   /** Pay assets in USD; USDC gas money is left out. */
   totalUsd: string;
   /** Local-currency balance (the "Spending" bucket), in the local currency. */
@@ -25,30 +25,49 @@ export interface TreasuryView {
   /** Absolute value; protectedNegative says whether holding pesos would have been better. */
   protectedUsd: string;
   protectedNegative: boolean;
+  /** Home USD only: wARS + wBRL in dollars, which the agent will convert; "0.00" otherwise. */
+  waitingUsd: string;
 }
 
 export function buildTreasuryView(input: {
   balances: TreasuryBalances;
   rates: ReferenceRates;
-  rules: { localCurrency: LocalCurrency; reserveAmount: string };
+  rules: { localCurrency: HomeCurrency; reserveAmount: string };
   payments: PaymentForPnl[];
   withdrawnUsdWad: bigint;
 }): TreasuryView {
   const { balances, rates } = input;
   const local = input.rules.localCurrency;
+  const savingsUsd = usdWadToDollars(usdWad("USDT", balances.USDT, rates) + usdWad("USAT", balances.USAT, rates));
+  const totalUsd = usdWadToDollars(treasuryUsdWad(balances, rates));
+  if (local === "USD") {
+    // A dollars freelancer: no spending bucket, no reserve, no "protected from inflation" figure.
+    return {
+      local,
+      totalUsd,
+      spending: "0",
+      reserve: "0",
+      reservePercent: null,
+      savingsUsd,
+      protectedUsd: "0",
+      protectedNegative: false,
+      waitingUsd: usdWadToDollars(usdWad("WARS", balances.WARS, rates) + usdWad("WBRL", balances.WBRL, rates)),
+    };
+  }
   const asset = LOCAL_ASSET[local];
   const reserveAtomic = fiatToAtomic(input.rules.reserveAmount, asset);
   const pnl = protectedValue({ balances, withdrawnUsdWad: input.withdrawnUsdWad, payments: input.payments, local, rates });
   const filled = reserveAtomic === 0n ? null : (balances[asset] * 100n) / reserveAtomic;
   return {
     local,
-    totalUsd: usdWadToDollars(treasuryUsdWad(balances, rates)),
+    totalUsd,
     spending: tokenFiatAmount(asset, balances[asset]).amount,
     reserve: input.rules.reserveAmount,
     reservePercent: filled === null ? null : Number(filled > 100n ? 100n : filled),
-    savingsUsd: usdWadToDollars(usdWad("USDT", balances.USDT, rates) + usdWad("USAT", balances.USAT, rates)),
+    savingsUsd,
     protectedUsd: usdWadToDollars(pnl.protectedUsdWad < 0n ? -pnl.protectedUsdWad : pnl.protectedUsdWad),
     protectedNegative: pnl.protectedUsdWad < 0n,
+    waitingUsd: "0.00",
   };
 }
 

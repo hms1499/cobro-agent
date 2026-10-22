@@ -238,8 +238,10 @@ export function describeDecision(
   ctx: ExplainContext,
   opts: { askFirst?: boolean } = {},
 ): string {
-  if (decision.kind === "none")
+  if (decision.kind === "none") {
+    if (ctx.local === "USD" && decision.reason === "within_band") return t("preview.usd_idle");
     return t(IDLE[decision.reason], { amount: MINIMUM_TEXT });
+  }
   return t(opts.askFirst ? "preview.propose" : "preview.convert", {
     amount: moneyText(decision.from, decision.amount.toString(), ctx),
     target: targetText(decision.to),

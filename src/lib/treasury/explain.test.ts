@@ -67,6 +67,12 @@ describe("describeEvent", () => {
 });
 
 describe("describeDecision", () => {
+  it("tells a dollars freelancer there is nothing to convert", () => {
+    expect(describeDecision({ kind: "none", reason: "within_band" }, { local: "USD", rates })).toBe(
+      "do nothing: everything you hold is already in dollars.",
+    );
+  });
+
   it("says what the agent would do now", () => {
     expect(describeDecision({ kind: "none", reason: "within_band" }, ctx)).toBe(
       "do nothing: your spending money is within the range you set.",

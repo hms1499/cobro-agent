@@ -70,12 +70,24 @@ async function Rules() {
             <CardContent>
               <section aria-labelledby="rules-heading" className="flex flex-col gap-4">
                 <h2 id="rules-heading" className="text-lg font-semibold">
-                  {t("rules.formTitle")}
+                  {row.localCurrency === "USD" ? t("rules.usdTitle") : t("rules.formTitle")}
                 </h2>
                 <Suspense fallback={<Skeleton className="h-16 w-full" />}>
                   <Preview user={user} row={row} />
                 </Suspense>
-                <RulesForm currency={row.localCurrency} values={rulesFormValues(row)} />
+                {row.localCurrency === "USD" ? (
+                  <>
+                    <p className="max-w-prose text-muted-foreground">{t("rules.usdExplain")}</p>
+                    <Link
+                      href="/app/settings"
+                      className="inline-flex min-h-11 w-fit items-center text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
+                    >
+                      {t("rules.usdSettings")}
+                    </Link>
+                  </>
+                ) : (
+                  <RulesForm currency={row.localCurrency} values={rulesFormValues(row)} />
+                )}
               </section>
             </CardContent>
           </Card>
@@ -96,7 +108,8 @@ async function Preview({ user, row }: { user: AppUser; row: RulesRow }) {
     const [balances, rates] = await Promise.all([readDisplayBalances(user.treasuryAddress), getReferenceRates()]);
     const input = await engineInput(getDb(), { userId: user.id, rules: row }, balances, rates, new Date());
     const decision = decide(input);
-    const askFirst = decision.kind === "convert" && modeNeedsApproval(row.approvalMode, decision.reason);
+    // A dollars freelancer's agent never asks (USD home spec §2.3), whatever mode is stored.
+    const askFirst = decision.kind === "convert" && row.localCurrency !== "USD" && modeNeedsApproval(row.approvalMode, decision.reason);
     text = describeDecision(decision, { local: row.localCurrency, rates }, { askFirst });
   } catch (error) {
     console.error("Rules preview failed:", error instanceof Error ? error.message : error);
