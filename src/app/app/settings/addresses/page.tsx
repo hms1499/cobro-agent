@@ -1,5 +1,7 @@
+import { ShieldAlert } from "lucide-react";
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { PageHeader } from "@/components/page-header";
 import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 import { pendingAddressCode } from "@/lib/addresses/codes";
@@ -14,9 +16,11 @@ export const metadata: Metadata = { title: `${t("addresses.title")} · ${t("app.
 export default function AddressesPage() {
   return (
     <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
-      <h1 className="text-2xl font-semibold">{t("addresses.title")}</h1>
-      <p className="max-w-prose text-muted-foreground">{t("addresses.intro")}</p>
-      <p className="max-w-prose rounded-lg bg-muted p-3 text-sm">{t("addresses.warning")}</p>
+      <PageHeader title={t("addresses.title")} intro={t("addresses.intro")} />
+      <p className="flex max-w-prose items-start gap-2 rounded-lg bg-highlight p-3 text-sm">
+        <ShieldAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        {t("addresses.warning")}
+      </p>
       <Suspense fallback={<Skeleton className="h-80 w-full" />}>
         <Addresses />
       </Suspense>

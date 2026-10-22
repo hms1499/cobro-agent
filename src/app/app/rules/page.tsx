@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import { LoadingRows } from "@/components/loading-rows";
 import { PageHeader } from "@/components/page-header";
+import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { t } from "@/i18n";
 import { requireUser } from "@/lib/auth/current-user";
@@ -27,7 +28,7 @@ export const metadata: Metadata = { title: `${t("rules.title")} · ${t("app.name
 
 export default function RulesPage() {
   return (
-    <main id="main" className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
+    <main id="main" className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
       <PageHeader title={t("rules.title")} intro={t("rules.intro")} />
       <Suspense fallback={<Skeleton className="h-96 w-full" />}>
         <Rules />
@@ -54,24 +55,35 @@ async function Rules() {
           </Link>
         </p>
       )}
-      <Suspense fallback={<Skeleton className="h-40 w-full" />}>
-        <AgentStatus user={user} />
-      </Suspense>
-      <Suspense fallback={<Skeleton className="h-32 w-full" />}>
-        <ProtectedCard user={user} />
-      </Suspense>
-      <section aria-labelledby="rules-heading" className="flex flex-col gap-4">
-        <h2 id="rules-heading" className="text-lg font-semibold">
-          {t("rules.formTitle")}
-        </h2>
-        <Suspense fallback={<Skeleton className="h-16 w-full" />}>
-          <Preview user={user} row={row} />
-        </Suspense>
-        <RulesForm currency={row.localCurrency} values={rulesFormValues(row)} />
-      </section>
-      <Suspense fallback={<LoadingRows count={5} />}>
-        <ActivityFeed user={user} />
-      </Suspense>
+      {/* Spec 4f: status and results beside the rules on desktop; on mobile status comes first. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="flex flex-col gap-6 lg:col-start-2 lg:row-start-1 lg:sticky lg:top-8">
+          <Suspense fallback={<Skeleton className="h-40 w-full rounded-xl" />}>
+            <AgentStatus user={user} />
+          </Suspense>
+          <Suspense fallback={<Skeleton className="h-32 w-full rounded-xl" />}>
+            <ProtectedCard user={user} />
+          </Suspense>
+        </div>
+        <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-start-1">
+          <Card>
+            <CardContent>
+              <section aria-labelledby="rules-heading" className="flex flex-col gap-4">
+                <h2 id="rules-heading" className="text-lg font-semibold">
+                  {t("rules.formTitle")}
+                </h2>
+                <Suspense fallback={<Skeleton className="h-16 w-full" />}>
+                  <Preview user={user} row={row} />
+                </Suspense>
+                <RulesForm currency={row.localCurrency} values={rulesFormValues(row)} />
+              </section>
+            </CardContent>
+          </Card>
+          <Suspense fallback={<LoadingRows count={5} />}>
+            <ActivityFeed user={user} />
+          </Suspense>
+        </div>
+      </div>
     </>
   );
 }

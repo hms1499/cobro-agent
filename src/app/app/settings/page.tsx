@@ -1,6 +1,9 @@
+import { BookUser } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { InitialAvatar } from "@/components/initial-avatar";
+import { PageHeader } from "@/components/page-header";
 import { ParaProviders } from "@/components/providers/para-provider";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,7 +20,7 @@ export const metadata: Metadata = { title: `${t("settings.title")} · ${t("app.n
 export default function SettingsPage() {
   return (
     <main id="main" className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
-      <h1 className="text-2xl font-semibold">{t("settings.title")}</h1>
+      <PageHeader title={t("settings.title")} />
       <Suspense fallback={<Skeleton className="h-40 w-full" />}>
         <Settings />
       </Suspense>
@@ -37,12 +40,16 @@ async function Settings() {
   return (
     <>
       <Card>
-        <CardContent>
-          <dl className="flex flex-col gap-4">
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <InitialAvatar name={user.displayName ?? user.email ?? "?"} size="md" />
+            <h2 className="text-lg font-semibold">{t("settings.profile")}</h2>
+          </div>
+          <dl className="flex flex-col divide-y divide-border">
             {rows.map((row) => (
-              <div key={row.label} className="flex flex-col gap-1">
+              <div key={row.label} className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:justify-between sm:gap-6">
                 <dt className="text-sm text-muted-foreground">{row.label}</dt>
-                <dd className="font-medium">{row.value}</dd>
+                <dd className="min-w-0 break-words font-medium sm:text-right">{row.value}</dd>
               </div>
             ))}
           </dl>
@@ -50,7 +57,10 @@ async function Settings() {
       </Card>
       <Card>
         <CardContent className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold">{t("settings.addresses.title")}</h2>
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <BookUser aria-hidden="true" className="size-5 text-secondary-accent" />
+            {t("settings.addresses.title")}
+          </h2>
           <p className="text-muted-foreground">{t("settings.addresses.count", { count: savedCount })}</p>
           <Link
             href="/app/settings/addresses"
