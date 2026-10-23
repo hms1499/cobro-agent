@@ -51,7 +51,7 @@ export function InvoiceTable({
           </th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-border">
+      <tbody className="enter-stagger divide-y divide-border">
         {rows.map((invoice) => {
           const amount = displayAmount(invoice.amount, invoice.currency, local, rates, "billed");
           return (

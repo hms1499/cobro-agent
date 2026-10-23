@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "@phosphor-icons/react/ssr";
 import { t } from "@/i18n";
 import { container, sectionTitle } from "./styles";
 

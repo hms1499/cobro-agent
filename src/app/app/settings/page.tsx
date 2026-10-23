@@ -1,4 +1,4 @@
-import { BookUser } from "lucide-react";
+import { AddressBook } from "@phosphor-icons/react/ssr";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -78,7 +78,7 @@ async function Settings() {
       <Card>
         <CardContent className="flex flex-col gap-2">
           <h2 className="flex items-center gap-2 text-lg font-semibold">
-            <BookUser aria-hidden="true" className="size-5 text-secondary-accent" />
+            <AddressBook aria-hidden="true" className="size-5 text-secondary-accent" />
             {t("settings.addresses.title")}
           </h2>
           <p className="text-muted-foreground">{t("settings.addresses.count", { count: savedCount })}</p>

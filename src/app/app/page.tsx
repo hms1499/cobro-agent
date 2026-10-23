@@ -1,4 +1,4 @@
-import { CircleAlert, Clock } from "lucide-react";
+import { Clock, WarningCircle } from "@phosphor-icons/react/ssr";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { LoadingRows } from "@/components/loading-rows";
@@ -115,7 +115,7 @@ function SetupBanner({ status }: { status: AppUser["treasuryStatus"] }) {
     >
       <p className={`flex items-start gap-2 ${failed ? "text-destructive" : "text-warning"}`}>
         {failed ? (
-          <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <WarningCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
         ) : (
           <Clock aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
         )}

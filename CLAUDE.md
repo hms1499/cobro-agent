@@ -25,7 +25,7 @@ Cobro: an invoicing and treasury agent for LatAm freelancers, built for the Celo
 - Celo mainnet only (chain 42220, x402 network `eip155:42220`). x402 prices are explicit `{ asset, amount, extra }` objects.
 - Any transaction we send goes through `createOperatorClient` (`src/lib/chain/clients.ts`), which appends our attribution tag `celo_bc3965e128ba`. The tag is issued by Loops; never derive it.
 - All user-facing text goes through `t()` from `@/i18n` with keys in `src/i18n/en.ts`.
-- UI follows `MASTER.md`: tokens only (no raw hex), Lucide icons with `aria-hidden`, touch targets `min-h-11`, one primary button per screen, `role="alert"`/`aria-live` for errors and status. Token units, gas and addresses stay behind a "Details" disclosure.
+- UI follows `MASTER.md`: tokens only (no raw hex), Phosphor icons (`@phosphor-icons/react/ssr`) with `aria-hidden`, touch targets `min-h-11`, one primary button per screen, `role="alert"`/`aria-live` for errors and status. Token units, gas and addresses stay behind a "Details" disclosure.
 - `src/app/layout.tsx` imports `@getpara/react-sdk/styles.css` **before** `globals.css`. Para's CSS carries its own Tailwind preflight in the same layers; reversing the order breaks our font and border colours.
 - Para has two environments. Production (Vercel + Neon main) uses Para PROD; localhost and Neon dev use Para BETA. `NEXT_PUBLIC_PARA_ENVIRONMENT` (`BETA` or `PROD`, default `BETA`) picks the REST and JWKS endpoints, and both keys must carry that environment's prefix (`sk_beta_`/`beta_` or `sk_prod_`/`prod_`); config refuses a mismatch. Treasury wallets cannot move between Para environments.
 

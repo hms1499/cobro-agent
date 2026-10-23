@@ -1,4 +1,4 @@
-import { CircleCheck } from "lucide-react";
+import { CheckCircle } from "@phosphor-icons/react/ssr";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
@@ -40,7 +40,7 @@ async function Recurring({ params }: { params: PageProps<"/r/[slug]">["params"] 
       ) : (
         <>
           <p role="status" className="flex items-center gap-2 font-medium text-success">
-            <CircleCheck aria-hidden="true" className="size-5" />
+            <CheckCircle aria-hidden="true" className="size-5" />
             {t("recurring.allPaid")}
           </p>
           <ul className="flex flex-col gap-3">

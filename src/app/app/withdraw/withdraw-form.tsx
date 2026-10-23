@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert, CircleCheck, ExternalLink } from "lucide-react";
+import { ArrowSquareOut, CheckCircle, WarningCircle } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
 import { useActionState } from "react";
 import { FormField, fieldA11y } from "@/components/form-field";
@@ -127,9 +127,9 @@ export function WithdrawForm({ options, destinations }: { options: WithdrawOptio
 
       <div aria-live="polite">
         {state.outcome?.kind === "sent" && (
-          <div className="flex flex-col gap-2 rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
+          <div className="enter-in flex flex-col gap-2 rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
             <p className="flex items-start gap-2 text-success">
-              <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+              <CheckCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
               {state.outcome.pending ? t("withdraw.pending", { destination: sentTo }) : t("withdraw.sent", { destination: sentTo })}
             </p>
             <a
@@ -139,7 +139,7 @@ export function WithdrawForm({ options, destinations }: { options: WithdrawOptio
               className="inline-flex min-h-11 w-fit items-center gap-1 text-primary underline underline-offset-4"
             >
               {t("withdraw.viewTx")}
-              <ExternalLink aria-hidden="true" className="size-4" />
+              <ArrowSquareOut aria-hidden="true" className="size-4" />
             </a>
             <Link href="/app" className="inline-flex min-h-11 w-fit items-center text-primary underline underline-offset-4">
               {t("withdraw.back")}
@@ -147,8 +147,8 @@ export function WithdrawForm({ options, destinations }: { options: WithdrawOptio
           </div>
         )}
         {state.outcome?.kind === "error" && (
-          <p role="alert" className="flex items-start gap-2 text-destructive">
-            <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <p role="alert" className="enter-in flex items-start gap-2 text-destructive">
+            <WarningCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
             {t(`withdraw.error.${state.outcome.error}` as const)}
           </p>
         )}

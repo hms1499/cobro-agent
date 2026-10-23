@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, ShieldCheck } from "lucide-react";
+import { CheckCircle, ShieldCheck, WarningCircle } from "@phosphor-icons/react/ssr";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -79,7 +79,7 @@ async function Pay({ params }: { params: PageProps<"/pay/[slug]">["params"] }) {
         <CardContent>
           {invoice.status === "paid" ? (
             <p role="status" className="flex items-start gap-2 font-medium text-success">
-              <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+              <CheckCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
               {t("pay.alreadyPaid")}
               {invoice.recurringSlug && (
                 <Link href={`/r/${invoice.recurringSlug}`} className="ml-1 text-primary underline underline-offset-4">
@@ -89,7 +89,7 @@ async function Pay({ params }: { params: PageProps<"/pay/[slug]">["params"] }) {
             </p>
           ) : invoice.status === "cancelled" || !invoice.payTo ? (
             <p role="alert" className="flex items-start gap-2 text-destructive">
-              <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+              <WarningCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
               {invoice.status === "cancelled" ? t("pay.cancelled") : t("pay.notReady")}
             </p>
           ) : (

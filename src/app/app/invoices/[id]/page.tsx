@@ -1,4 +1,4 @@
-import { ArrowLeft, CircleCheck, ExternalLink } from "lucide-react";
+import { ArrowLeft, ArrowSquareOut, CheckCircle } from "@phosphor-icons/react/ssr";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -61,8 +61,8 @@ async function Invoice({
   return (
     <>
       {created === "1" && (
-        <p role="status" className="flex items-start gap-2 font-medium text-success">
-          <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+        <p role="status" className="enter-in flex items-start gap-2 font-medium text-success">
+          <CheckCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
           {t("invoice.created")}
         </p>
       )}
@@ -121,7 +121,7 @@ async function Invoice({
                   className="flex min-h-11 w-fit items-center gap-2 rounded-sm text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
                 >
                   {t("invoice.open")}
-                  <ExternalLink aria-hidden="true" className="size-4" />
+                  <ArrowSquareOut aria-hidden="true" className="size-4" />
                 </Link>
               </CardContent>
             </Card>
@@ -168,7 +168,7 @@ async function Invoice({
                           className="inline-flex items-center gap-1 break-all font-mono text-primary underline underline-offset-4"
                         >
                           {payment.txHash}
-                          <ExternalLink aria-hidden="true" className="size-3.5 shrink-0" />
+                          <ArrowSquareOut aria-hidden="true" className="size-3.5 shrink-0" />
                           <span className="sr-only">{t("invoice.viewTx")}</span>
                         </a>
                       </dd>

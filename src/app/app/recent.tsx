@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
 import { EmptyState } from "@/components/empty-state";
 import { InvoicesIllustration } from "@/components/illustrations";
@@ -58,7 +58,7 @@ export async function Recent({ user }: { user: AppUser }) {
               }
             />
           ) : (
-            <ul className="flex flex-col">
+            <ul className="enter-stagger flex flex-col">
               {items.map((item) => {
                 if (item.kind === "invoice") {
                   const invoice = item.invoice;

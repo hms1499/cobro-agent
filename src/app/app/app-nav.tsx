@@ -1,17 +1,18 @@
 "use client";
 
-import { Bot, FileText, House, Settings } from "lucide-react";
+import { GearSix, House, Receipt, Robot } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { InitialAvatar } from "@/components/initial-avatar";
 import { LogoMark } from "@/components/logo-mark";
 import { t, type MessageKey } from "@/i18n";
+import { CommandPalette } from "./command-palette";
 
 const ITEMS: { href: string; label: MessageKey; icon: typeof House }[] = [
   { href: "/app", label: "nav.home", icon: House },
-  { href: "/app/invoices", label: "nav.invoices", icon: FileText },
-  { href: "/app/rules", label: "nav.agent", icon: Bot },
-  { href: "/app/settings", label: "nav.settings", icon: Settings },
+  { href: "/app/invoices", label: "nav.invoices", icon: Receipt },
+  { href: "/app/rules", label: "nav.agent", icon: Robot },
+  { href: "/app/settings", label: "nav.settings", icon: GearSix },
 ];
 
 /** Tags nav clicks so the layout's ViewTransition crossfades the page area (app/app/layout.tsx). */
@@ -45,6 +46,7 @@ export function AppNavLinks({
         <LogoMark />
         {t("app.name")}
       </Link>
+      <CommandPalette />
       <ul className="flex lg:flex-col lg:gap-0.5 lg:px-3">
         {ITEMS.map(({ href, label, icon: Icon }) => {
           const active = pathname !== null && (href === "/app" ? pathname === "/app" : pathname.startsWith(href));
@@ -59,7 +61,7 @@ export function AppNavLinks({
                 }`}
               >
                 <span className="relative">
-                  <Icon aria-hidden="true" className="size-5" />
+                  <Icon aria-hidden="true" weight={active ? "fill" : "regular"} className="size-5" />
                   {hasProposal && href === "/app/rules" && (
                     <span aria-hidden="true" className="absolute -right-1 -top-1 size-2.5 rounded-full bg-destructive" />
                   )}

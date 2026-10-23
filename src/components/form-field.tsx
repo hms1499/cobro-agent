@@ -1,4 +1,4 @@
-import { CircleAlert } from "lucide-react";
+import { WarningCircle } from "@phosphor-icons/react/ssr";
 import type { ReactNode } from "react";
 import { Label } from "@/components/ui/label";
 import { t, type MessageKey } from "@/i18n";
@@ -39,8 +39,8 @@ export function FormField({
         </p>
       )}
       {error && (
-        <p id={`${id}-error`} role="alert" className="flex items-start gap-1 text-sm text-destructive">
-          <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        <p id={`${id}-error`} role="alert" className="enter-in flex items-start gap-1 text-sm text-destructive">
+          <WarningCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           {t(error)}
         </p>
       )}

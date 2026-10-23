@@ -1,4 +1,4 @@
-import { CircleCheck, FlaskConical, Hand, Pause } from "lucide-react";
+import { CheckCircle, Flask, Hand, Pause } from "@phosphor-icons/react/ssr";
 import { Card, CardContent } from "@/components/ui/card";
 import { t } from "@/i18n";
 import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
@@ -14,8 +14,8 @@ import type { AppUser } from "@/lib/users/queries";
 import { AgentToggle } from "./agent-toggle";
 
 const CHIPS: Record<AgentState, { icon: typeof Pause; className: string }> = {
-  active: { icon: CircleCheck, className: "text-success" },
-  dry_run: { icon: FlaskConical, className: "text-muted-foreground" },
+  active: { icon: CheckCircle, className: "text-success" },
+  dry_run: { icon: Flask, className: "text-muted-foreground" },
   awaiting: { icon: Hand, className: "text-warning" },
   paused: { icon: Pause, className: "text-muted-foreground" },
   off: { icon: Pause, className: "text-muted-foreground" },

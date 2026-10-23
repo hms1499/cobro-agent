@@ -1,4 +1,4 @@
-import { CircleAlert } from "lucide-react";
+import { WarningCircle } from "@phosphor-icons/react/ssr";
 import { CountUp } from "@/components/count-up";
 import { t } from "@/i18n";
 import type { ReferenceRates } from "@/lib/fx/rates";
@@ -30,7 +30,7 @@ function Cell({
     <div className="flex items-center justify-between gap-3 px-4 py-3 sm:flex-col sm:items-stretch sm:justify-start sm:gap-1 sm:px-5 sm:py-5">
       <dt className="flex flex-col text-sm sm:flex-row sm:items-center sm:justify-between sm:gap-3">
         <span className={`flex items-center gap-1.5 ${warn ? "font-medium text-destructive" : "text-muted-foreground"}`}>
-          {warn && <CircleAlert aria-hidden="true" className="size-4" />}
+          {warn && <WarningCircle aria-hidden="true" className="size-4" />}
           {label}
         </span>
         {amount && <span className="text-xs text-muted-foreground tabular-nums sm:text-sm">{countLabel(figure.count)}</span>}

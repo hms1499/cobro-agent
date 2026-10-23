@@ -1,4 +1,4 @@
-import { Hand } from "lucide-react";
+import { Hand } from "@phosphor-icons/react/ssr";
 import { t } from "@/i18n";
 import type { FxIntentRow } from "@/lib/db/schema";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";

@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert } from "lucide-react";
+import { WarningCircle } from "@phosphor-icons/react/ssr";
 import { useActionState, useState, type FormEvent } from "react";
 import { FormField, fieldA11y } from "@/components/form-field";
 import { InvoiceDocument } from "@/components/invoice-document";
@@ -72,8 +72,8 @@ export function InvoiceForm({
       <form action={action} onChange={onChange} noValidate className="flex flex-col gap-6">
         <div aria-live="polite">
           {state.notReady && (
-            <p className="flex items-start gap-2 text-destructive" role="alert">
-              <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+            <p className="enter-in flex items-start gap-2 text-destructive" role="alert">
+              <WarningCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
               {t("invoiceForm.notReady")}
             </p>
           )}

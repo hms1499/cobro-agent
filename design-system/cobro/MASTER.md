@@ -148,7 +148,7 @@ subtitle, amount, status), `Money` (`md` / `lg` / `xl`), `EmptyState`, `LoadingR
 
 ### Status chips
 
-| State | Color | Icon (Lucide) | Label |
+| State | Color | Icon (Phosphor) | Label |
 |-------|-------|---------------|-------|
 | Paid / converted | success | `CircleCheck` | "Paid", "Converted" |
 | Open / waiting | warning | `Clock` | "Open", "Waiting for a better rate" |
@@ -162,7 +162,10 @@ subtitle, amount, status), `Money` (`md` / `lg` / `xl`), `EmptyState`, `LoadingR
 
 ### Icons
 
-- Lucide (`lucide-react`, shipped with shadcn), 1.5–2px stroke, sizes 16 / 20 / 24 as tokens.
+- Phosphor (`@phosphor-icons/react`, imported from `@phosphor-icons/react/ssr` so the same import works in
+  server and client components; chosen by the user on 2026-10-23, replacing Lucide). Sizes 16 / 20 / 24 as
+  tokens (`size-4` / `size-5` / `size-6`). Weight `regular` by default; `fill` marks the selected item (active
+  nav tab, highlighted palette row) and a few emphasis badges; `duotone` only on the brand-blue sign-in panel.
 - Decorative icons next to text get `aria-hidden="true"`; icon-only buttons get an `aria-label`.
 - No emojis as icons.
 
@@ -205,12 +208,18 @@ nothing moves. Plan 4f (2026-10-22, the user's call) adds a small set of entranc
   once, when 15% is visible. The hero is never delayed. Content is visible without JavaScript.
 - App navigation: the page area crossfades (out 90ms, in 180ms) through React `<ViewTransition>` in
   `app/app/layout.tsx`; the nav and the root never animate.
+- Messages that appear after an action (saved, sent, a field error) fade up 4px in 200ms (`.enter-in`); list
+  rows on Home, Invoices, Agent history and saved addresses do the same once on mount, 35ms apart, first
+  eight rows only (`.enter-stagger`). Added 2026-10-23.
+- Command palette (Cmd/Ctrl+K, desktop; trigger in the sidebar): overlay fades in, the panel drops 4px and
+  scales 0.98 → 1 in 120ms ease-out.
+- Skeletons shimmer: a soft card-coloured band sweeps the muted block every 1.4s.
 - Figures: summary and balance figures count up once on first paint (`CountUp`, ≤600ms). The server
   HTML always holds the real figure, never a placeholder zero.
 - CSS transitions, the View Transitions API and `requestAnimationFrame` only (no GSAP, no motion
   library). Animate `opacity` and `transform` only, never layout.
 - Under `prefers-reduced-motion: reduce`, all of the above drops to instant state changes, figures show
-  their final value and skeletons stop pulsing.
+  their final value and skeletons stop shimmering.
 - Loading: skeletons shaped like the loaded layout for content longer than about 300ms; button
   spinners for actions.
 
@@ -227,7 +236,7 @@ nothing moves. Plan 4f (2026-10-22, the user's call) adds a small set of entranc
 
 ### Additional Forbidden Patterns
 
-- ❌ **Emojis as icons** — Use SVG icons (Lucide)
+- ❌ **Emojis as icons** — Use SVG icons (Phosphor)
 - ❌ **Missing cursor:pointer** on clickable elements, or cursor:pointer on static ones
 - ❌ **Layout-shifting hovers** — No scale or translate that moves surrounding content
 - ❌ **Low contrast text** — Maintain 4.5:1 minimum (3:1 for input borders and icons that carry meaning)
@@ -240,7 +249,7 @@ nothing moves. Plan 4f (2026-10-22, the user's call) adds a small set of entranc
 
 Before delivering any UI code, verify:
 
-- [ ] No emojis used as icons (Lucide only)
+- [ ] No emojis used as icons (Phosphor only)
 - [ ] Colors come from tokens; no raw hex in components
 - [ ] Every amount goes through `formatMoney`; local currency first, USD second
 - [ ] `cursor-pointer` on clickable elements only
