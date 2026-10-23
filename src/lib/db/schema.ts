@@ -45,6 +45,8 @@ export const users = pgTable("users", {
   email: text("email"),
   displayName: text("display_name"),
   personalWallet: text("personal_wallet"),
+  /** The last invoice number handed out to this user; see `insertNumberedInvoice`. */
+  invoiceSeq: integer("invoice_seq").notNull().default(0),
   createdAt: createdAt(),
 });
 
@@ -124,10 +126,15 @@ export const invoices = pgTable(
     paidAt: timestamp("paid_at", { withTimezone: true }),
     /** When the freelancer cancelled it (only an open invoice can be cancelled). */
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    /** Per-user and gapless (1 = the freelancer's first invoice), taken from users.invoice_seq by `insertNumberedInvoice`. */
+    number: integer("number").notNull(),
   },
   (t) => [
     uniqueIndex("invoices_recurring_period_uq").on(t.recurringId, t.periodStart),
     index("invoices_user_created_idx").on(t.userId, t.createdAt),
+    uniqueIndex("invoices_user_number_uq").on(t.userId, t.number),
+    // The cron's reconcileSettlements looks for expired claims across all users.
+    index("invoices_settling_idx").on(t.settlingUntil).where(sql`status = 'settling'`),
   ],
 );
 
@@ -162,7 +169,11 @@ export const payments = pgTable(
     ratesSnapshot: jsonb("rates_snapshot").$type<Record<string, string>>(),
     settledAt: timestamp("settled_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("payments_invoice_idx").on(t.invoiceId)],
+  (t) => [
+    index("payments_invoice_idx").on(t.invoiceId),
+    // reconcileSettlements matches on-chain hashes case-insensitively.
+    index("payments_tx_hash_lower_idx").on(sql`lower(${t.txHash})`),
+  ],
 );
 
 /** Spec §10.2 and trade approvals §4: at most one open (proposed, waiting or executing) intent per user. */
@@ -251,7 +262,11 @@ export const treasuryTxs = pgTable(
     createdAt: createdAt(),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
   },
-  (t) => [index("treasury_txs_user_status_idx").on(t.userId, t.status)],
+  (t) => [
+    index("treasury_txs_user_status_idx").on(t.userId, t.status),
+    // usersWithPendingTxs: the cron's scan for transactions still waiting for a receipt.
+    index("treasury_txs_pending_idx").on(t.userId).where(sql`status = 'pending'`),
+  ],
 );
 
 /** Addresses a freelancer may withdraw to besides their own wallet. Usable 24 h after saving; removal is immediate. */

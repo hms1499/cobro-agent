@@ -30,6 +30,7 @@ function row(overrides: Partial<InvoiceRow> = {}): InvoiceRow {
     createdAt: new Date("2026-10-01T00:00:00Z"),
     paidAt: null,
     cancelledAt: null,
+    number: 1,
     ...overrides,
   };
 }
