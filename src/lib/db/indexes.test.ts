@@ -11,7 +11,7 @@ beforeAll(async () => {
 /** The planner's plan for `query`, with sequential scans priced out so a small table cannot hide an index. */
 async function explain(query: SQL): Promise<string> {
   await db.execute(sql`set enable_seqscan = off`);
-  const result = await db.execute<{ "QUERY PLAN": string }>(sql`explain ${query}`);
+  const result = (await db.execute(sql`explain ${query}`)) as unknown as { rows: { "QUERY PLAN": string }[] };
   return result.rows.map((row) => row["QUERY PLAN"]).join("\n");
 }
 
