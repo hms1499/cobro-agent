@@ -2,6 +2,7 @@
 
 import { CheckCircle } from "@phosphor-icons/react/ssr";
 import { useActionState, useState } from "react";
+import { CurrencyIcon } from "@/components/currency-icon";
 import { FormField, fieldA11y } from "@/components/form-field";
 import { SubmitButton } from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ export function CurrencyForm({
                 }}
                 className="size-4 accent-primary"
               />
+              <CurrencyIcon code={code} />
               <span className="font-medium">{t(`currency.${code}` as const)}</span>
             </label>
           ))}

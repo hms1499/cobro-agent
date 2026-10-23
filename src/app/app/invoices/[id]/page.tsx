@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CopyLink } from "@/components/copy-link";
+import { CurrencyIcon } from "@/components/currency-icon";
 import { InvoiceDocument } from "@/components/invoice-document";
 import { Money } from "@/components/money";
 import { InvoiceStatusChip } from "@/components/status-chip";
@@ -140,7 +141,10 @@ async function Invoice({
             {payments.map((payment) => (
               <li key={payment.id} className="rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
                 <div className="flex items-start justify-between gap-4">
-                  <p className="font-medium">{t("invoice.paidOn", { date: formatDate(payment.settledAt) })}</p>
+                  <p className="flex items-center gap-2 font-medium">
+                    {isPayAsset(payment.asset) && <CurrencyIcon code={payment.asset} size="sm" />}
+                    {t("invoice.paidOn", { date: formatDate(payment.settledAt) })}
+                  </p>
                   <Money amount={displayAmount(invoice.amount, invoice.currency, user.localCurrency, rates, "billed")} />
                 </div>
                 <details className="mt-2 text-sm">

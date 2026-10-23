@@ -14,7 +14,7 @@ import {
   useWalletClient,
 } from "wagmi";
 import { celo } from "wagmi/chains";
-import { CurrencyBadge } from "@/components/currency-badge";
+import { CurrencyIcon } from "@/components/currency-icon";
 import { Button } from "@/components/ui/button";
 import { t, type MessageKey } from "@/i18n";
 import { PAY_ASSETS, type PayAsset } from "@/lib/money/currencies";
@@ -222,7 +222,7 @@ export function PayInvoice({ slug }: { slug: string }) {
               onChange={() => void loadQuote(code)}
               className="size-4 accent-primary"
             />
-            <CurrencyBadge code={code} />
+            <CurrencyIcon code={code} />
             <span className="flex flex-col">
               <span className="font-medium">{t(`asset.${code}.name` as const)}</span>
               {code === "USAT" && <span className="text-sm text-muted-foreground">{t("pay.recommendedUs")}</span>}

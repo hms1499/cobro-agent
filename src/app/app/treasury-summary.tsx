@@ -1,7 +1,7 @@
 import { Plus, WarningCircle } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { CurrencyBadge } from "@/components/currency-badge";
+import { CurrencyIcon } from "@/components/currency-icon";
 import { Money } from "@/components/money";
 import { Card, CardContent } from "@/components/ui/card";
 import { t } from "@/i18n";
@@ -77,12 +77,12 @@ function Figures({ view, rates }: NonNullable<Awaited<ReturnType<typeof loadTrea
   return (
     <>
       <Money size="xl" countUp amount={displayAmount(view.totalUsd, "USD", local, rates)} />
-      {/* Spec 4f item D: the two pockets behind the total, each with its currency badge. */}
+      {/* Spec 4f item D: the two pockets behind the total, each with its currency icon. */}
       <ul className="flex flex-col divide-y divide-border border-y border-border">
         <li className="flex flex-col gap-2 py-3">
           <div className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-2.5 text-sm">
-              <CurrencyBadge code={local} size="sm" />
+              <CurrencyIcon code={local} size="sm" />
               {t("treasury.spending", { currency: local })}
             </span>
             <span className="font-semibold tabular-nums">{displayAmount(view.spending, local, local, rates).primary}</span>
@@ -107,7 +107,7 @@ function Figures({ view, rates }: NonNullable<Awaited<ReturnType<typeof loadTrea
         </li>
         <li className="flex items-center justify-between gap-3 py-3">
           <span className="flex items-center gap-2.5 text-sm">
-            <CurrencyBadge code="USD" size="sm" />
+            <CurrencyIcon code="USD" size="sm" />
             {t("treasury.savings")}
           </span>
           <span className="font-semibold tabular-nums">{displayAmount(view.savingsUsd, "USD", local, rates, "billed").primary}</span>
@@ -124,7 +124,7 @@ function DollarPockets({ view, rates }: NonNullable<Awaited<ReturnType<typeof lo
     <ul className="flex flex-col divide-y divide-border border-y border-border">
       <li className="flex items-center justify-between gap-3 py-3">
         <span className="flex items-center gap-2.5 text-sm">
-          <CurrencyBadge code="USD" size="sm" />
+          <CurrencyIcon code="USD" size="sm" />
           {t("treasury.dollars")}
         </span>
         <span className="font-semibold tabular-nums">{displayAmount(view.savingsUsd, "USD", "USD", rates).primary}</span>

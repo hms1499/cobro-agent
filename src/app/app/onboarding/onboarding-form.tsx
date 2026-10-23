@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { CurrencyIcon } from "@/components/currency-icon";
 import { FormField, fieldA11y } from "@/components/form-field";
 import { SubmitButton } from "@/components/submit-button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +45,7 @@ export function OnboardingForm({ defaultName }: { defaultName: string }) {
                 onChange={() => setCurrency(code)}
                 className="size-4 accent-primary"
               />
+              <CurrencyIcon code={code} />
               <span className="font-medium">{t(`currency.${code}` as const)}</span>
             </label>
           ))}

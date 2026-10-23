@@ -2,6 +2,7 @@
 
 import { WarningCircle } from "@phosphor-icons/react/ssr";
 import { useActionState, useState, type FormEvent } from "react";
+import { CurrencyIcon } from "@/components/currency-icon";
 import { FormField, fieldA11y } from "@/components/form-field";
 import { InvoiceDocument } from "@/components/invoice-document";
 import { SubmitButton } from "@/components/submit-button";
@@ -98,13 +99,23 @@ export function InvoiceForm({
             />
           </FormField>
           <FormField id="currency" label={t("invoiceForm.currency")} error={errors.currency}>
-            <select {...fieldA11y("currency", { error: errors.currency })} defaultValue={values.currency} className={selectClass}>
-              {FIAT_CURRENCIES.map((code) => (
-                <option key={code} value={code}>
-                  {t(`currency.${code}` as const)}
-                </option>
-              ))}
-            </select>
+            {/* An <option> cannot hold an icon, so the chosen currency's flag sits inside the field. */}
+            <div className="relative">
+              <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2">
+                <CurrencyIcon code={draft.currency} size="sm" />
+              </span>
+              <select
+                {...fieldA11y("currency", { error: errors.currency })}
+                defaultValue={values.currency}
+                className={`${selectClass} pl-11`}
+              >
+                {FIAT_CURRENCIES.map((code) => (
+                  <option key={code} value={code}>
+                    {t(`currency.${code}` as const)}
+                  </option>
+                ))}
+              </select>
+            </div>
           </FormField>
         </div>
 
