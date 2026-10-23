@@ -60,7 +60,7 @@ describe("stored invoice numbers", () => {
     const { recurring, first } = await createRecurring(db, user.id, { ...input, repeat: "weekly" }, NOW);
     const skipped = await db.transaction((tx) =>
       insertNumberedInvoice(
-        tx as unknown as Db,
+        tx,
         {
           slug: "dup-period",
           userId: user.id,
@@ -112,6 +112,24 @@ describe("stored invoice numbers", () => {
     expect(template.nextIssueAt).toEqual(b.recurring.nextIssueAt);
   });
 
+  it("keeps the number when an insert fails outside a caller's transaction", async () => {
+    const user = await seedFreelancer(db);
+    const first = await createInvoice(db, user.id, input);
+    // Called with the root handle, not a transaction; the slug collides, so the insert fails.
+    await expect(
+      insertNumberedInvoice(db, { slug: first.slug, userId: user.id, clientName: "Acme", description: "Logo", amount: "1", currency: "USD" }),
+    ).rejects.toThrow();
+    expect(await seqOf(user.id)).toBe(1);
+    expect((await createInvoice(db, user.id, input)).number).toBe(2);
+  });
+
+  it("names the missing user instead of failing on an empty counter", async () => {
+    const missing = crypto.randomUUID();
+    await expect(
+      insertNumberedInvoice(db, { slug: "nobody", userId: missing, clientName: "Acme", description: "Logo", amount: "1", currency: "USD" }),
+    ).rejects.toThrow(`No user ${missing} to number an invoice for`);
+  });
+
   it("rejects a duplicate number for the same user", async () => {
     const user = await seedFreelancer(db);
     await createInvoice(db, user.id, input);
@@ -139,7 +157,12 @@ describe("migration 0008", () => {
 
   it("backfill matches the old numbering, ties broken by id", async () => {
     const old = drizzle({ client: new PGlite() });
-    await migrate(old, { migrationsFolder: migrationsUpTo(7) });
+    const folder = migrationsUpTo(7);
+    try {
+      await migrate(old, { migrationsFolder: folder });
+    } finally {
+      fs.rmSync(folder, { recursive: true, force: true });
+    }
 
     const ids = { a: crypto.randomUUID(), b: crypto.randomUUID(), c: crypto.randomUUID() };
     for (const [key, id] of Object.entries(ids)) {

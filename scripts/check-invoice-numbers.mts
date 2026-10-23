@@ -4,6 +4,8 @@ import { parseServerEnv, requireValue } from "@/lib/config/server";
 /**
  * After migration 0008: every stored invoice number must equal the number the old read-time count gave
  * (position among the owner's invoices by created_at, then id). Prints two counts and nothing else.
+ * Only meaningful right after migrating: new invoices are numbered in lock order, so two created at the
+ * same moment may legitimately differ from created_at order and count as mismatches.
  * Run: npx tsx --env-file=.env.local scripts/check-invoice-numbers.mts
  */
 const pool = new Pool({ connectionString: requireValue(parseServerEnv().DATABASE_URL, "DATABASE_URL") });

@@ -51,16 +51,14 @@ export async function seedInvoice(
   userId: string,
   overrides: Partial<NewInvoice> = {},
 ): Promise<schema.InvoiceRow> {
-  const row = await db.transaction((tx) =>
-    insertNumberedInvoice(tx, {
-      slug: `s${crypto.randomUUID().replaceAll("-", "").slice(0, 9)}`,
-      userId,
-      clientName: "Acme",
-      description: "Logo",
-      amount: "300",
-      currency: "USD",
-      ...overrides,
-    }),
-  );
+  const row = await insertNumberedInvoice(db, {
+    slug: `s${crypto.randomUUID().replaceAll("-", "").slice(0, 9)}`,
+    userId,
+    clientName: "Acme",
+    description: "Logo",
+    amount: "300",
+    currency: "USD",
+    ...overrides,
+  });
   return row!;
 }
