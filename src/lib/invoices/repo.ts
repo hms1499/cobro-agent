@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, getTableColumns, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, lte, sql } from "drizzle-orm";
 import { getAddress, type Address } from "viem";
 import type { Db } from "@/lib/db/client";
 import {
@@ -16,6 +16,7 @@ import {
 import type { FiatCurrency } from "@/lib/money/currencies";
 import { addDays, isoDate } from "./dates";
 import type { InvoiceInput } from "./input";
+import { insertNumberedInvoice } from "./numbering";
 import { nextIssueAt } from "./schedule";
 import { newSlug } from "./slug";
 
@@ -24,14 +25,6 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** An invoice with its per-user number (1 = the freelancer's first invoice), see `formatInvoiceNumber`. */
 export type NumberedInvoice = InvoiceRow & { number: number };
-
-/**
- * Position among the owner's invoices by (created_at, id); computed at read time, invoices are never deleted.
- * The outer columns are written out: Drizzle leaves them unqualified in single-table selects, where they
- * would resolve to the subquery's own row.
- */
-const invoiceNumber = sql<number>`(select count(*) from invoices i2 where i2.user_id = "invoices"."user_id" and (i2.created_at, i2.id) <= ("invoices"."created_at", "invoices"."id"))`.mapWith(Number);
-const numberedColumns = { ...getTableColumns(invoices), number: invoiceNumber };
 
 export interface OwnedInvoice {
   invoice: NumberedInvoice;
@@ -68,9 +61,8 @@ export type RecurringLink =
     };
 
 export async function createInvoice(db: Db, userId: string, input: InvoiceInput): Promise<InvoiceRow> {
-  const [row] = await db
-    .insert(invoices)
-    .values({
+  const row = await db.transaction((tx) =>
+    insertNumberedInvoice(tx, {
       slug: newSlug(),
       userId,
       clientName: input.clientName,
@@ -78,16 +70,16 @@ export async function createInvoice(db: Db, userId: string, input: InvoiceInput)
       amount: input.amount,
       currency: input.currency,
       dueDate: input.dueDate,
-    })
-    .returning();
-  return row;
+    }),
+  );
+  return row!;
 }
 
 /** Inserts one period of a template; undefined when that period already exists. */
 async function insertInstance(db: Db, recurring: RecurringInvoiceRow, periodStart: Date) {
-  const [row] = await db
-    .insert(invoices)
-    .values({
+  return insertNumberedInvoice(
+    db,
+    {
       slug: newSlug(),
       userId: recurring.userId,
       recurringId: recurring.id,
@@ -97,10 +89,9 @@ async function insertInstance(db: Db, recurring: RecurringInvoiceRow, periodStar
       amount: recurring.amount,
       currency: recurring.currency,
       dueDate: isoDate(addDays(periodStart, RECURRING_DUE_DAYS)),
-    })
-    .onConflictDoNothing({ target: [invoices.recurringId, invoices.periodStart] })
-    .returning();
-  return row as InvoiceRow | undefined;
+    },
+    { skipExistingPeriod: true },
+  );
 }
 
 export async function createRecurring(
@@ -161,7 +152,7 @@ export async function issueDueRecurring(db: Db, now: Date, limit = 100): Promise
 }
 
 export async function listInvoices(db: Db, userId: string, limit = 50): Promise<NumberedInvoice[]> {
-  return db.select(numberedColumns).from(invoices).where(eq(invoices.userId, userId)).orderBy(desc(invoices.createdAt)).limit(limit);
+  return db.select().from(invoices).where(eq(invoices.userId, userId)).orderBy(desc(invoices.createdAt)).limit(limit);
 }
 
 /** Newest activity first: a paid invoice counts from its payment, so an old invoice paid today comes back to the top. */
@@ -177,7 +168,7 @@ export async function listRecentInvoices(db: Db, userId: string, limit = 10): Pr
 export async function getOwnedInvoice(db: Db, userId: string, invoiceId: string): Promise<OwnedInvoice | null> {
   if (!UUID.test(invoiceId)) return null;
   const [row] = await db
-    .select({ invoice: numberedColumns, recurring: recurringInvoices })
+    .select({ invoice: invoices, recurring: recurringInvoices })
     .from(invoices)
     .leftJoin(recurringInvoices, eq(recurringInvoices.id, invoices.recurringId))
     .where(and(eq(invoices.id, invoiceId), eq(invoices.userId, userId)));
@@ -229,7 +220,6 @@ export async function findPublicInvoice(db: Db, slug: string): Promise<PublicInv
   const [row] = await db
     .select({
       invoice: invoices,
-      number: invoiceNumber,
       freelancerName: users.displayName,
       walletStatus: treasuryWallets.status,
       walletAddress: treasuryWallets.address,
@@ -253,7 +243,7 @@ export async function findPublicInvoice(db: Db, slug: string): Promise<PublicInv
     status: invoice.status,
     settlingUntil: invoice.settlingUntil,
     freelancerName: row.freelancerName,
-    number: row.number,
+    number: invoice.number,
     payTo: row.walletStatus === "ready" && row.walletAddress ? getAddress(row.walletAddress) : null,
     recurringSlug: row.recurringSlug,
   };

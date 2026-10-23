@@ -45,6 +45,8 @@ export const users = pgTable("users", {
   email: text("email"),
   displayName: text("display_name"),
   personalWallet: text("personal_wallet"),
+  /** The last invoice number handed out to this user; see `insertNumberedInvoice`. */
+  invoiceSeq: integer("invoice_seq").notNull().default(0),
   createdAt: createdAt(),
 });
 
@@ -124,10 +126,13 @@ export const invoices = pgTable(
     paidAt: timestamp("paid_at", { withTimezone: true }),
     /** When the freelancer cancelled it (only an open invoice can be cancelled). */
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    /** Per-user and gapless (1 = the freelancer's first invoice), taken from users.invoice_seq by `insertNumberedInvoice`. */
+    number: integer("number").notNull(),
   },
   (t) => [
     uniqueIndex("invoices_recurring_period_uq").on(t.recurringId, t.periodStart),
     index("invoices_user_created_idx").on(t.userId, t.createdAt),
+    uniqueIndex("invoices_user_number_uq").on(t.userId, t.number),
   ],
 );
 

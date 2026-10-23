@@ -2,6 +2,7 @@ import { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
+import { insertNumberedInvoice, type NewInvoice } from "@/lib/invoices/numbering";
 import type { Db } from "./client";
 import * as schema from "./schema";
 
@@ -48,11 +49,10 @@ export async function seedFreelancer(
 export async function seedInvoice(
   db: Db,
   userId: string,
-  overrides: Partial<typeof schema.invoices.$inferInsert> = {},
+  overrides: Partial<NewInvoice> = {},
 ): Promise<schema.InvoiceRow> {
-  const [row] = await db
-    .insert(schema.invoices)
-    .values({
+  const row = await db.transaction((tx) =>
+    insertNumberedInvoice(tx, {
       slug: `s${crypto.randomUUID().replaceAll("-", "").slice(0, 9)}`,
       userId,
       clientName: "Acme",
@@ -60,7 +60,7 @@ export async function seedInvoice(
       amount: "300",
       currency: "USD",
       ...overrides,
-    })
-    .returning();
-  return row;
+    }),
+  );
+  return row!;
 }

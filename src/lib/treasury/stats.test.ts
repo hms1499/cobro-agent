@@ -1,7 +1,7 @@
 // src/lib/treasury/stats.test.ts
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db/client";
-import { fxTrades, invoices, payments, recurringInvoices, treasuryTxs } from "@/lib/db/schema";
+import { fxTrades, payments, recurringInvoices, treasuryTxs } from "@/lib/db/schema";
 import { createTestDb, resetDb, seedFreelancer, seedInvoice } from "@/lib/db/testing";
 import { paymentsForPnl, recentConversions, repeatClients, volumeStats, withdrawnUsdWad } from "./stats";
 
@@ -61,13 +61,8 @@ describe("stats", () => {
         nextIssueAt: T("12:00:00"),
       })
       .returning();
-    const [a, b] = await db
-      .insert(invoices)
-      .values([
-        { slug: "p1", userId: user.id, recurringId: template.id, periodStart: T("00:00:00"), clientName: "Acme", description: "m", amount: "100", currency: "USD", status: "paid" },
-        { slug: "p2", userId: user.id, recurringId: template.id, periodStart: T("01:00:00"), clientName: "Acme", description: "m", amount: "100", currency: "USD", status: "paid" },
-      ])
-      .returning();
+    const a = await seedInvoice(db, user.id, { slug: "p1", recurringId: template.id, periodStart: T("00:00:00"), description: "m", amount: "100", status: "paid" });
+    const b = await seedInvoice(db, user.id, { slug: "p2", recurringId: template.id, periodStart: T("01:00:00"), description: "m", amount: "100", status: "paid" });
     await db.insert(payments).values([
       { invoiceId: a.id, payer: "0xAbC", asset: "USAT", amountAtomic: "1", txHash: "0x3", settledAt: T("09:00:00") },
       { invoiceId: b.id, payer: "0xabc", asset: "USAT", amountAtomic: "1", txHash: "0x4", settledAt: T("10:00:00") },

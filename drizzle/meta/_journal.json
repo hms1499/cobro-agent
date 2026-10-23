@@ -57,6 +57,13 @@
       "when": 1792643134484,
       "tag": "0007_sloppy_tiger_shark",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1792724687141,
+      "tag": "0008_stored_invoice_numbers",
+      "breakpoints": true
     }
   ]
 }
