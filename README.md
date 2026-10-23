@@ -50,8 +50,9 @@ flowchart LR
 
 ### Stable Agents: LatAm (Ripio × Celo)
 
-- **Works on mainnet with a real wFIAT token** — invoices priced in ARS or BRL are paid in wARS or wBRL on
-  Celo mainnet; the agent swaps wARS/wBRL ↔ USD₮ on Textile FX. Every transaction Cobro sends carries the
+- **Works on mainnet with a real wFIAT token** — an ARS invoice was paid in wARS on Celo mainnet and the agent
+  then swapped the excess wARS into USD₮ on Textile FX on its own; wBRL takes the same path (supported, not yet
+  run on mainnet). Every transaction Cobro sends carries the
   entry's attribution tag (see [Attribution](#attribution)).
 - **Real use of wFIAT and the Celo stack** — wFIAT is the reserve the freelancer spends; x402 through Celo's
   facilitator for payments, ERC-8004 identity for the agent, gas paid in stablecoins, Para server wallets.
@@ -65,9 +66,12 @@ flowchart LR
 
 ### Open Corridors: USA₮ with x402
 
-- **Real settlement on mainnet** — USA₮ invoices settle through Celo's x402 facilitator on mainnet.
-- **A named counterparty outside the team** — clients outside the team pay freelancers' invoices; they are
-  listed by role in [Real usage](#real-usage).
+- **Real settlement on mainnet** — Cobro accepts USA₮ on its payment page and settles it through Celo's x402
+  facilitator on mainnet, the same path wARS and USD₮ invoices already took. Settled USA₮ payments appear in
+  [Real usage](#real-usage).
+- **A named counterparty outside the team** — Cobro is opening to outside freelancers and their clients; payments
+  from clients outside the team are listed by role in [Real usage](#real-usage) as they happen, and only those
+  count as independent.
 - **Repeat flow from the same counterparty** — weekly and monthly recurring invoices bring the same client
   back every period on the same link.
 - **Why USA₮ matters to that user** — the client is often a US company or a web3 team that wants to pay in a

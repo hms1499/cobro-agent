@@ -26,8 +26,8 @@ export interface UsageRows {
     settledAt: Date;
     recurring: boolean;
   }[];
-  swaps: { txHash: string; notionalUsdCents: number; filledAt: Date }[];
-  withdrawals: { hash: string; usdCents: number | null; confirmedAt: Date }[];
+  swaps: { userId: string; txHash: string; notionalUsdCents: number; filledAt: Date }[];
+  withdrawals: { userId: string; hash: string; usdCents: number | null; confirmedAt: Date }[];
 }
 
 /** Who stands behind a row of the activity table. "new wallet": outside, but created after the window opened. */
@@ -67,11 +67,11 @@ export async function loadUsageRows(db: Db): Promise<UsageRows> {
     .from(payments)
     .innerJoin(invoices, eq(invoices.id, payments.invoiceId));
   const swapRows = await db
-    .select({ txHash: fxTrades.swapTxHash, notionalUsdCents: fxTrades.notionalUsdCents, filledAt: fxTrades.filledAt })
+    .select({ userId: fxTrades.userId, txHash: fxTrades.swapTxHash, notionalUsdCents: fxTrades.notionalUsdCents, filledAt: fxTrades.filledAt })
     .from(fxTrades)
     .where(and(eq(fxTrades.status, "filled"), isNotNull(fxTrades.swapTxHash), isNotNull(fxTrades.filledAt)));
   const withdrawalRows = await db
-    .select({ hash: treasuryTxs.hash, usdCents: treasuryTxs.usdCents, confirmedAt: treasuryTxs.confirmedAt })
+    .select({ userId: treasuryTxs.userId, hash: treasuryTxs.hash, usdCents: treasuryTxs.usdCents, confirmedAt: treasuryTxs.confirmedAt })
     .from(treasuryTxs)
     .where(and(eq(treasuryTxs.kind, "withdraw"), eq(treasuryTxs.status, "success"), isNotNull(treasuryTxs.confirmedAt)));
   return {
@@ -82,8 +82,8 @@ export async function loadUsageRows(db: Db): Promise<UsageRows> {
       ratesSnapshot: ratesSnapshot ?? null,
       recurring: recurringId !== null,
     })),
-    swaps: swapRows.map((row) => ({ txHash: row.txHash!, notionalUsdCents: row.notionalUsdCents, filledAt: row.filledAt! })),
-    withdrawals: withdrawalRows.map((row) => ({ hash: row.hash, usdCents: row.usdCents, confirmedAt: row.confirmedAt! })),
+    swaps: swapRows.map((row) => ({ userId: row.userId, txHash: row.txHash!, notionalUsdCents: row.notionalUsdCents, filledAt: row.filledAt! })),
+    withdrawals: withdrawalRows.map((row) => ({ userId: row.userId, hash: row.hash, usdCents: row.usdCents, confirmedAt: row.confirmedAt! })),
   };
 }
 
@@ -119,7 +119,7 @@ export function computeUsage(
   const teamEmails = new Set(exclusions.emails.map((e) => e.toLowerCase()));
   const team = new Set(exclusions.wallets.map((w) => w.toLowerCase()));
   const report: UsageReport = {
-    outsideFreelancers: rows.users.filter((u) => u.createdAt >= windowStart && !(u.email && teamEmails.has(u.email.toLowerCase()))).length,
+    outsideFreelancers: rows.users.filter((u) => u.createdAt >= windowStart && u.email !== null && !teamEmails.has(u.email.toLowerCase())).length,
     independentPayers: 0,
     unverifiedPayers: 0,
     payments: 0,
@@ -168,16 +168,22 @@ export function computeUsage(
   report.repeatPayers = repeat.size;
   report.repeatUsatPayers = repeatUsat.size;
 
+  // The agent's work on the team's own treasuries is shown as team activity and left out of the counts.
+  const teamUsers = new Set(rows.users.filter((u) => u.email !== null && teamEmails.has(u.email.toLowerCase())).map((u) => u.id));
   for (const s of rows.swaps) {
     if (s.filledAt < windowStart) continue;
+    const role = teamUsers.has(s.userId) ? "team" : "agent";
+    report.activity.push({ at: s.filledAt, kind: "swap", usdCents: s.notionalUsdCents, role, txHash: s.txHash });
+    if (role === "team") continue;
     report.swaps += 1;
     report.swapVolumeUsdCents += s.notionalUsdCents;
-    report.activity.push({ at: s.filledAt, kind: "swap", usdCents: s.notionalUsdCents, role: "agent", txHash: s.txHash });
   }
   for (const w of rows.withdrawals) {
     if (w.confirmedAt < windowStart) continue;
+    const role = teamUsers.has(w.userId) ? "team" : "agent";
+    report.activity.push({ at: w.confirmedAt, kind: "withdrawal", usdCents: w.usdCents, role, txHash: w.hash });
+    if (role === "team") continue;
     report.withdrawals += 1;
-    report.activity.push({ at: w.confirmedAt, kind: "withdrawal", usdCents: w.usdCents, role: "agent", txHash: w.hash });
   }
   report.activity.sort((a, b) => b.at.getTime() - a.at.getTime());
   return report;

@@ -57,10 +57,10 @@ try {
   const report = computeUsage(rows, exclusions, histories, rates, WINDOW_START);
   const markdown = renderUsageMarkdown(report, new Date());
   console.log(markdown);
-  const team = report.activity.filter((a) => a.role === "team").length;
+  const teamRows = (kind: string) => report.activity.filter((a) => a.role === "team" && a.kind === kind).length;
   const teamEmails = new Set(exclusions.emails.map((e) => e.toLowerCase()));
   const excludedUsers = rows.users.filter((u) => u.email && teamEmails.has(u.email.toLowerCase())).length;
-  console.log(`\nexcluded: ${excludedUsers} users, ${team} payments`);
+  console.log(`\nexcluded: ${excludedUsers} users, ${teamRows("payment")} payments, ${teamRows("swap")} swaps, ${teamRows("withdrawal")} withdrawals`);
   if (args.includes("--write-readme")) {
     fs.writeFileSync("README.md", replaceUsageBlock(fs.readFileSync("README.md", "utf8"), markdown));
     console.log("README.md usage block updated");

@@ -153,8 +153,8 @@ describe("computeUsage", () => {
     const report = computeUsage(
       rows({
         payments: [payment({ settledAt: early })],
-        swaps: [{ txHash: hash(3), notionalUsdCents: 500, filledAt: early }],
-        withdrawals: [{ hash: hash(4), usdCents: 400, confirmedAt: early }],
+        swaps: [{ userId: "f1", txHash: hash(3), notionalUsdCents: 500, filledAt: early }],
+        withdrawals: [{ userId: "f1", hash: hash(4), usdCents: 400, confirmedAt: early }],
       }),
       NO_EXCLUSIONS,
       histories(),
@@ -170,8 +170,8 @@ describe("computeUsage", () => {
   it("counts agent swaps and withdrawals in the window", () => {
     const report = computeUsage(
       rows({
-        swaps: [{ txHash: hash(3), notionalUsdCents: 500, filledAt: DURING }],
-        withdrawals: [{ hash: hash(4), usdCents: 400, confirmedAt: DURING }],
+        swaps: [{ userId: "f1", txHash: hash(3), notionalUsdCents: 500, filledAt: DURING }],
+        withdrawals: [{ userId: "f1", hash: hash(4), usdCents: 400, confirmedAt: DURING }],
       }),
       NO_EXCLUSIONS,
       histories(),
@@ -182,6 +182,29 @@ describe("computeUsage", () => {
     expect(report.swapVolumeUsdCents).toBe(500);
     expect(report.withdrawals).toBe(1);
     expect(report.activity.every((a) => a.role === "agent")).toBe(true);
+  });
+
+  it("swaps and withdrawals of team accounts are labelled team and not counted", () => {
+    const report = computeUsage(
+      rows({
+        users: [{ id: "team-user", email: "team@example.com", createdAt: DURING }],
+        swaps: [{ userId: "team-user", txHash: hash(3), notionalUsdCents: 500, filledAt: DURING }],
+        withdrawals: [{ userId: "team-user", hash: hash(4), usdCents: 400, confirmedAt: DURING }],
+      }),
+      { emails: ["team@example.com"], wallets: [] },
+      histories(),
+      NOW_RATES,
+      WINDOW,
+    );
+    expect(report.swaps).toBe(0);
+    expect(report.swapVolumeUsdCents).toBe(0);
+    expect(report.withdrawals).toBe(0);
+    expect(report.activity.map((a) => a.role)).toEqual(["team", "team"]);
+  });
+
+  it("a user without an email is not counted as an outside freelancer", () => {
+    const report = computeUsage(rows({ users: [{ id: "u0", email: null, createdAt: DURING }] }), NO_EXCLUSIONS, histories(), NOW_RATES, WINDOW);
+    expect(report.outsideFreelancers).toBe(0);
   });
 
   it("outsideFreelancers excludes emails case-insensitively", () => {
@@ -207,7 +230,7 @@ describe("renderUsageMarkdown", () => {
       rows({
         users: [{ id: "u2", email: "friend@example.org", createdAt: DURING }],
         payments: [payment(), payment({ payer: TEAM, txHash: hash(2) })],
-        swaps: [{ txHash: hash(3), notionalUsdCents: 500, filledAt: DURING }],
+        swaps: [{ userId: "f1", txHash: hash(3), notionalUsdCents: 500, filledAt: DURING }],
       }),
       { emails: [], wallets: [TEAM] },
       histories(),
@@ -266,7 +289,7 @@ describe("loadUsageRows", () => {
     expect(loaded.payments).toEqual([
       expect.objectContaining({ freelancerId: user.id, payer: CLIENT, asset: "USAT", amountAtomic: 1_000_000n, txHash: hash(1), recurring: false }),
     ]);
-    expect(loaded.swaps).toEqual([{ txHash: hash(2), notionalUsdCents: 300, filledAt: DURING }]);
-    expect(loaded.withdrawals).toEqual([{ hash: hash(3), usdCents: 200, confirmedAt: DURING }]);
+    expect(loaded.swaps).toEqual([{ userId: user.id, txHash: hash(2), notionalUsdCents: 300, filledAt: DURING }]);
+    expect(loaded.withdrawals).toEqual([{ userId: user.id, hash: hash(3), usdCents: 200, confirmedAt: DURING }]);
   });
 });
