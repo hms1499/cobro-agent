@@ -138,15 +138,21 @@ export async function issueDueRecurring(db: Db, now: Date, limit = 100): Promise
     .limit(limit);
   let issued = 0;
   for (const recurring of due) {
-    await db.transaction(async (tx) => {
-      const advanced = await tx
-        .update(recurringInvoices)
-        .set({ nextIssueAt: nextIssueAt(recurring.nextIssueAt, recurring.interval, recurring.anchorDay) })
-        .where(and(eq(recurringInvoices.id, recurring.id), eq(recurringInvoices.nextIssueAt, recurring.nextIssueAt)))
-        .returning({ id: recurringInvoices.id });
-      if (advanced.length === 0) return;
-      if (await insertInstance(tx, recurring, recurring.nextIssueAt)) issued += 1;
-    });
+    // One template's failure rolls back its own period (schedule included, so the next tick retries it)
+    // and must not stop the others, nor the rest of the cron tick, which runs this first.
+    try {
+      await db.transaction(async (tx) => {
+        const advanced = await tx
+          .update(recurringInvoices)
+          .set({ nextIssueAt: nextIssueAt(recurring.nextIssueAt, recurring.interval, recurring.anchorDay) })
+          .where(and(eq(recurringInvoices.id, recurring.id), eq(recurringInvoices.nextIssueAt, recurring.nextIssueAt)))
+          .returning({ id: recurringInvoices.id });
+        if (advanced.length === 0) return;
+        if (await insertInstance(tx, recurring, recurring.nextIssueAt)) issued += 1;
+      });
+    } catch (error) {
+      console.error(`Recurring invoice ${recurring.slug} failed to issue:`, error);
+    }
   }
   return issued;
 }

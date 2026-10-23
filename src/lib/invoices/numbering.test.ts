@@ -7,7 +7,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Db } from "@/lib/db/client";
-import { users } from "@/lib/db/schema";
+import { recurringInvoices, users } from "@/lib/db/schema";
 import { createTestDb, resetDb, seedFreelancer } from "@/lib/db/testing";
 import type { InvoiceInput } from "./input";
 import { insertNumberedInvoice } from "./numbering";
@@ -93,6 +93,23 @@ describe("stored invoice numbers", () => {
     expect((await createInvoice(db, b.id, input)).number).toBe(1);
     expect((await createInvoice(db, a.id, input)).number).toBe(2);
     expect((await createInvoice(db, b.id, input)).number).toBe(2);
+  });
+
+  it("keeps issuing other recurring invoices when one fails", async () => {
+    const ok = await seedFreelancer(db);
+    const broken = await seedFreelancer(db);
+    const a = await createRecurring(db, ok.id, { ...input, repeat: "weekly" }, NOW);
+    const b = await createRecurring(db, broken.id, { ...input, repeat: "weekly" }, NOW);
+    // A counter that fell behind (say, a row inserted by hand): the next number collides with invoice 1.
+    await db.update(users).set({ invoiceSeq: 0 }).where(eq(users.id, broken.id));
+
+    const issued = await issueDueRecurring(db, new Date(a.recurring.nextIssueAt.getTime() + 1000));
+
+    expect(issued).toBe(1);
+    expect((await listInvoices(db, ok.id)).length).toBe(2);
+    // The failed period rolled back, schedule included, so the next tick tries it again.
+    const [template] = await db.select().from(recurringInvoices).where(eq(recurringInvoices.id, b.recurring.id));
+    expect(template.nextIssueAt).toEqual(b.recurring.nextIssueAt);
   });
 
   it("rejects a duplicate number for the same user", async () => {

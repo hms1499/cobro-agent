@@ -195,7 +195,14 @@ Say that migration 0008 backfills production rows, and ask how they want it run 
 
 Also tell them about the deploy window. Between migrating main and the new deployment going live (about 2–3 minutes of Vercel build), the old production code inserts invoices without `number`, so creating an invoice, or the cron issuing a recurring one, fails with an error. Nothing is lost: the action can be retried, and the cron retries on its next run. To keep the window short, run Step 6's merge and gate first, then migrate main, then push right away.
 
-After they confirm, run the migration against main, then the check script against main. Expected: `mismatches=0`.
+If the deployment does not go live (failed or stuck build), restore invoice creation for the old code:
+`ALTER TABLE invoices ALTER COLUMN number DROP NOT NULL;`. Before the fixed deploy goes out, number the
+rows it left empty, then set the column back. Rows with a null number continue each user's sequence in
+`(created_at, id)` order; `invoice_seq` is then reset to each user's count, and `SET NOT NULL` is applied
+again. After this deploy, **do not use Vercel Instant Rollback** to a deployment from before plan 5:
+that code cannot create invoices against the new schema. Roll forward instead.
+
+After they confirm, run the migration against main, then the check script against main. Expected: `mismatches=0`. The check is only meaningful right after migrating: once new code has created invoices, two concurrent creates may legitimately number out of `created_at` order.
 
 - [ ] **Step 6: Merge and push**
 
