@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CurrencyIcon } from "@/components/currency-icon";
 import { InitialAvatar } from "@/components/initial-avatar";
 import { InvoiceStatusChip } from "@/components/status-chip";
 import { t } from "@/i18n";
@@ -75,8 +76,13 @@ export function InvoiceTable({
                 <InvoiceStatusChip status={displayStatus(invoice, today)} size="sm" />
               </td>
               <td className={`${td} text-right tabular-nums`}>
-                <span className="block whitespace-nowrap font-semibold">{amount.primary}</span>
-                {amount.secondary && <span className="block whitespace-nowrap text-muted-foreground">{amount.secondary}</span>}
+                <span className="flex items-start justify-end gap-2">
+                  <CurrencyIcon code={invoice.currency} size="sm" />
+                  <span>
+                    <span className="block whitespace-nowrap font-semibold">{amount.primary}</span>
+                    {amount.secondary && <span className="block whitespace-nowrap text-muted-foreground">{amount.secondary}</span>}
+                  </span>
+                </span>
               </td>
             </tr>
           );

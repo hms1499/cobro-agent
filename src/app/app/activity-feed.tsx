@@ -1,5 +1,6 @@
 // src/app/app/activity-feed.tsx
 import { ArrowSquareOut, CheckCircle, Clock, Info, WarningCircle } from "@phosphor-icons/react/ssr";
+import { AssetTrail } from "@/components/currency-icon";
 import { EmptyState } from "@/components/empty-state";
 import { ActivityIllustration } from "@/components/illustrations";
 import { ScrollToHash } from "@/components/scroll-to-hash";
@@ -8,7 +9,7 @@ import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import { getDb } from "@/lib/db/client";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { formatDateTime } from "@/lib/invoices/dates";
-import { describeEvent, type EventTone } from "@/lib/treasury/explain";
+import { describeEvent, eventAssets, type EventTone } from "@/lib/treasury/explain";
 import { HIDE_WHY_EVENTS } from "@/lib/dashboard/recent";
 import { listEvents } from "@/lib/treasury/repo";
 import type { AppUser } from "@/lib/users/queries";
@@ -49,6 +50,7 @@ export async function ActivityFeed({ user, limit = 40 }: { user: AppUser; limit?
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <p className="font-medium">{view.title}</p>
+                  <AssetTrail assets={eventAssets(event)} />
                   <time dateTime={event.createdAt.toISOString()} className="text-sm text-muted-foreground">
                     {formatDateTime(event.createdAt)}
                   </time>

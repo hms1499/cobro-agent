@@ -3,6 +3,7 @@
 import { ArrowSquareOut, CheckCircle, WarningCircle } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
 import { useActionState } from "react";
+import { CurrencyIcon } from "@/components/currency-icon";
 import { FormField, fieldA11y } from "@/components/form-field";
 import { Money } from "@/components/money";
 import { SubmitButton } from "@/components/submit-button";
@@ -48,6 +49,7 @@ export function WithdrawForm({ options, destinations }: { options: WithdrawOptio
                 defaultChecked={(state.values.asset ?? options[0].asset) === option.asset}
                 className="size-4 accent-primary"
               />
+              <CurrencyIcon code={option.asset} />
               <span className="font-medium">{option.label}</span>
             </span>
             <span className="flex flex-col items-end text-right">

@@ -5,7 +5,7 @@ import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import type { AgentEventType, FxIntentRow } from "@/lib/db/schema";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { formatDecimal } from "@/lib/money/decimal";
-import { isHomeCurrency, isLocalCurrency, isPayAsset, type HomeCurrency } from "@/lib/money/currencies";
+import { isHomeCurrency, isLocalCurrency, isPayAsset, type HomeCurrency, type PayAsset } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 import { formatMoney } from "@/lib/money/format";
 import type { Decision, IdleReason } from "./engine";
@@ -70,6 +70,12 @@ const reasonText = (reason: unknown) =>
   t(REASONS[String(reason)] ?? "event.why.generic");
 
 /** The activity feed's title and "Why?" text for one event (spec §17.1 principle 4). */
+/** The tokens an agent event moved, in order (from, then to), for the icons beside its title. */
+export function eventAssets(event: { type: AgentEventType; data: Record<string, unknown> }): PayAsset[] {
+  const d = event.data;
+  return [d.from ?? d.asset, d.to].filter(isPayAsset);
+}
+
 export function describeEvent(
   event: { type: AgentEventType; data: Record<string, unknown> },
   ctx: ExplainContext,

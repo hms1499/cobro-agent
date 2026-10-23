@@ -2,7 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { parseDecimal } from "@/lib/money/decimal";
-import { describeDecision, describeEvent, describeProposal, moneyText, percentText } from "./explain";
+import { describeDecision, describeEvent, describeProposal, eventAssets, moneyText, percentText } from "./explain";
 
 const rates: ReferenceRates = { perUsd: { ARS: parseDecimal("1600", 18), BRL: parseDecimal("5", 18) }, fetchedAt: 0 };
 const ctx = { local: "ARS" as const, rates };
@@ -138,5 +138,22 @@ describe("describeDecision with approval", () => {
   it("says the agent would ask first", () => {
     const decision = { kind: "convert", from: "USDT", to: "WARS", amount: 2_000_000n, usdWad: 0n, reason: "top_up" } as const;
     expect(describeDecision(decision, ctx, { askFirst: true })).toMatch(/^ask you to approve converting US\$2\.00 to pesos\./);
+  });
+});
+
+describe("eventAssets", () => {
+  it("lists the tokens a conversion moves, in order", () => {
+    expect(eventAssets({ type: "converted", data: { from: "WARS", to: "USDT" } })).toEqual(["WARS", "USDT"]);
+    expect(eventAssets({ type: "proposed", data: { from: "USDT", to: "WBRL" } })).toEqual(["USDT", "WBRL"]);
+  });
+
+  it("names the token of a withdrawal", () => {
+    expect(eventAssets({ type: "withdrawn", data: { asset: "USAT", amount: "1" } })).toEqual(["USAT"]);
+  });
+
+  it("shows no token for events without one, or with an unknown one", () => {
+    expect(eventAssets({ type: "paused", data: {} })).toEqual([]);
+    expect(eventAssets({ type: "gas_dripped", data: { asset: "CELO" } })).toEqual([]);
+    expect(eventAssets({ type: "converted", data: { from: "USDC", to: "USDT" } })).toEqual(["USDT"]);
   });
 });

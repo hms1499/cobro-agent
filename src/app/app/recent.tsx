@@ -1,5 +1,6 @@
 import { Plus } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
+import { AssetTrail } from "@/components/currency-icon";
 import { EmptyState } from "@/components/empty-state";
 import { InvoicesIllustration } from "@/components/illustrations";
 import { InitialAvatar } from "@/components/initial-avatar";
@@ -15,7 +16,7 @@ import { formatDate, isoDate } from "@/lib/invoices/dates";
 import { listRecentInvoices } from "@/lib/invoices/repo";
 import { displayStatus } from "@/lib/invoices/view";
 import { displayAmount } from "@/lib/money/display";
-import { describeEvent } from "@/lib/treasury/explain";
+import { describeEvent, eventAssets } from "@/lib/treasury/explain";
 import { listEvents } from "@/lib/treasury/repo";
 import type { AppUser } from "@/lib/users/queries";
 import { TONES } from "./activity-feed";
@@ -88,6 +89,7 @@ export async function Recent({ user }: { user: AppUser }) {
                       }
                       title={view.title}
                       wrapTitle
+                      status={<AssetTrail assets={eventAssets(item.event)} />}
                       subtitle={formatDate(item.event.createdAt)}
                     />
                   </li>
