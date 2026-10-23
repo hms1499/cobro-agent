@@ -64,6 +64,13 @@
       "when": 1792724687141,
       "tag": "0008_stored_invoice_numbers",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1792724828048,
+      "tag": "0009_cron_indexes",
+      "breakpoints": true
     }
   ]
 }
