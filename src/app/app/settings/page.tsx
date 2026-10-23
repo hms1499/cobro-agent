@@ -95,7 +95,7 @@ async function Settings() {
         // button exists, the placeholder holds their place so the screen doesn't look unfinished.
         <div className="flex flex-col gap-6 [&:not(:has(button))_.para-placeholder]:flex">
           <ParaProviders apiKey={env.NEXT_PUBLIC_PARA_API_KEY} environment={env.NEXT_PUBLIC_PARA_ENVIRONMENT}>
-            <MyWalletButton />
+            <MyWalletButton email={user.email} />
             <SignOutButton />
           </ParaProviders>
           <div className="para-placeholder hidden flex-col gap-3" aria-busy="true" aria-label={t("common.loading")}>
