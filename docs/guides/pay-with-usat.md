@@ -31,8 +31,7 @@ USA₮ on Celo is the token at
 ## Paying
 
 1. Open the payment link the freelancer sent you.
-2. Under **Choose how to pay**, pick **US dollar (USA₮)**. The page shows the exact amount and how long
-   the rate is locked.
+2. Under **Choose how to pay**, pick **US dollar (USA₮)**. The page shows the exact amount you pay.
 3. Press **Connect wallet**, and **Switch to Celo** if the page asks.
 4. Press **Pay**, then confirm the signature in your wallet. You are signing a transfer of exactly the
    amount shown, to the freelancer's account; nothing else.
