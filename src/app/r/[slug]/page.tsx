@@ -2,6 +2,7 @@ import { CheckCircle } from "@phosphor-icons/react/ssr";
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { Suspense } from "react";
+import { LogoMark } from "@/components/logo-mark";
 import { InvoiceStatusChip } from "@/components/status-chip";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,7 +17,10 @@ export const metadata: Metadata = { title: `${t("pay.title")} · ${t("app.name")
 export default function RecurringPage(props: PageProps<"/r/[slug]">) {
   return (
     <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
-      <p className="text-sm font-semibold text-primary">{t("app.name")}</p>
+      <p className="flex min-h-11 items-center gap-2 font-semibold text-primary">
+        <LogoMark className="size-7" />
+        {t("app.name")}
+      </p>
       <Suspense fallback={<Skeleton className="h-64 w-full" />}>
         <Recurring params={props.params} />
       </Suspense>
