@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle, Pause, Play } from "lucide-react";
+import { CircleNotch, Pause, Play } from "@phosphor-icons/react/ssr";
 import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { t } from "@/i18n";
@@ -18,7 +18,7 @@ export function AgentToggle({ enabled }: { enabled: boolean }) {
 
 function ToggleButton({ enabled }: { enabled: boolean }) {
   const { pending } = useFormStatus();
-  const Icon = pending ? LoaderCircle : enabled ? Pause : Play;
+  const Icon = pending ? CircleNotch : enabled ? Pause : Play;
   return (
     <Button type="submit" variant="outline" size="lg" className="min-h-11" disabled={pending} aria-disabled={pending}>
       <Icon aria-hidden="true" className={pending ? "size-4 animate-spin motion-reduce:animate-none" : "size-4"} />

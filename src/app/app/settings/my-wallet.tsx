@@ -1,7 +1,7 @@
 "use client";
 
 import { useModal } from "@getpara/react-sdk";
-import { Wallet } from "lucide-react";
+import { Wallet } from "@phosphor-icons/react/ssr";
 import { Button } from "@/components/ui/button";
 import { t } from "@/i18n";
 

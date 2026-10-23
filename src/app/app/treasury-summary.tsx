@@ -1,4 +1,4 @@
-import { CircleAlert, Plus } from "lucide-react";
+import { Plus, WarningCircle } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { CurrencyBadge } from "@/components/currency-badge";
@@ -43,7 +43,7 @@ export async function MoneyCard({ user, primaryAction }: { user: AppUser; primar
   const figures: ReactNode =
     loaded === "error" ? (
       <p role="alert" className="flex items-start gap-2 text-destructive">
-        <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+        <WarningCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
         {t("treasury.loadError")}
       </p>
     ) : loaded ? (

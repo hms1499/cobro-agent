@@ -1,13 +1,13 @@
-import { CircleAlert, CircleCheck, Clock, LoaderCircle } from "lucide-react";
+import { CheckCircle, CircleNotch, Clock, WarningCircle } from "@phosphor-icons/react/ssr";
 import { t, type MessageKey } from "@/i18n";
 import type { DisplayStatus } from "@/lib/invoices/view";
 
 const CHIPS: Record<DisplayStatus, { icon: typeof Clock; className: string; label: MessageKey }> = {
   open: { icon: Clock, className: "text-warning", label: "status.open" },
-  overdue: { icon: CircleAlert, className: "text-destructive", label: "status.overdue" },
-  settling: { icon: LoaderCircle, className: "text-warning", label: "status.settling" },
-  paid: { icon: CircleCheck, className: "text-success", label: "status.paid" },
-  cancelled: { icon: CircleAlert, className: "text-muted-foreground", label: "status.cancelled" },
+  overdue: { icon: WarningCircle, className: "text-destructive", label: "status.overdue" },
+  settling: { icon: CircleNotch, className: "text-warning", label: "status.settling" },
+  paid: { icon: CheckCircle, className: "text-success", label: "status.paid" },
+  cancelled: { icon: WarningCircle, className: "text-muted-foreground", label: "status.cancelled" },
 };
 
 /** Icon and text, never color alone (MASTER.md "Status chips"). */

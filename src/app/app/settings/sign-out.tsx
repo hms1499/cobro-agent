@@ -1,7 +1,7 @@
 "use client";
 
 import { useLogout } from "@getpara/react-sdk";
-import { LogOut } from "lucide-react";
+import { SignOut } from "@phosphor-icons/react/ssr";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -25,7 +25,7 @@ export function SignOutButton() {
 
   return (
     <Button variant="outline" size="lg" className="min-h-11 w-fit" onClick={signOut} disabled={pending}>
-      <LogOut aria-hidden="true" className="size-4" />
+      <SignOut aria-hidden="true" className="size-4" />
       {pending ? t("settings.signingOut") : t("settings.signOut")}
     </Button>
   );

@@ -1,4 +1,4 @@
-import { Wallet } from "lucide-react";
+import { Wallet } from "@phosphor-icons/react/ssr";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";

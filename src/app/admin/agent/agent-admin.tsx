@@ -1,7 +1,7 @@
 "use client";
 
 import { verifyTx } from "@celo/attribution-tags";
-import { CircleAlert, CircleCheck, Clock, ExternalLink } from "lucide-react";
+import { ArrowSquareOut, CheckCircle, Clock, WarningCircle } from "@phosphor-icons/react/ssr";
 import { useState } from "react";
 import type { Hex } from "viem";
 import {
@@ -112,7 +112,7 @@ export function AgentAdmin({ appUrl, attributionCode, agentWallet, agentId }: Pr
         <div aria-live="polite" className="flex flex-col gap-3">
           {registeredAgentId !== undefined && (
             <p className="flex items-center gap-2 font-medium text-success">
-              <CircleCheck aria-hidden="true" className="size-5" />
+              <CheckCircle aria-hidden="true" className="size-5" />
               {t("admin.registeredAs", { agentId: registeredAgentId.toString() })}
             </p>
           )}
@@ -120,9 +120,9 @@ export function AgentAdmin({ appUrl, attributionCode, agentWallet, agentId }: Pr
             <>
               <p className={`flex items-center gap-2 ${phase.tagged ? "text-success" : "text-destructive"}`}>
                 {phase.tagged ? (
-                  <CircleCheck aria-hidden="true" className="size-5" />
+                  <CheckCircle aria-hidden="true" className="size-5" />
                 ) : (
-                  <CircleAlert aria-hidden="true" className="size-5" />
+                  <WarningCircle aria-hidden="true" className="size-5" />
                 )}
                 {phase.tagged ? t("admin.tagFound") : t("admin.tagMissing")}
               </p>
@@ -133,7 +133,7 @@ export function AgentAdmin({ appUrl, attributionCode, agentWallet, agentId }: Pr
                 className="flex w-fit items-center gap-1 rounded-sm text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 {t("admin.viewTx")}
-                <ExternalLink aria-hidden="true" className="size-4" />
+                <ArrowSquareOut aria-hidden="true" className="size-4" />
               </a>
               <p className="text-sm text-muted-foreground">
                 {t("admin.nextSteps", { agentId: phase.agentId.toString() })}
@@ -149,7 +149,7 @@ export function AgentAdmin({ appUrl, attributionCode, agentWallet, agentId }: Pr
           {blocker === "wrong-wallet" && (
             <div className="flex flex-col gap-1">
               <p className="flex items-center gap-2 text-destructive">
-                <CircleAlert aria-hidden="true" className="size-5 shrink-0" />
+                <WarningCircle aria-hidden="true" className="size-5 shrink-0" />
                 {t("admin.wrongWallet")}
               </p>
               <p className="font-mono text-sm break-all text-muted-foreground">
@@ -159,7 +159,7 @@ export function AgentAdmin({ appUrl, attributionCode, agentWallet, agentId }: Pr
           )}
           {phase.kind === "error" && (
             <p className="flex items-start gap-2 text-destructive" role="alert">
-              <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+              <WarningCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
               <span className="break-words">{phase.message}</span>
             </p>
           )}

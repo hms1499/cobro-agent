@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleCheck } from "lucide-react";
+import { CheckCircle } from "@phosphor-icons/react/ssr";
 import { useActionState, useState } from "react";
 import { FormField, fieldA11y } from "@/components/form-field";
 import { SubmitButton } from "@/components/submit-button";
@@ -86,8 +86,8 @@ export function CurrencyForm({
       )}
 
       {state.saved && !switching && (
-        <p role="status" className="flex items-center gap-2 text-sm font-medium text-success">
-          <CircleCheck aria-hidden="true" className="size-4" />
+        <p role="status" className="enter-in flex items-center gap-2 text-sm font-medium text-success">
+          <CheckCircle aria-hidden="true" className="size-4" />
           {t("settings.currencySaved")}
         </p>
       )}

@@ -1,4 +1,4 @@
-import { ShieldAlert } from "lucide-react";
+import { ShieldWarning } from "@phosphor-icons/react/ssr";
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { PageHeader } from "@/components/page-header";
@@ -18,7 +18,7 @@ export default function AddressesPage() {
     <main id="main" className="mx-auto flex w-full max-w-xl flex-1 flex-col gap-6 px-4 py-8 md:px-8">
       <PageHeader title={t("addresses.title")} intro={t("addresses.intro")} />
       <p className="flex max-w-prose items-start gap-2 rounded-lg bg-highlight p-3 text-sm">
-        <ShieldAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+        <ShieldWarning aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
         {t("addresses.warning")}
       </p>
       <Suspense fallback={<Skeleton className="h-80 w-full" />}>

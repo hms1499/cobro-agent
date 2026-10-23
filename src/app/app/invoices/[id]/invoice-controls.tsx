@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert, CircleCheck } from "lucide-react";
+import { CheckCircle, WarningCircle } from "@phosphor-icons/react/ssr";
 import { useActionState, useState } from "react";
 import { SubmitButton } from "@/components/submit-button";
 import { Button } from "@/components/ui/button";
@@ -35,8 +35,8 @@ function Confirmed({
   const [asking, setAsking] = useState(false);
   if (state.outcome === "cancelled" || state.outcome === "stopped") {
     return (
-      <p role="status" className="flex items-start gap-2 text-sm font-medium text-success">
-        <CircleCheck aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+      <p role="status" className="enter-in flex items-start gap-2 text-sm font-medium text-success">
+        <CheckCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
         {t(state.outcome === "cancelled" ? "invoice.cancelDone" : "invoice.stopDone")}
       </p>
     );
@@ -45,7 +45,7 @@ function Confirmed({
     <div className="flex flex-col gap-3">
       {state.outcome === "not_cancellable" && (
         <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
-          <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          <WarningCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
           {t("invoice.cancelRefused")}
         </p>
       )}

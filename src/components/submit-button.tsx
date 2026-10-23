@@ -1,6 +1,6 @@
 "use client";
 
-import { LoaderCircle } from "lucide-react";
+import { CircleNotch } from "@phosphor-icons/react/ssr";
 import type { ComponentProps, ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ export function SubmitButton({
   const { pending } = useFormStatus();
   return (
     <Button type="submit" variant={variant} size="lg" className="min-h-11 w-full sm:w-auto" disabled={pending} aria-disabled={pending}>
-      {pending && <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
+      {pending && <CircleNotch aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
       {pending ? pendingLabel : children}
     </Button>
   );

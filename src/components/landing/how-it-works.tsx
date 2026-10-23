@@ -1,6 +1,6 @@
 "use client";
 
-import { Pause, Play } from "lucide-react";
+import { Pause, Play } from "@phosphor-icons/react/ssr";
 import Image from "next/image";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { t } from "@/i18n";

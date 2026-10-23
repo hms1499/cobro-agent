@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert, CircleCheck, Clock } from "lucide-react";
+import { CheckCircle, Clock, WarningCircle } from "@phosphor-icons/react/ssr";
 import { useActionState } from "react";
 import { EmptyState } from "@/components/empty-state";
 import { FormField, fieldA11y } from "@/components/form-field";
@@ -28,7 +28,7 @@ export function AddressList({ items }: { items: AddressItem[] }) {
     );
   }
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="enter-stagger flex flex-col gap-3">
       {items.map((item) => (
         <li key={item.id} className="flex flex-col gap-2 rounded-xl bg-card p-4 shadow-sm ring-1 ring-foreground/10">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -36,7 +36,7 @@ export function AddressList({ items }: { items: AddressItem[] }) {
             <p className="min-w-0 break-words font-medium">{item.label}</p>
             {item.hoursLeft === null ? (
               <span className="inline-flex w-fit items-center gap-1 rounded-full bg-muted px-2.5 py-0.5 text-sm font-medium text-success">
-                <CircleCheck aria-hidden="true" className="size-4" />
+                <CheckCircle aria-hidden="true" className="size-4" />
                 {t("addresses.ready")}
               </span>
             ) : (
@@ -78,7 +78,7 @@ export function AddAddress({ email, pending }: { email: string; pending: { label
   const addressHelp = t("addresses.addressHelp");
   const problem = state.message && state.step !== "added" && (
     <p role="alert" className="flex items-start gap-2 text-destructive">
-      <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+      <WarningCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
       {t(state.message)}
     </p>
   );
@@ -136,8 +136,8 @@ export function AddAddress({ email, pending }: { email: string; pending: { label
       </h2>
       <div aria-live="polite">
         {state.step === "added" && state.message && (
-          <p className="flex items-start gap-2 text-success">
-            <CircleCheck aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <p className="enter-in flex items-start gap-2 text-success">
+            <CheckCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
             {t(state.message)}
           </p>
         )}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useAccount, useIssueJwt, useModal } from "@getpara/react-sdk";
-import { CircleAlert, LoaderCircle, Mail } from "lucide-react";
+import { CircleNotch, EnvelopeSimple, WarningCircle } from "@phosphor-icons/react/ssr";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -66,24 +66,24 @@ export function SignIn() {
   return (
     <div className="flex flex-col gap-4">
       {phase === "creating" ? (
-        <p className="flex items-center gap-2 text-muted-foreground">
-          <LoaderCircle aria-hidden="true" className="size-5 animate-spin motion-reduce:animate-none" />
+        <p role="status" className="flex min-h-11 items-center justify-center gap-2 rounded-lg bg-muted text-muted-foreground">
+          <CircleNotch aria-hidden="true" className="size-5 animate-spin motion-reduce:animate-none" />
           {t("signin.creating")}
         </p>
       ) : (
         <Button
           size="lg"
-          className="min-h-11"
+          className="min-h-11 w-full"
           onClick={() => (isConnected ? void createSession() : openModal(email ? { defaultAuthIdentifier: email } : undefined))}
         >
-          <Mail aria-hidden="true" className="size-4" />
+          <EnvelopeSimple aria-hidden="true" className="size-4" />
           {phase === "error" ? t("signin.retry") : t("signin.continue")}
         </Button>
       )}
       <div aria-live="polite">
         {phase === "error" && (
-          <p className="flex items-start gap-2 text-destructive" role="alert">
-            <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <p className="enter-in flex items-start gap-2 text-destructive" role="alert">
+            <WarningCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
             {t("signin.error")}
           </p>
         )}

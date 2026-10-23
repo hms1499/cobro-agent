@@ -1,4 +1,4 @@
-import { ArrowRight, Gauge, LockKeyhole, ShieldCheck } from "lucide-react";
+import { ArrowRight, Gauge, LockKey, ShieldCheck } from "@phosphor-icons/react/ssr";
 import { t } from "@/i18n";
 import { formatMoney } from "@/lib/money/format";
 import { container, sectionIntro, sectionTitle } from "./styles";
@@ -6,7 +6,7 @@ import { container, sectionIntro, sectionTitle } from "./styles";
 // An example figure, labelled as such on the page (landing spec anti-goals).
 const EXAMPLE_PROTECTED_ARS = "38940";
 const RULES = [
-  { icon: LockKeyhole, title: "landing.agent.ask.title", body: "landing.agent.ask.body" },
+  { icon: LockKey, title: "landing.agent.ask.title", body: "landing.agent.ask.body" },
   { icon: Gauge, title: "landing.agent.limits.title", body: "landing.agent.limits.body" },
   { icon: ArrowRight, title: "landing.agent.onlyYou.title", body: "landing.agent.onlyYou.body" },
 ] as const;

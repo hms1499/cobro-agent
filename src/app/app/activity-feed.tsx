@@ -1,5 +1,5 @@
 // src/app/app/activity-feed.tsx
-import { CircleAlert, CircleCheck, Clock, ExternalLink, Info } from "lucide-react";
+import { ArrowSquareOut, CheckCircle, Clock, Info, WarningCircle } from "@phosphor-icons/react/ssr";
 import { EmptyState } from "@/components/empty-state";
 import { ActivityIllustration } from "@/components/illustrations";
 import { ScrollToHash } from "@/components/scroll-to-hash";
@@ -14,9 +14,9 @@ import { listEvents } from "@/lib/treasury/repo";
 import type { AppUser } from "@/lib/users/queries";
 
 export const TONES: Record<EventTone, { icon: typeof Info; className: string }> = {
-  success: { icon: CircleCheck, className: "text-success" },
+  success: { icon: CheckCircle, className: "text-success" },
   warning: { icon: Clock, className: "text-warning" },
-  alert: { icon: CircleAlert, className: "text-destructive" },
+  alert: { icon: WarningCircle, className: "text-destructive" },
   info: { icon: Info, className: "text-muted-foreground" },
 };
 
@@ -38,7 +38,7 @@ export async function ActivityFeed({ user, limit = 40 }: { user: AppUser; limit?
           />
         </div>
       ) : (
-        <ul className="flex flex-col divide-y rounded-xl bg-card ring-1 ring-foreground/10">
+        <ul className="enter-stagger flex flex-col divide-y rounded-xl bg-card ring-1 ring-foreground/10">
           {events.map((event) => {
             const view = describeEvent(event, { local: user.localCurrency, rates });
             const { icon: Icon, className } = TONES[view.tone];
@@ -66,7 +66,7 @@ export async function ActivityFeed({ user, limit = 40 }: { user: AppUser; limit?
                           className="mt-2 inline-flex min-h-11 items-center gap-1 text-primary underline underline-offset-4"
                         >
                           {t("activity.viewTx")}
-                          <ExternalLink aria-hidden="true" className="size-4" />
+                          <ArrowSquareOut aria-hidden="true" className="size-4" />
                         </a>
                       )}
                     </details>

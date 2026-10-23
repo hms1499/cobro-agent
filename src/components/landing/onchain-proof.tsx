@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ArrowSquareOut } from "@phosphor-icons/react/ssr";
 import { t } from "@/i18n";
 import { IDENTITY_REGISTRY } from "@/lib/identity/registry";
 import { container, sectionIntro, sectionTitle } from "./styles";
@@ -32,7 +32,7 @@ export function OnchainProof({ agentId }: { agentId: number | undefined }) {
                 </span>
                 <span className="col-start-1 row-start-2 truncate font-mono text-[0.8rem] text-primary sm:col-start-auto sm:row-start-auto">{row.id}</span>
                 {row.href ? (
-                  <ExternalLink aria-hidden="true" className="col-start-2 row-span-2 row-start-1 size-4 self-center text-muted-foreground sm:col-start-auto sm:row-span-1 sm:row-start-auto" />
+                  <ArrowSquareOut aria-hidden="true" className="col-start-2 row-span-2 row-start-1 size-4 self-center text-muted-foreground sm:col-start-auto sm:row-span-1 sm:row-start-auto" />
                 ) : (
                   <span />
                 )}

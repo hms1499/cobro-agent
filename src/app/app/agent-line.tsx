@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { CaretRight } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
 import { t } from "@/i18n";
 import { parseServerEnv } from "@/lib/config/server";
@@ -35,7 +35,7 @@ export async function AgentLine({ user }: { user: AppUser }) {
       <span className="flex-1">
         {t(`home.agentLine.${state}` as const, { minutes: CHECK_INTERVAL_MINUTES })}
       </span>
-      <ChevronRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
+      <CaretRight aria-hidden="true" className="size-4 shrink-0 text-muted-foreground" />
     </Link>
   );
 }

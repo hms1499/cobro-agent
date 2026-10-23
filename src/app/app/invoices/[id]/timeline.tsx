@@ -1,4 +1,4 @@
-import { CircleAlert, CircleCheck, CircleDashed, CircleX, LoaderCircle } from "lucide-react";
+import { CheckCircle, CircleDashed, CircleNotch, WarningCircle, XCircle } from "@phosphor-icons/react/ssr";
 import { t, type MessageKey } from "@/i18n";
 import { formatDate } from "@/lib/invoices/dates";
 import type { TimelineStep } from "@/lib/invoices/view";
@@ -12,10 +12,10 @@ const LABEL: Record<TimelineStep["key"], MessageKey> = {
 };
 
 function StepIcon({ step, late }: { step: TimelineStep; late: boolean }) {
-  if (late) return <CircleAlert aria-hidden="true" className="size-5 text-destructive" />;
-  if (step.key === "cancelled") return <CircleX aria-hidden="true" className="size-5 text-muted-foreground" />;
-  if (step.key === "settling") return <LoaderCircle aria-hidden="true" className="size-5 text-warning" />;
-  if (step.done) return <CircleCheck aria-hidden="true" className="size-5 text-success" />;
+  if (late) return <WarningCircle aria-hidden="true" className="size-5 text-destructive" />;
+  if (step.key === "cancelled") return <XCircle aria-hidden="true" className="size-5 text-muted-foreground" />;
+  if (step.key === "settling") return <CircleNotch aria-hidden="true" className="size-5 text-warning" />;
+  if (step.done) return <CheckCircle aria-hidden="true" className="size-5 text-success" />;
   return <CircleDashed aria-hidden="true" className="size-5 text-muted-foreground" />;
 }
 

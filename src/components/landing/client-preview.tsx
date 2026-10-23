@@ -1,4 +1,4 @@
-import { CircleDollarSign, Clock, Repeat } from "lucide-react";
+import { Clock, CurrencyCircleDollar, Repeat } from "@phosphor-icons/react/ssr";
 import { t } from "@/i18n";
 import { EXAMPLE_ARS_PER_USD, EXAMPLE_BRL_PER_USD } from "@/lib/landing/examples";
 import { formatMoney } from "@/lib/money/format";
@@ -6,7 +6,7 @@ import { container, sectionIntro, sectionTitle } from "./styles";
 
 const PAID_USD = 300;
 const POINTS = [
-  { icon: CircleDollarSign, title: "landing.clients.point1.title", body: "landing.clients.point1.body" },
+  { icon: CurrencyCircleDollar, title: "landing.clients.point1.title", body: "landing.clients.point1.body" },
   { icon: Clock, title: "landing.clients.point2.title", body: "landing.clients.point2.body" },
   { icon: Repeat, title: "landing.clients.point3.title", body: "landing.clients.point3.body" },
 ] as const;

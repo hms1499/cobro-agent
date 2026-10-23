@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert, CircleCheck, ExternalLink, LoaderCircle, Unplug } from "lucide-react";
+import { ArrowSquareOut, CheckCircle, CircleNotch, Plugs, WarningCircle } from "@phosphor-icons/react/ssr";
 import { useEffect, useRef, useState } from "react";
 import { erc20Abi } from "viem";
 import {
@@ -184,7 +184,7 @@ export function PayInvoice({ slug }: { slug: string }) {
       <section role="status" className="flex flex-col gap-3">
         <Stepper current={4} />
         <p className="flex items-center gap-2 text-lg font-semibold text-success">
-          <CircleCheck aria-hidden="true" className="size-6" />
+          <CheckCircle aria-hidden="true" className="size-6" />
           {t("pay.paidTitle")}
         </p>
         <p>{t("pay.paidBody", { amount: phase.amount })}</p>
@@ -195,7 +195,7 @@ export function PayInvoice({ slug }: { slug: string }) {
           className="flex min-h-11 w-fit items-center gap-2 rounded-sm text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-ring"
         >
           {t("pay.receipt")}
-          <ExternalLink aria-hidden="true" className="size-4" />
+          <ArrowSquareOut aria-hidden="true" className="size-4" />
         </a>
       </section>
     );
@@ -235,7 +235,7 @@ export function PayInvoice({ slug }: { slug: string }) {
         {!asset && <p className="text-muted-foreground">{t("pay.chooseHint")}</p>}
         {loadingQuote && (
           <p className="flex items-center gap-2 text-muted-foreground">
-            <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />
+            <CircleNotch aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />
             {t("pay.loadingQuote")}
           </p>
         )}
@@ -285,7 +285,7 @@ export function PayInvoice({ slug }: { slug: string }) {
             )}
             {(busy || activeBlocker === null) && (
               <Button size="lg" className="min-h-11" onClick={pay} disabled={busy} aria-disabled={busy}>
-                {busy && <LoaderCircle aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
+                {busy && <CircleNotch aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />}
                 {phase.kind === "signing" ? t("pay.signing") : phase.kind === "settling" ? t("pay.settling") : t("pay.pay", { amount: amountLabel })}
               </Button>
             )}
@@ -298,7 +298,7 @@ export function PayInvoice({ slug }: { slug: string }) {
                   <p className="font-mono break-all text-muted-foreground">{connection.address}</p>
                 </details>
                 <Button variant="ghost" className="min-h-11 text-primary" onClick={() => void disconnect()}>
-                  <Unplug aria-hidden="true" className="size-4" />
+                  <Plugs aria-hidden="true" className="size-4" />
                   {t("pay.disconnect")}
                 </Button>
               </div>
@@ -309,8 +309,8 @@ export function PayInvoice({ slug }: { slug: string }) {
 
       <div aria-live="assertive">
         {(phase.kind === "error" || phase.kind === "locked") && (
-          <p role="alert" className="flex items-start gap-2 text-destructive">
-            <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <p role="alert" className="enter-in flex items-start gap-2 text-destructive">
+            <WarningCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
             {t(phase.key)}
           </p>
         )}

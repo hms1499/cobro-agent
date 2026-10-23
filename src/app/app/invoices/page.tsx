@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "@phosphor-icons/react/ssr";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -89,7 +89,7 @@ async function Invoices({ searchParams }: { searchParams: PageProps<"/app/invoic
               <div className="hidden md:block">
                 <InvoiceTable rows={rows} local={user.localCurrency} rates={rates} today={today} />
               </div>
-              <ul className="flex flex-col p-2 md:hidden">
+              <ul className="enter-stagger flex flex-col p-2 md:hidden">
                 {rows.map((invoice) => (
                   <li key={invoice.id}>
                     <ListRow
