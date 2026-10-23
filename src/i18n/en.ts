@@ -210,6 +210,8 @@ export const en = {
   "settings.wallet.title": "Your wallet",
   "settings.wallet.help": "Money you withdraw from Cobro arrives here. Open your wallet to send it to an exchange or another wallet.",
   "settings.wallet.open": "Open my wallet",
+  "settings.wallet.reauth": "For your safety, Para signs you out of your wallet after a while. To open it, enter the code Para emails to {email}.",
+  "settings.wallet.reauthNoEmail": "For your safety, Para signs you out of your wallet after a while. To open it, enter the code Para emails you.",
   "onboarding.title": "Set up your account",
   "onboarding.step": "Step {step} of {total}",
   "onboarding.name": "Your name or business",
