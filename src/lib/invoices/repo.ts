@@ -61,17 +61,15 @@ export type RecurringLink =
     };
 
 export async function createInvoice(db: Db, userId: string, input: InvoiceInput): Promise<InvoiceRow> {
-  const row = await db.transaction((tx) =>
-    insertNumberedInvoice(tx, {
-      slug: newSlug(),
-      userId,
-      clientName: input.clientName,
-      description: input.description,
-      amount: input.amount,
-      currency: input.currency,
-      dueDate: input.dueDate,
-    }),
-  );
+  const row = await insertNumberedInvoice(db, {
+    slug: newSlug(),
+    userId,
+    clientName: input.clientName,
+    description: input.description,
+    amount: input.amount,
+    currency: input.currency,
+    dueDate: input.dueDate,
+  });
   return row!;
 }
 

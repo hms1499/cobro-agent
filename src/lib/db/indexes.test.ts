@@ -8,7 +8,10 @@ beforeAll(async () => {
   db = await createTestDb();
 });
 
-/** The planner's plan for `query`, with sequential scans priced out so a small table cannot hide an index. */
+/**
+ * The planner's plan for `query`, with sequential scans priced out so a small table cannot hide an index.
+ * Values go in as parameters, as the app sends them: a partial index must still match a bound `status`.
+ */
 async function explain(query: SQL): Promise<string> {
   await db.execute(sql`set enable_seqscan = off`);
   const result = (await db.execute(sql`explain ${query}`)) as unknown as { rows: { "QUERY PLAN": string }[] };
@@ -17,19 +20,19 @@ async function explain(query: SQL): Promise<string> {
 
 describe("cron indexes", () => {
   it("uses the settling index for stuck claims", async () => {
-    expect(await explain(sql`select id from invoices where status = 'settling' and settling_until < now()`)).toContain(
+    expect(await explain(sql`select id from invoices where status = ${"settling"} and settling_until < ${new Date()}`)).toContain(
       "invoices_settling_idx",
     );
   });
 
   it("uses the lower(tx_hash) index for reconciliation", async () => {
-    expect(await explain(sql`select tx_hash from payments where lower(tx_hash) in ('0xabc', '0xdef')`)).toContain(
+    expect(await explain(sql`select tx_hash from payments where lower(tx_hash) in (${"0xabc"}, ${"0xdef"})`)).toContain(
       "payments_tx_hash_lower_idx",
     );
   });
 
   it("uses the pending index for unsettled wallet transactions", async () => {
-    expect(await explain(sql`select distinct user_id from treasury_txs where status = 'pending' order by user_id`)).toContain(
+    expect(await explain(sql`select distinct user_id from treasury_txs where status = ${"pending"} order by user_id`)).toContain(
       "treasury_txs_pending_idx",
     );
   });
