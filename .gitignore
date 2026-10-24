@@ -29,3 +29,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Demo video: kept locally, shared by link (YouTube/Loom)
+docs/demo/*.mp4

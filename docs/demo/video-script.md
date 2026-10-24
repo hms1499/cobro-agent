@@ -2,7 +2,8 @@
 
 One end-to-end flow, screen recording with English captions, no voice. Limit 3:15.
 [`captions.srt`](captions.srt) holds the captions with the timings of the recorded cut; the same captions
-are burned into the video.
+are burned into the video. The video itself (`cobro-demo.mp4`) is kept locally in this folder and
+shared by link; it is not committed.
 
 Two roles appear on screen, named by role only: **the freelancer** (Cobro account) and **the client**
 (their own browser wallet). No names are spoken or captioned.
