@@ -7,7 +7,7 @@ are burned into the video.
 Two roles appear on screen, named by role only: **the freelancer** (Cobro account) and **the client**
 (their own browser wallet). No names are spoken or captioned.
 
-## As recorded (2026-10-24, 3:13)
+## As recorded (2026-10-24, 3:04)
 
 Recorded on production. Freelancer scenes come from a CDP screencast of a headed Chrome at 1280×720 ×1.5
 (1920×1080); the client scene is a full-screen capture of the client's own Chrome, cropped to 16:9.
@@ -24,7 +24,7 @@ Captions are rendered as PNG overlays. The shot list below is the plan; these ar
 - **Scene 7** zooms on `celo_bc3965e128ba` in Celoscan's UTF-8 input view; Celoscan's sponsored rows are
   hidden while recording.
 - **The email is not blurred** (the user's call). Wallet addresses in the OKX confirm screen are blurred.
-- **Scene 8** uses placeholders until Task 6 produces the numbers; only its card and caption are re-rendered.
+- **Scene 8 (numbers card) was dropped** at the user's request; the video ends on agent #9884 at 8004scan. Real usage numbers live in the README and the Loops description.
 - The first client wallet tried, Backpack, blocked `cobro-agent.vercel.app` as "malicious or suspicious";
   that part is cut.
 

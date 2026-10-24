@@ -99,13 +99,5 @@ Every transaction Cobro sends carries its attribution tag.
 On Celoscan, the input data carries Cobro's tag.
 
 26
-00:02:57,733 --> 00:03:02,767
+00:02:57,733 --> 00:03:03,767
 Cobro's agent is registered on ERC-8004 as agent #9884.
-
-27
-00:03:02,767 --> 00:03:08,767
-So far: {freelancers} freelancers, {payments} payments, {conversions} agent conversions.
-
-28
-00:03:08,767 --> 00:03:12,767
-cobro-agent.vercel.app. Your clients pay in dollars. You keep pesos.
