@@ -1,11 +1,32 @@
 # Cobro demo video: script and shot list
 
-One end-to-end flow, screen recording with English captions, no voice. Target length 3:12 (limit 3:15).
-Captions are also in [`captions.srt`](captions.srt) with the same text and timings; upload the SRT with
-the video (YouTube "Subtitles", Loom "Captions") or burn it in.
+One end-to-end flow, screen recording with English captions, no voice. Limit 3:15.
+[`captions.srt`](captions.srt) holds the captions with the timings of the recorded cut; the same captions
+are burned into the video.
 
-Two roles appear on screen, named by role only: **the freelancer** (Cobro account, home currency ARS) and
-**the client** (their own browser wallet). No names, emails or full addresses are spoken or captioned.
+Two roles appear on screen, named by role only: **the freelancer** (Cobro account) and **the client**
+(their own browser wallet). No names are spoken or captioned.
+
+## As recorded (2026-10-24, 3:13)
+
+Recorded on production. Freelancer scenes come from a CDP screencast of a headed Chrome at 1280×720 ×1.5
+(1920×1080); the client scene is a full-screen capture of the client's own Chrome, cropped to 16:9.
+Captions are rendered as PNG overlays. The shot list below is the plan; these are the differences:
+
+- **Home currency USD**, not ARS: the account was already on USD, and keeping it avoided a conversion.
+- **The client paid 0.86 USD₮** (ARS 1,400 weekly invoice, INV-0005) from an OKX wallet, because the client
+  wallet held about 1 USD₮ and no wARS. Caption 13 says "pays in dollars (USD₮)".
+- **Scene 5 shows the prepared fallback**: the real Oct 22 conversion of ARS 1,700 to USD₮
+  (tx `0xf8e0…c10f`, attribution tag verified). Caption 17 is worded for a USD home currency.
+- **Scene 6 withdraws 0.50 USD₮ to the freelancer's own Cobro wallet** (tx `0xc957…edb4`, tag verified),
+  because the saved address was still in its 24-hour wait; the form shows that wait on screen. A short
+  extra shot opens the wallet (Settings → Open my wallet) to show the money arrived (caption 23).
+- **Scene 7** zooms on `celo_bc3965e128ba` in Celoscan's UTF-8 input view; Celoscan's sponsored rows are
+  hidden while recording.
+- **The email is not blurred** (the user's call). Wallet addresses in the OKX confirm screen are blurred.
+- **Scene 8** uses placeholders until Task 6 produces the numbers; only its card and caption are re-rendered.
+- The first client wallet tried, Backpack, blocked `cobro-agent.vercel.app` as "malicious or suspicious";
+  that part is cut.
 
 ## Prep checklist
 
@@ -79,7 +100,7 @@ Page: `/app/invoices/new` (click **New invoice**, or press Cmd+K and type "new")
 |---|---|---|
 | 1:02–1:09 | Pay page loads: invoice from the freelancer, amount in ARS, "Choose how to pay". | The client opens the link. No account, no sign-up. |
 | 1:09–1:16 | Pan over the four currencies; hover **US dollar (USA₮)**, "Recommended for US clients". | Four currencies. USA₮ is recommended for US clients. |
-| 1:16–1:23 | Pick **Argentine peso (wARS)**. "You pay …" and "Rate locked for …" appear. | Here the client pays in Argentine pesos (wARS). |
+| 1:16–1:23 | Pick **Argentine peso (wARS)**. "You pay …" and "Rate locked for …" appear. | Here the client pays in dollars (USD₮). |
 | 1:23–1:31 | **Connect wallet** → **Pay …**. The wallet asks for a signature (no gas); sign it. | One signature over x402. Cobro covers the network fee. |
 | | `CUT` if "Confirming your payment…" takes longer than a few seconds. | |
 | 1:31–1:40 | "Payment complete". Click **View receipt on Celoscan**, show the tab for 2 seconds. | Paid. Settled on Celo mainnet, straight to the freelancer. |
@@ -93,7 +114,7 @@ Page: `/app/invoices/new` (click **New invoice**, or press Cmd+K and type "new")
 |---|---|---|
 | 1:40–1:47 | **Invoices**: the new invoice shows **Paid**. Open it; the timeline ends in "Paid". | Back with the freelancer: the invoice is marked paid. |
 | | `CUT` until `/app/rules` shows a new "Converted … to dollars" entry. If nothing appears within 20 minutes (the agent waits for a fair rate), use the *(prepared)* fallback entry instead. | |
-| 1:47–1:55 | **Agent** (`/app/rules`): "What your agent did" → the new "Converted … to dollars" entry. | Pesos above the reserve? The agent saves the extra in dollars. |
+| 1:47–1:55 | **Agent** (`/app/rules`): "What your agent did" → the new "Converted … to dollars" entry. | Paid in pesos? The agent converts them to dollars on its own. |
 | 1:55–2:03 | Click **Why?** to open the explanation and the price line. | It converts through Textile FX, within your caps and price limit. |
 | 2:03–2:10 | Point at **View on Celoscan** on the same entry (open it in scene 7). Scroll up to show the spending and savings bars. | Every action explains why, with a tagged transaction. |
 
