@@ -366,6 +366,7 @@ function quoteMatches(q: FirmQuote, taker: Address, maxSell: bigint, allowed: re
   );
 }
 
+/** Spec §10.4 for one intent, from the RFQ to the swap. Each step below returns early with the outcome when it stops the trade. */
 async function trade(
   deps: ExecutorDeps,
   ctx: TreasuryContext,
@@ -376,15 +377,77 @@ async function trade(
   result: Result,
 ): Promise<RunResult> {
   const signer = deps.signer(ctx);
-  const attempts = intent.attempts + 1;
+  const outcome = await requestQuote(deps, ctx, signer, d);
+  if (outcome.status === "no_quote") return noQuote(deps, ctx, intent, d, outcome.reason, outcome.retryAfterMs, result);
 
-  // Spec §10.4 step 3, with a fresh taker proof each time (Textile accepts one for 60 s).
-  let outcome: RfqOutcome;
+  const q = outcome.quote;
+  const run: QuoteRun = {
+    deps,
+    ctx,
+    intent,
+    d,
+    q,
+    signer,
+    feeToken,
+    rates,
+    result,
+    attempts: intent.attempts + 1,
+    policy: { allowedSpenders: deps.allowedSpenders, personalWallet: ctx.personalWallet, withdrawalAddresses: [] },
+    quotedTrade: quotedTradeRow(ctx, intent, d, q),
+  };
+  // The quote must be what we asked for: bound to this wallet, within the intent, on an allowed contract.
+  if (!quoteMatches(q, ctx.address, d.amount, deps.allowedSpenders)) return rejectOffPolicy(run);
+
+  const slippage = slippageBps(d.from, q.takerPays, d.to, q.buyAmount, rates);
+  const priceRefused = await refuseOnPrice(run, slippage);
+  if (priceRefused) return priceRefused;
+
+  await updateIntent(deps.db, intent.id, { status: "executing", attempts: run.attempts, lastSlippageBps: slippage }, deps.now());
+  const approveFailed = await ensureAllowance(run, slippage);
+  if (approveFailed) return approveFailed;
+  const expired = await discardIfExpired(run, slippage);
+  if (expired) return expired;
+  return sendSwap(run, slippage);
+}
+
+/** One firm quote on its way from the checks to the swap: what every step of trade() after the RFQ needs. */
+interface QuoteRun {
+  deps: ExecutorDeps;
+  ctx: TreasuryContext;
+  intent: FxIntentRow;
+  d: ConvertDecision;
+  q: FirmQuote;
+  signer: TreasurySigner;
+  feeToken: GasToken;
+  rates: ReferenceRates;
+  result: Result;
+  /** The intent's attempt count with this run included. */
+  attempts: number;
+  policy: TreasuryPolicy;
+  /** The fx_trades fields every row written for this quote shares. */
+  quotedTrade: ReturnType<typeof quotedTradeRow>;
+}
+
+function quotedTradeRow(ctx: TreasuryContext, intent: FxIntentRow, d: ConvertDecision, q: FirmQuote) {
+  return {
+    userId: ctx.userId,
+    intentId: intent.id,
+    rfqId: q.rfqId,
+    sellAsset: d.from,
+    buyAsset: d.to,
+    sellAmount: q.takerPays.toString(),
+    buyAmount: q.buyAmount.toString(),
+    feeAmount: q.feeAmount.toString(),
+  };
+}
+
+/** Spec §10.4 step 3, with a fresh taker proof each time (Textile accepts one for 60 s). An error becomes a no-quote. */
+async function requestQuote(deps: ExecutorDeps, ctx: TreasuryContext, signer: TreasurySigner, d: ConvertDecision): Promise<RfqOutcome> {
   try {
     const nonce = `0x${randomBytes(32).toString("hex")}` as Hex;
     const issuedAt = deps.now().getTime();
     const signature = await signer.signTypedData(takerControlTypedData(ctx.address, nonce, issuedAt));
-    outcome = await deps.rfq.request({
+    return await deps.rfq.request({
       sellToken: TOKENS[d.from].address,
       buyToken: TOKENS[d.to].address,
       sellAmount: d.amount,
@@ -395,36 +458,32 @@ async function trade(
     // Textile errors (insufficient_funds, 429, 5xx, network) and Para errors alike: wait and retry (spec §12).
     if (!(error instanceof TextileError)) console.error(`RFQ for ${ctx.userId} failed:`, error);
     const reason = error instanceof TextileError ? (error.reason ?? `http_${error.status}`) : "error";
-    return noQuote(deps, ctx, intent, d, reason, RETRY_AFTER_ERROR_MS, result);
+    return { status: "no_quote", reason, retryAfterMs: RETRY_AFTER_ERROR_MS };
   }
-  if (outcome.status === "no_quote") return noQuote(deps, ctx, intent, d, outcome.reason, outcome.retryAfterMs, result);
+}
 
-  const q = outcome.quote;
-  const quotedTrade = {
-    userId: ctx.userId,
-    intentId: intent.id,
-    rfqId: q.rfqId,
-    sellAsset: d.from,
-    buyAsset: d.to,
-    sellAmount: q.takerPays.toString(),
-    buyAmount: q.buyAmount.toString(),
-    feeAmount: q.feeAmount.toString(),
-  };
-  const refuse = async (status: "rejected" | "expired", detail: string, slippage: number | null) => {
-    await deps.rfq.cancel(q.rfqId, q.claimToken).catch((error) => console.error(`Textile cancel ${q.rfqId} failed:`, error));
-    await insertTrade(deps.db, { ...quotedTrade, status, detail, slippageBps: slippage });
-  };
+/** Tells Textile the quote will not be filled. A failed cancel is only logged. */
+async function cancelQuote({ deps, q }: QuoteRun): Promise<void> {
+  await deps.rfq.cancel(q.rfqId, q.claimToken).catch((error) => console.error(`Textile cancel ${q.rfqId} failed:`, error));
+}
 
-  // The quote must be what we asked for: bound to this wallet, within the intent, on an allowed contract.
-  if (!quoteMatches(q, ctx.address, d.amount, deps.allowedSpenders)) {
-    await refuse("rejected", "policy", null);
-    await updateIntent(deps.db, intent.id, { attempts, retryAfter: new Date(deps.now().getTime() + RETRY_AFTER_ERROR_MS) }, deps.now());
-    await logEvent(deps.db, ctx.userId, "policy_rejected", { ...decisionData(d), spender: q.spender }, deps.now());
-    return result("failed", "policy");
-  }
+/** Cancels the quote and records the trade as not taken. */
+async function refuseQuote(run: QuoteRun, status: "rejected" | "expired", detail: string, slippage: number | null): Promise<void> {
+  await cancelQuote(run);
+  await insertTrade(run.deps.db, { ...run.quotedTrade, status, detail, slippageBps: slippage });
+}
 
-  // Spec §10.3.
-  const slippage = slippageBps(d.from, q.takerPays, d.to, q.buyAmount, rates);
+async function rejectOffPolicy(run: QuoteRun): Promise<RunResult> {
+  const { deps, ctx, intent, d, q } = run;
+  await refuseQuote(run, "rejected", "policy", null);
+  await updateIntent(deps.db, intent.id, { attempts: run.attempts, retryAfter: new Date(deps.now().getTime() + RETRY_AFTER_ERROR_MS) }, deps.now());
+  await logEvent(deps.db, ctx.userId, "policy_rejected", { ...decisionData(d), spender: q.spender }, deps.now());
+  return run.result("failed", "policy");
+}
+
+/** Spec §10.3: blocks a price past the hard limit, waits on one past the normal limit. Null when the price is accepted. */
+async function refuseOnPrice(run: QuoteRun, slippage: number): Promise<RunResult | null> {
+  const { deps, ctx, intent, d } = run;
   const verdict = acceptQuote({
     slippageBps: slippage,
     intentCreatedAt: waitStartedAt(intent),
@@ -434,8 +493,8 @@ async function trade(
     maxWaitMinutes: ctx.rules.maxWaitMinutes,
   });
   if (verdict === "block") {
-    await refuse("rejected", "price_blocked", slippage);
-    await updateIntent(deps.db, intent.id, { status: "blocked", attempts, lastSlippageBps: slippage }, deps.now());
+    await refuseQuote(run, "rejected", "price_blocked", slippage);
+    await updateIntent(deps.db, intent.id, { status: "blocked", attempts: run.attempts, lastSlippageBps: slippage }, deps.now());
     await logEvent(
       deps.db,
       ctx.userId,
@@ -443,54 +502,68 @@ async function trade(
       { ...decisionData(d), slippageBps: slippage, limitBps: ctx.rules.hardMaxSlippageBps },
       deps.now(),
     );
-    return result("blocked");
+    return run.result("blocked");
   }
   if (verdict === "wait") {
-    await refuse("rejected", "price", slippage);
-    await updateIntent(deps.db, intent.id, { attempts, lastSlippageBps: slippage }, deps.now());
+    await refuseQuote(run, "rejected", "price", slippage);
+    await updateIntent(deps.db, intent.id, { attempts: run.attempts, lastSlippageBps: slippage }, deps.now());
     await logOncePerIntent(deps, ctx.userId, intent.id, "waiting", {
       ...decisionData(d),
       slippageBps: slippage,
       limitBps: ctx.rules.maxSlippageBps,
     });
-    return result("waiting", "price");
+    return run.result("waiting", "price");
   }
+  return null;
+}
 
-  await updateIntent(deps.db, intent.id, { status: "executing", attempts, lastSlippageBps: slippage }, deps.now());
-  const policy: TreasuryPolicy = { allowedSpenders: deps.allowedSpenders, personalWallet: ctx.personalWallet, withdrawalAddresses: [] };
-
-  // Spec §10.4 step 5: approve up to what is left of the daily cap; USD₮ needs a reset to 0 first.
+/** Spec §10.4 step 5: approve up to what is left of the daily cap; USD₮ needs a reset to 0 first. Null once the spender may take the quote. */
+async function ensureAllowance(run: QuoteRun, slippage: number): Promise<RunResult | null> {
+  const { deps, ctx, intent, d, q, rates } = run;
   const allowance = await deps.chain.allowance(TOKENS[d.from].address, ctx.address, q.spender);
-  if (allowance < q.takerPays) {
-    const dailyLeft = dollarsToWad(ctx.rules.dailyMaxUsd) - (await filledUsdWad24h(deps.db, ctx.userId, deps.now()));
-    const target = maxBig(q.takerPays, atomicForUsdWad(d.from, dailyLeft, rates));
-    for (const amount of d.from === "USDT" && allowance > 0n ? [0n, target] : [target]) {
-      const call = encodeTreasuryCall({ kind: "approve", asset: d.from, spender: q.spender, amount }, policy);
-      const sent = await sendTreasuryTx(deps, ctx, signer, "approve", call, feeToken);
-      if (sent.status) await settleTreasuryTx(deps.db, sent.hash, sent.status === "rejected" ? "failed" : sent.status, deps.now());
-      if (sent.status !== "success") {
-        await refuse("rejected", `approve_${sent.status ?? "pending"}`, slippage);
-        await updateIntent(deps.db, intent.id, { status: "waiting" }, deps.now());
-        if (sent.status === "rejected") {
-          await logEvent(deps.db, ctx.userId, "swap_failed", { ...decisionData(d), detail: "approve_rejected" }, deps.now());
-        }
-        return sent.status === null ? result("pending_tx", "approve") : result("failed", "approve");
+  if (allowance >= q.takerPays) return null;
+  const dailyLeft = dollarsToWad(ctx.rules.dailyMaxUsd) - (await filledUsdWad24h(deps.db, ctx.userId, deps.now()));
+  const target = maxBig(q.takerPays, atomicForUsdWad(d.from, dailyLeft, rates));
+  for (const amount of d.from === "USDT" && allowance > 0n ? [0n, target] : [target]) {
+    const call = encodeTreasuryCall({ kind: "approve", asset: d.from, spender: q.spender, amount }, run.policy);
+    const sent = await sendTreasuryTx(deps, ctx, run.signer, "approve", call, run.feeToken);
+    if (sent.status) await settleTreasuryTx(deps.db, sent.hash, sent.status === "rejected" ? "failed" : sent.status, deps.now());
+    if (sent.status !== "success") {
+      await refuseQuote(run, "rejected", `approve_${sent.status ?? "pending"}`, slippage);
+      await updateIntent(deps.db, intent.id, { status: "waiting" }, deps.now());
+      if (sent.status === "rejected") {
+        await logEvent(deps.db, ctx.userId, "swap_failed", { ...decisionData(d), detail: "approve_rejected" }, deps.now());
       }
+      return sent.status === null ? run.result("pending_tx", "approve") : run.result("failed", "approve");
     }
   }
-  if (deps.now().getTime() >= q.expiresAt.getTime() - EXPIRY_MARGIN_MS) {
-    // Spec §12: an expired quote is discarded, never sent. The allowance stays for the next run.
-    await refuse("expired", "quote_expired", slippage);
-    await updateIntent(deps.db, intent.id, { status: "waiting" }, deps.now());
-    return result("expired");
-  }
+  return null;
+}
 
+/** Spec §12: a quote this close to its expiry is discarded, never sent. The allowance stays for the next run. */
+async function discardIfExpired(run: QuoteRun, slippage: number): Promise<RunResult | null> {
+  const { deps, intent, q } = run;
+  if (deps.now().getTime() < q.expiresAt.getTime() - EXPIRY_MARGIN_MS) return null;
+  await refuseQuote(run, "expired", "quote_expired", slippage);
+  await updateIntent(deps.db, intent.id, { status: "waiting" }, deps.now());
+  return run.result("expired");
+}
+
+async function sendSwap(run: QuoteRun, slippage: number): Promise<RunResult> {
+  const { deps, ctx, d, q, rates } = run;
   // Store the signed bytes and the trade before broadcasting, so a crash right after is reconcilable.
-  const signed = await deps.signTx(signer, encodeTreasuryCall({ kind: "swap", ...q.swap }, policy), feeToken);
+  const signed = await deps.signTx(run.signer, encodeTreasuryCall({ kind: "swap", ...q.swap }, run.policy), run.feeToken);
   await deps.db.transaction(async (tx) => {
-    await recordTreasuryTx(tx, { userId: ctx.userId, kind: "swap", nonce: signed.nonce, hash: signed.hash, raw: signed.raw, feeToken });
+    await recordTreasuryTx(tx, {
+      userId: ctx.userId,
+      kind: "swap",
+      nonce: signed.nonce,
+      hash: signed.hash,
+      raw: signed.raw,
+      feeToken: run.feeToken,
+    });
     await insertTrade(tx, {
-      ...quotedTrade,
+      ...run.quotedTrade,
       claimToken: q.claimToken,
       slippageBps: slippage,
       notionalUsdCents: cents(usdWad(d.from, q.takerPays, rates)),
@@ -500,13 +573,13 @@ async function trade(
   });
   if (!(await broadcast(deps, signed.hash, signed.raw))) {
     await settleSwap(deps, ctx.userId, signed.hash, "failed", "rejected");
-    await deps.rfq.cancel(q.rfqId, q.claimToken).catch((error) => console.error(`Textile cancel ${q.rfqId} failed:`, error));
-    return result("failed", "swap_rejected");
+    await cancelQuote(run);
+    return run.result("failed", "swap_rejected");
   }
   const status = await deps.chain.waitForReceipt(signed.hash);
-  if (status === null) return result("pending_tx", "swap");
+  if (status === null) return run.result("pending_tx", "swap");
   await settleSwap(deps, ctx.userId, signed.hash, status);
-  return status === "success" ? result("converted") : result("failed", "swap_reverted");
+  return status === "success" ? run.result("converted") : run.result("failed", "swap_reverted");
 }
 
 async function noQuote(
