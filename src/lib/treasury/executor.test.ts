@@ -549,6 +549,85 @@ describe("runTreasuryForUser: a broadcast the node refuses", () => {
   });
 });
 
+describe("runTreasuryForUser: less common trade paths", () => {
+  it("backs off and logs after an RFQ error that is not Textile's", async () => {
+    const user = await freelancer();
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas });
+    vi.mocked(deps.rfq.request).mockRejectedValueOnce(new Error("socket hang up"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "no_quote", detail: "error" });
+      expect(logged).toHaveBeenCalledWith(expect.stringContaining("RFQ"), expect.any(Error));
+    } finally {
+      logged.mockRestore();
+    }
+    expect((await intentsOf(user.id))[0]).toMatchObject({ attempts: 1, retryAfter: new Date(NOW.getTime() + 600_000) });
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "no_quote", detail: "error" });
+  });
+
+  it("names a Textile error without a reason by its HTTP status", async () => {
+    const user = await freelancer();
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas });
+    vi.mocked(deps.rfq.request).mockRejectedValueOnce(new TextileError(503, undefined, "unavailable"));
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "no_quote", detail: "http_503" });
+  });
+
+  it("skips the approval when the allowance already covers the quote", async () => {
+    const user = await freelancer();
+    const { deps, state, signed } = harness({ WARS: pesos(3_200n), ...gas });
+    state.allowance = pesos(3_200n);
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("converted");
+    expect(signed).toEqual([{ to: TEXTILE_REACTOR, data: "0xabcdef", feeToken: "USDT" }]);
+  });
+
+  it("waits on an approval whose receipt does not arrive in time, and keeps it pending", async () => {
+    const user = await freelancer();
+    const { deps, state } = harness({ WARS: pesos(3_200n), ...gas });
+    state.receipts.set(hashOf(1), null);
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "pending_tx", detail: "approve" });
+    expect((await txByHash(hashOf(1))).status).toBe("pending");
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "rejected", detail: "approve_pending", slippageBps: 50 });
+    expect((await intentsOf(user.id))[0]).toMatchObject({ status: "waiting", attempts: 1 });
+    expect(deps.rfq.cancel).toHaveBeenCalledWith("rfq_1", "claim_1");
+    expect(await eventTypes(user.id)).toEqual([]);
+  });
+
+  it("fails a reverted approval without a swap_failed event and signs no swap", async () => {
+    const user = await freelancer();
+    const { deps, state } = harness({ WARS: pesos(3_200n), ...gas });
+    state.receipts.set(hashOf(1), "reverted");
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "failed", detail: "approve" });
+    expect(deps.signTx).toHaveBeenCalledTimes(1);
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "rejected", detail: "approve_reverted" });
+    expect((await intentsOf(user.id))[0].status).toBe("waiting");
+    expect(await eventTypes(user.id)).toEqual([]);
+  });
+
+  it("records a reverted swap as failed", async () => {
+    const user = await freelancer();
+    const { deps, state } = harness({ WARS: pesos(3_200n), ...gas });
+    state.receipts.set(hashOf(2), "reverted");
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "failed", detail: "swap_reverted" });
+    expect((await txByHash(hashOf(2))).status).toBe("reverted");
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "failed", swapTxHash: hashOf(2) });
+    expect(deps.rfq.submit).not.toHaveBeenCalled();
+  });
+
+  it("still records a refused quote when Textile's cancel fails", async () => {
+    const user = await freelancer();
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas }, { outcome: quoted({ buyAmount: 1_900_000n }) });
+    vi.mocked(deps.rfq.cancel).mockRejectedValueOnce(new Error("timeout"));
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "waiting", detail: "price" });
+      expect(logged).toHaveBeenCalledWith(expect.stringContaining("Textile cancel rfq_1"), expect.any(Error));
+    } finally {
+      logged.mockRestore();
+    }
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "rejected", detail: "price" });
+  });
+});
+
 describe("runTreasuryForUser: one event per intent and kind", () => {
   it("logs a no-quote and then a lack of gas on the same intent, each once", async () => {
     const user = await freelancer();
