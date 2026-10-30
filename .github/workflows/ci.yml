@@ -1,0 +1,31 @@
+name: CI
+# Runs the full gate (CLAUDE.md) on every push and pull request. It needs no secrets: the committed
+# .env carries the public values the build reads, and unit and DB tests run offline (PGlite).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build

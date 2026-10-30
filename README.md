@@ -1,5 +1,8 @@
 # Cobro
 
+[![CI](https://github.com/hms1499/cobro-agent/actions/workflows/ci.yml/badge.svg)](https://github.com/hms1499/cobro-agent/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 **Get paid in dollars or pesos. Your agent protects the rest.**
 
 Cobro is an invoicing and treasury agent for Latin American freelancers whose clients already hold
@@ -130,6 +133,8 @@ _Not generated yet._
 
 ## Run locally
 
+Needs Node 24 (`nvm use` reads `.nvmrc`).
+
 ```bash
 npm install
 cp .env.example .env.local   # fill in the values; localhost uses Para BETA and a Neon dev branch
@@ -137,10 +142,15 @@ npm run db:migrate
 npm run dev
 ```
 
-Before a change is done: `npm test && npm run typecheck && npm run lint && npm run build`.
+Before a change is done: `npm test && npm run typecheck && npm run lint && npm run build`. CI runs the same
+gate on every push and pull request.
 
 Just checking the code? `npm install && npm test && npm run build` works on a fresh clone with no secrets: the committed `.env` carries the three public values the build needs. Signing in, the database and payments need the secrets in `.env.local`, so try those on the [live demo](https://cobro-agent.vercel.app).
 
 ## For clients
 
 Paying a Cobro invoice in USA₮ for the first time? Read [Paying a Cobro invoice in USA₮](docs/guides/pay-with-usat.md).
+
+## License
+
+[MIT](LICENSE)
