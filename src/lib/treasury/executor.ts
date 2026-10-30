@@ -403,10 +403,10 @@ async function trade(
   if (priceRefused) return priceRefused;
 
   await updateIntent(deps.db, intent.id, { status: "executing", attempts: run.attempts, lastSlippageBps: slippage }, deps.now());
-  const approveFailed = await ensureAllowance(run, slippage);
-  if (approveFailed) return approveFailed;
-  const expired = await discardIfExpired(run, slippage);
-  if (expired) return expired;
+  // Expiry is checked before the approval too, so no gas goes on a quote that is already too old.
+  const stopped =
+    (await discardIfExpired(run, slippage)) ?? (await ensureAllowance(run, slippage)) ?? (await discardIfExpired(run, slippage));
+  if (stopped) return stopped;
   return sendSwap(run, slippage);
 }
 
@@ -530,17 +530,21 @@ async function ensureAllowance(run: QuoteRun, slippage: number): Promise<RunResu
     if (sent.status) await settleTreasuryTx(deps.db, sent.hash, sent.status === "rejected" ? "failed" : sent.status, deps.now());
     if (sent.status !== "success") {
       await refuseQuote(run, "rejected", `approve_${sent.status ?? "pending"}`, slippage);
-      await updateIntent(deps.db, intent.id, { status: "waiting" }, deps.now());
-      if (sent.status === "rejected") {
-        await logEvent(deps.db, ctx.userId, "swap_failed", { ...decisionData(d), detail: "approve_rejected" }, deps.now());
+      if (sent.status === null) {
+        await updateIntent(deps.db, intent.id, { status: "waiting" }, deps.now());
+        return run.result("pending_tx", "approve");
       }
-      return sent.status === null ? run.result("pending_tx", "approve") : run.result("failed", "approve");
+      // Refused or reverted: back off as after a refused quote, so a failing approval is not resent (and paid for) every run.
+      const retryAfter = new Date(deps.now().getTime() + RETRY_AFTER_ERROR_MS);
+      await updateIntent(deps.db, intent.id, { status: "waiting", retryAfter }, deps.now());
+      await logEvent(deps.db, ctx.userId, "swap_failed", { ...decisionData(d), detail: `approve_${sent.status}` }, deps.now());
+      return run.result("failed", "approve");
     }
   }
   return null;
 }
 
-/** Spec §12: a quote this close to its expiry is discarded, never sent. The allowance stays for the next run. */
+/** Spec §12: a quote this close to its expiry is discarded, never sent. An allowance already granted stays for the next run. */
 async function discardIfExpired(run: QuoteRun, slippage: number): Promise<RunResult | null> {
   const { deps, intent, q } = run;
   if (deps.now().getTime() < q.expiresAt.getTime() - EXPIRY_MARGIN_MS) return null;

@@ -303,12 +303,24 @@ describe("runTreasuryForUser: converting", () => {
     expect(wallet.gasDrippedAt).toEqual(NOW);
   });
 
-  it("discards a quote that expires before the swap could be sent", async () => {
+  it("discards a quote that expires while the approval is mined, before the swap is sent", async () => {
     const user = await freelancer();
-    const { deps, signed } = harness({ WARS: pesos(3_200n), ...gas }, { outcome: quoted({ expiresAt: new Date(NOW.getTime() + 3_000) }) });
+    const { deps, signed } = harness({ WARS: pesos(3_200n), ...gas });
+    // The quote expires at NOW + 60 s; the approval takes until 58 s, past the 5 s margin.
+    deps.now = () => (signed.length > 0 ? new Date(NOW.getTime() + 58_000) : NOW);
     expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("expired");
     expect(signed).toHaveLength(1); // the approval only
     expect((await tradesOf(user.id))[0].status).toBe("expired");
+    expect((await intentsOf(user.id))[0].status).toBe("waiting");
+  });
+
+  it("discards a quote already near its expiry before spending gas on an approval", async () => {
+    const user = await freelancer();
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas }, { outcome: quoted({ expiresAt: new Date(NOW.getTime() + 3_000) }) });
+    expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("expired");
+    expect(deps.signTx).not.toHaveBeenCalled();
+    expect(deps.rfq.cancel).toHaveBeenCalledWith("rfq_1", "claim_1");
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "expired", detail: "quote_expired" });
     expect((await intentsOf(user.id))[0].status).toBe("waiting");
   });
 });
@@ -545,7 +557,8 @@ describe("runTreasuryForUser: a broadcast the node refuses", () => {
     expect((await txByHash(hashOf(1))).status).toBe("failed");
     expect(deps.signTx).toHaveBeenCalledTimes(1);
     expect((await eventsOf(user.id)).map((e) => [e.type, e.data.detail])).toEqual([["swap_failed", "approve_rejected"]]);
-    expect((await runTreasuryForUser(deps, user.id)).outcome).not.toBe("pending_tx");
+    expect((await intentsOf(user.id))[0].retryAfter).toEqual(new Date(NOW.getTime() + 600_000));
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "waiting", detail: "retry_after" });
   });
 });
 
@@ -592,15 +605,18 @@ describe("runTreasuryForUser: less common trade paths", () => {
     expect(await eventTypes(user.id)).toEqual([]);
   });
 
-  it("fails a reverted approval without a swap_failed event and signs no swap", async () => {
+  it("backs off after a reverted approval and says so, so it is not resent and paid for every run", async () => {
     const user = await freelancer();
     const { deps, state } = harness({ WARS: pesos(3_200n), ...gas });
     state.receipts.set(hashOf(1), "reverted");
     expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "failed", detail: "approve" });
     expect(deps.signTx).toHaveBeenCalledTimes(1);
     expect((await tradesOf(user.id))[0]).toMatchObject({ status: "rejected", detail: "approve_reverted" });
-    expect((await intentsOf(user.id))[0].status).toBe("waiting");
-    expect(await eventTypes(user.id)).toEqual([]);
+    expect((await intentsOf(user.id))[0]).toMatchObject({ status: "waiting", retryAfter: new Date(NOW.getTime() + 600_000) });
+    expect((await eventsOf(user.id)).map((e) => [e.type, e.data.detail])).toEqual([["swap_failed", "approve_reverted"]]);
+
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "waiting", detail: "retry_after" });
+    expect(deps.signTx).toHaveBeenCalledTimes(1);
   });
 
   it("records a reverted swap as failed", async () => {
