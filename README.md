@@ -139,6 +139,8 @@ npm run dev
 
 Before a change is done: `npm test && npm run typecheck && npm run lint && npm run build`.
 
+Just checking the code? `npm install && npm test && npm run build` works on a fresh clone with no secrets: the committed `.env` carries the three public values the build needs. Signing in, the database and payments need the secrets in `.env.local`, so try those on the [live demo](https://cobro-agent.vercel.app).
+
 ## For clients
 
 Paying a Cobro invoice in USA₮ for the first time? Read [Paying a Cobro invoice in USA₮](docs/guides/pay-with-usat.md).

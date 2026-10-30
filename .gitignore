@@ -12,7 +12,8 @@ dist/
 next-env.d.ts
 
 # Environment and secrets
-.env
+# .env is committed: it holds only public NEXT_PUBLIC_* values so a clean clone builds.
+# Secrets go in .env.local, which overrides it.
 .env.*
 !.env.example
 
@@ -27,8 +28,6 @@ next-env.d.ts
 coverage/
 .playwright-mcp/
 *.log
-.env*
-!.env.example
 
 # Demo video: kept locally, shared by link (YouTube/Loom)
 docs/demo/*.mp4
