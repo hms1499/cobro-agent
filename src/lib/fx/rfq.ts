@@ -52,6 +52,18 @@ export type RfqOutcome =
   | { status: "quoted"; quote: FirmQuote }
   | { status: "no_quote"; reason: string; retryAfterMs: number | null };
 
+/** An indicative estimate from /v2/rfq/preview: no taker proof, nothing reserved, not signable. */
+export type RfqPreview =
+  | {
+      status: "preview";
+      sellAmount: bigint;
+      buyAmount: bigint;
+      feeAmount: bigint;
+      takerPays: bigint;
+      availableSellAmount: bigint | null;
+    }
+  | { status: "no_quote"; reason: string; availableSellAmount: bigint | null };
+
 export class TextileError extends Error {
   constructor(
     readonly status: number,
@@ -111,6 +123,25 @@ const noQuoteSchema = z.object({
       .nonnegative()
       .nullish()
       .transform((ms) => (ms == null ? null : Math.ceil(ms))),
+  }),
+});
+
+const previewSchema = z.object({
+  data: z.object({
+    status: z.literal("preview"),
+    sellAmount: units,
+    buyAmount: units,
+    feeAmount: units,
+    takerPays: units,
+    availableSellAmount: units.nullish(),
+  }),
+});
+
+const previewNoQuoteSchema = z.object({
+  data: z.object({
+    status: z.literal("no_quote"),
+    reason: z.string().optional(),
+    availableSellAmount: units.nullish(),
   }),
 });
 
@@ -175,6 +206,27 @@ export class TextileRfqClient {
       };
     }
     throw new TextileError(200, "malformed_response", "Textile returned an RFQ outcome we cannot read");
+  }
+
+  async preview(input: { sellToken: Address; buyToken: Address; sellAmount: bigint; taker: Address }): Promise<RfqPreview> {
+    const json = await this.call("POST", "/v2/rfq/preview", {
+      chainId: CELO_CHAIN_ID,
+      sellToken: input.sellToken,
+      buyToken: input.buyToken,
+      sellAmount: input.sellAmount.toString(),
+      taker: input.taker,
+    });
+    const ok = previewSchema.safeParse(json);
+    if (ok.success) {
+      const { status, sellAmount, buyAmount, feeAmount, takerPays, availableSellAmount } = ok.data.data;
+      return { status, sellAmount, buyAmount, feeAmount, takerPays, availableSellAmount: availableSellAmount ?? null };
+    }
+    const noQuote = previewNoQuoteSchema.safeParse(json);
+    if (noQuote.success) {
+      const { reason, availableSellAmount } = noQuote.data.data;
+      return { status: "no_quote", reason: reason ?? "no_valid_quote", availableSellAmount: availableSellAmount ?? null };
+    }
+    throw new TextileError(200, "malformed_response", "Textile returned a preview we cannot read");
   }
 
   async cancel(rfqId: string, claimToken: string): Promise<void> {
