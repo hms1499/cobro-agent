@@ -1,0 +1,361 @@
+// src/lib/treasury/chat-swap.ts
+import { and, desc, eq, isNotNull } from "drizzle-orm";
+import { safeErrorTag } from "@/lib/addresses/safe-error";
+import { TOKENS } from "@/lib/chain/tokens";
+import type { Db } from "@/lib/db/client";
+import { fxTrades } from "@/lib/db/schema";
+import type { FirmQuote, TextileRfqClient } from "@/lib/fx/rfq";
+import type { PayAsset } from "@/lib/money/currencies";
+import { chatAvailable, dailyLeftWad, fitChatAmount, isDirectPair, swapWouldBeUndone } from "./chat-rules";
+import { MIN_NOTIONAL_WAD, slippageBps } from "./engine";
+import {
+  engineRules,
+  ensureFeeToken,
+  executeQuote,
+  quoteMatches,
+  reconcilePending,
+  refuseQuote,
+  rejectOffPolicy,
+  requestQuote,
+  type ExecutorDeps,
+  type QuoteRun,
+  type RunResult,
+} from "./executor";
+import {
+  acquireWalletLock,
+  cancelOpenIntent,
+  chatCardEvent,
+  filledUsdWad24h,
+  hasPendingApproval,
+  holdsWalletLock,
+  insertTrade,
+  loadTreasuryContext,
+  logEvent,
+  nextDailyCapacityAt,
+  openProposal,
+  releaseWalletLock,
+  setAutoConvertOff,
+  tradeByChatCard,
+  walletLockHolder,
+  type TreasuryContext,
+} from "./repo";
+import { usdWad } from "./value";
+
+export type ChatSwapError =
+  | "paused"
+  | "disabled"
+  | "dry_run"
+  | "not_ready"
+  | "unsupported_pair"
+  | "below_minimum"
+  | "insufficient"
+  | "daily_limit"
+  | "busy"
+  | "needs_gas"
+  | "no_quote"
+  | "price"
+  | "expired"
+  | "changed"
+  | "policy"
+  | "swap_failed"
+  | "unconfirmed";
+
+export interface SwapCard {
+  cardId: string;
+  from: PayAsset;
+  to: PayAsset;
+  amountAtomic: string;
+  buyAtomic: string;
+  limited: "daily" | "balance" | null;
+  turnsOff: boolean;
+  losesProposal: boolean;
+  nextDailyAt: string | null;
+}
+
+export type ChatPreviewDeps = Pick<ExecutorDeps, "db" | "now" | "chain" | "rates"> & { preview: TextileRfqClient["preview"] };
+
+export type ChatSwapStatus =
+  | { state: "running"; stage: "price" | "preparing" | "swapping" }
+  | { state: "confirming" }
+  | { state: "success"; soldAtomic: string; boughtAtomic: string; from: PayAsset; to: PayAsset; txHash: string; turnedOff: boolean }
+  | { state: "refused"; error: ChatSwapError }
+  | { state: "unknown" };
+
+export interface ChatSwapInput {
+  from: PayAsset;
+  to: PayAsset;
+  amount: bigint;
+  cardId: string;
+  seenTurnsOff: boolean;
+}
+
+/** Lowercase, as crypto.randomUUID writes it: the card id is compared as text in event data, and reaches uuid columns. */
+const CARD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+/** Spec §5: the card, from Textile's unlocked estimate. It only reads; the tap checks everything again. */
+export async function previewChatSwap(
+  deps: ChatPreviewDeps,
+  userId: string,
+  input: { from: PayAsset; to: PayAsset; wanted: bigint | null },
+): Promise<SwapCard | { refused: ChatSwapError; availableSellAtomic: string | null; nextDailyAt: string | null }> {
+  const { from, to, wanted } = input;
+  const refused = (error: ChatSwapError, more: { availableSellAtomic?: string | null; nextDailyAt?: string | null } = {}) => ({
+    refused: error,
+    availableSellAtomic: null,
+    nextDailyAt: null,
+    ...more,
+  });
+  const ctx = await loadTreasuryContext(deps.db, userId);
+  if (!ctx) return refused("not_ready");
+  if (!ctx.rules.enabled) return refused("paused");
+  if (!isDirectPair(from, to)) return refused("unsupported_pair");
+
+  const balances = await deps.chain.readBalances(ctx.address);
+  const rates = await deps.rates().catch(() => null);
+  if (!rates) return refused("no_quote");
+  const now = deps.now();
+  const nextDailyAt = async () => (await nextDailyCapacityAt(deps.db, userId, now))?.toISOString() ?? null;
+  const fit = fitChatAmount({
+    from,
+    wanted,
+    available: chatAvailable(from, balances),
+    dailyLeft: dailyLeftWad(ctx.rules.dailyMaxUsd, await filledUsdWad24h(deps.db, userId, now)),
+    rates,
+  });
+  if ("refused" in fit) return refused(fit.refused, fit.refused === "daily_limit" ? { nextDailyAt: await nextDailyAt() } : {});
+
+  const estimate = await deps
+    .preview({ sellToken: TOKENS[from].address, buyToken: TOKENS[to].address, sellAmount: fit.amount, taker: ctx.address })
+    .catch((error) => {
+      console.error(`Textile preview for ${userId} failed:`, safeErrorTag(error));
+      return null;
+    });
+  if (!estimate) return refused("no_quote");
+  if (estimate.status === "no_quote") return refused("no_quote", { availableSellAtomic: estimate.availableSellAmount?.toString() ?? null });
+
+  const turnsOff =
+    !ctx.rules.autoPausedAt &&
+    swapWouldBeUndone({ balances, rules: engineRules(ctx.rules), rates, from, to, sold: estimate.takerPays, bought: estimate.buyAmount });
+  return {
+    cardId: crypto.randomUUID(),
+    from,
+    to,
+    amountAtomic: fit.amount.toString(),
+    buyAtomic: estimate.buyAmount.toString(),
+    limited: fit.limited,
+    turnsOff,
+    losesProposal: turnsOff && (await openProposal(deps.db, userId)) !== null,
+    nextDailyAt: fit.limited === "daily" ? await nextDailyAt() : null,
+  };
+}
+
+/** One tap on a card. `quote` is set once Textile holds a firm quote for it. */
+interface Tap {
+  deps: ExecutorDeps;
+  userId: string;
+  input: ChatSwapInput;
+  quote: FirmQuote | null;
+}
+
+/**
+ * Spec §5: the freelancer's tap on a card, from the checks to the swap, in the shape of withdraw(). It never
+ * throws; the outcome goes to the database, where chatSwapStatus reads it. The card id is the lock's holder, so
+ * status can read the lock, and a card that has a trade or a refusal never trades again.
+ */
+export async function chatSwap(deps: ExecutorDeps, userId: string, input: ChatSwapInput): Promise<void> {
+  // A crafted value must not reach Postgres as a uuid. There is no card to record a refusal against.
+  if (!CARD_ID.test(input.cardId)) {
+    console.error(`Chat swap for ${userId} ignored: the card id is not a uuid`);
+    return;
+  }
+  const tap: Tap = { deps, userId, input, quote: null };
+  try {
+    await startSwap(tap);
+  } catch (error) {
+    await endUnconfirmed(tap, error);
+  }
+}
+
+async function startSwap(tap: Tap): Promise<void> {
+  const { deps, userId, input } = tap;
+  const off = !deps.flags.enabled ? "disabled" : deps.flags.dryRun ? "dry_run" : null;
+  if (off) return refuseUnlessEnded(tap, off);
+  const ctx = await loadTreasuryContext(deps.db, userId);
+  if (!ctx) return refuseUnlessEnded(tap, "not_ready");
+  if (!ctx.rules.enabled) return refuseUnlessEnded(tap, "paused");
+  if (!(await acquireWalletLock(deps.db, ctx.walletId, input.cardId, deps.now()))) {
+    // Held by this same card: a double tap while the first run trades. That run reports the outcome.
+    if ((await walletLockHolder(deps.db, ctx.walletId)) !== input.cardId) await refuseUnlessEnded(tap, "busy");
+    return;
+  }
+  try {
+    if (await cardEnded(tap)) return;
+    const error = await swapLocked(tap, ctx);
+    if (error) await refuse(tap, error);
+  } catch (error) {
+    // Inside the lock, so status never sees the lock gone with no answer yet.
+    await endUnconfirmed(tap, error);
+  } finally {
+    await releaseWalletLock(deps.db, ctx.walletId, input.cardId).catch((error) =>
+      console.error(`Releasing the wallet lock of ${userId} failed:`, safeErrorTag(error)),
+    );
+  }
+}
+
+/** The steps in the lock, in the order of spec §5. Returns what to refuse with, or null when the swap was sent. */
+async function swapLocked(tap: Tap, ctx: TreasuryContext): Promise<ChatSwapError | null> {
+  const { deps, userId } = tap;
+  const { from, to, amount, cardId, seenTurnsOff } = tap.input;
+  if ((await reconcilePending(deps, ctx)).stillPending > 0) return "busy";
+  if (!isDirectPair(from, to)) return "unsupported_pair";
+
+  const read = await deps.chain.readBalances(ctx.address);
+  if (amount > chatAvailable(from, read)) return "insufficient";
+  const rates = await deps.rates().catch(() => null);
+  if (!rates) return "no_quote";
+  const usd = usdWad(from, amount, rates);
+  if (usd < MIN_NOTIONAL_WAD) return "below_minimum";
+  if (usd > dailyLeftWad(ctx.rules.dailyMaxUsd, await filledUsdWad24h(deps.db, userId, deps.now()))) return "daily_limit";
+  const { feeToken, balances } = await ensureFeeToken(deps, ctx, read, { asset: from, amount });
+  if (!feeToken) return "needs_gas";
+
+  const signer = deps.signer(ctx);
+  const outcome = await requestQuote(deps, ctx, signer, { from, to, amount });
+  if (outcome.status === "no_quote") {
+    await insertTrade(deps.db, {
+      userId,
+      chatCardId: cardId,
+      sellAsset: from,
+      buyAsset: to,
+      sellAmount: amount.toString(),
+      status: "no_quote",
+      detail: outcome.reason,
+    });
+    return "no_quote";
+  }
+
+  const q = outcome.quote;
+  tap.quote = q;
+  const run: QuoteRun = {
+    deps,
+    ctx,
+    intent: null,
+    chatCardId: cardId,
+    d: { kind: "convert", from, to, amount, usdWad: usd, reason: "chat" },
+    q,
+    signer,
+    feeToken,
+    rates,
+    result: (runOutcome, detail) => ({ userId, outcome: runOutcome, detail }),
+    attempts: 1,
+    policy: { allowedSpenders: deps.allowedSpenders, personalWallet: ctx.personalWallet, withdrawalAddresses: [] },
+  };
+  if (!quoteMatches(q, ctx.address, amount, deps.allowedSpenders)) {
+    await rejectOffPolicy(run);
+    return "policy";
+  }
+  // No wait-then-accept-worse path: the freelancer is present and can try again.
+  const slippage = slippageBps(from, q.takerPays, to, q.buyAmount, rates);
+  if (slippage > ctx.rules.maxSlippageBps) {
+    await refuseQuote(run, "rejected", "price", slippage);
+    return "price";
+  }
+  // Spec §3.1, again on the firm amounts: a card that did not say so must not turn auto-convert off.
+  const turnsOff =
+    !ctx.rules.autoPausedAt &&
+    swapWouldBeUndone({ balances, rules: engineRules(ctx.rules), rates, from, to, sold: q.takerPays, bought: q.buyAmount });
+  if (turnsOff && !seenTurnsOff) {
+    await refuseQuote(run, "rejected", "changed", slippage);
+    return "changed";
+  }
+  if (turnsOff) {
+    run.beforeBroadcast = async (tx) => {
+      await setAutoConvertOff(tx, userId, deps.now());
+      await cancelOpenIntent(tx, userId, deps.now());
+      await logEvent(tx, userId, "auto_convert_off", { cardId }, deps.now());
+    };
+  }
+  return errorOf(await executeQuote(run, slippage));
+}
+
+function errorOf({ outcome, detail }: RunResult): ChatSwapError | null {
+  if (outcome === "converted") return null;
+  // A swap with no receipt yet is settled by reconciliation; status reads it from the trade.
+  if (outcome === "pending_tx") return detail === "swap" ? null : "busy";
+  return outcome === "expired" ? "expired" : "swap_failed";
+}
+
+function refuse({ deps, userId, input }: Tap, error: ChatSwapError): Promise<void> {
+  const { cardId, from, to, amount } = input;
+  return logEvent(deps.db, userId, "chat_swap_refused", { cardId, error, from, to, amount: amount.toString() }, deps.now());
+}
+
+/** Whether this card already has its answer: one card, at most one swap and no second try. */
+async function cardEnded({ deps, userId, input }: Tap): Promise<boolean> {
+  return (
+    (await tradeByChatCard(deps.db, userId, input.cardId)) !== null ||
+    (await chatCardEvent(deps.db, userId, "chat_swap_refused", input.cardId)) !== null
+  );
+}
+
+/** Before the lock: a replayed card that already ended must not add "a swap wasn't sent" to its history. */
+async function refuseUnlessEnded(tap: Tap, error: ChatSwapError): Promise<void> {
+  if (!(await cardEnded(tap))) await refuse(tap, error);
+}
+
+/**
+ * Signing, the RPC or the database failed. With the swap stored, it may land: the quote stays and reconciliation
+ * settles it, and status reads it from the trade. Without one, nothing can land, so Textile is told. Only a
+ * tag is logged: a failed insert's message carries its parameters.
+ */
+async function endUnconfirmed(tap: Tap, error: unknown): Promise<void> {
+  const { deps, userId, quote } = tap;
+  console.error(`Chat swap for ${userId} ended with an error:`, safeErrorTag(error));
+  try {
+    const trade = await tradeByChatCard(deps.db, userId, tap.input.cardId);
+    if (trade?.swapTxHash) return;
+    if (quote && !trade) {
+      await deps.rfq
+        .cancel(quote.rfqId, quote.claimToken)
+        .catch((cancelError) => console.error(`Textile cancel ${quote.rfqId} failed:`, safeErrorTag(cancelError)));
+    }
+    await refuse(tap, "unconfirmed");
+  } catch (second) {
+    console.error(`Recording the end of a chat swap for ${userId} failed:`, safeErrorTag(second));
+  }
+}
+
+/** Spec §5.1: what a card's swap is doing, from Postgres alone, so a reload never loses it. */
+export async function chatSwapStatus(db: Db, userId: string, cardId: string, now: Date): Promise<ChatSwapStatus> {
+  if (!CARD_ID.test(cardId)) return { state: "unknown" };
+  const trade = await tradeByChatCard(db, userId, cardId);
+  if (trade?.status === "filled" && trade.buyAmount && trade.swapTxHash) {
+    return {
+      state: "success",
+      soldAtomic: trade.sellAmount,
+      boughtAtomic: trade.buyAmount,
+      from: trade.sellAsset,
+      to: trade.buyAsset,
+      txHash: trade.swapTxHash,
+      turnedOff: (await chatCardEvent(db, userId, "auto_convert_off", cardId)) !== null,
+    };
+  }
+  const locked = () => holdsWalletLock(db, userId, cardId, now);
+  if (trade?.status === "broadcast") return (await locked()) ? { state: "running", stage: "swapping" } : { state: "confirming" };
+  if (trade?.status === "failed") return { state: "refused", error: "swap_failed" };
+  const refusal = await chatCardEvent(db, userId, "chat_swap_refused", cardId);
+  if (refusal) return { state: "refused", error: refusal.data.error as ChatSwapError };
+  if (await locked()) return { state: "running", stage: (await hasPendingApproval(db, userId)) ? "preparing" : "price" };
+  return { state: "unknown" };
+}
+
+/** The card of a chat swap still waiting for its receipt, so the page can pick it up after a reload. */
+export async function activeChatCardId(db: Db, userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ cardId: fxTrades.chatCardId })
+    .from(fxTrades)
+    .where(and(eq(fxTrades.userId, userId), eq(fxTrades.status, "broadcast"), isNotNull(fxTrades.chatCardId)))
+    .orderBy(desc(fxTrades.createdAt))
+    .limit(1);
+  return row?.cardId ?? null;
+}
