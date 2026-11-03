@@ -50,7 +50,8 @@ export interface FirmQuote {
 
 export type RfqOutcome =
   | { status: "quoted"; quote: FirmQuote }
-  | { status: "no_quote"; reason: string; retryAfterMs: number | null };
+  /** `httpStatus`: only when requestQuote turned a Textile error into a no-quote. */
+  | { status: "no_quote"; reason: string; retryAfterMs: number | null; httpStatus?: number };
 
 /** An indicative estimate from /v2/rfq/preview: no taker proof, nothing reserved, not signable. */
 export type RfqPreview =

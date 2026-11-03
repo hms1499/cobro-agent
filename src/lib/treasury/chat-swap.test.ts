@@ -133,6 +133,8 @@ function harness(balances: Partial<TreasuryBalances>, outcome: RfqOutcome = quot
   return { deps, state, signed };
 }
 
+type Harness = ReturnType<typeof harness>;
+
 const seed = () => seedFreelancer(db);
 const setRules = (userId: string, fields: Partial<typeof rules.$inferInsert>) => db.update(rules).set(fields).where(eq(rules.userId, userId));
 const autoPausedAt = async (userId: string) => (await db.select().from(rules).where(eq(rules.userId, userId)))[0].autoPausedAt;
@@ -497,7 +499,8 @@ describe("chatSwap", () => {
     }
     await chatSwap(deps, user.id, BUY);
 
-    expect(await refusals(user.id)).toEqual([error]);
+    // A failed approval is told once, by the executor's swap_failed event.
+    expect(await refusals(user.id)).toEqual(error === "swap_failed" ? [] : [error]);
     expect(await status(user.id)).toEqual({ state: "refused", error });
     expect(await autoPausedAt(user.id)).toBeNull();
     expect((await intentsOf(user.id))[0].status).toBe("waiting");
@@ -524,6 +527,60 @@ describe("chatSwap", () => {
     await chatSwap(deps, user.id, SELL);
     expect(await status(user.id)).toEqual({ state: "refused", error: "swap_failed" });
     expect(deps.rfq.cancel).toHaveBeenCalledWith("rfq_1", "claim_1");
+  });
+
+  it.each([
+    ["a reverted swap", "failed", "reverted", (state: Harness["state"]) => state.receipts.set(hashOf(1), "reverted")],
+    ["a swap the node refuses", "failed", "rejected", (state: Harness["state"]) => state.refused.add(rawOf(1))],
+    ["a reverted approval", "rejected", "approve_reverted", (state: Harness["state"]) => {
+      state.allowance = 0n;
+      state.receipts.set(hashOf(1), "reverted");
+    }],
+    ["a refused approval", "rejected", "approve_rejected", (state: Harness["state"]) => {
+      state.allowance = 0n;
+      state.refused.add(rawOf(1));
+    }],
+  ] as const)("reports %s with one event, and status reads swap_failed", async (_label, tradeStatus, detail, fail) => {
+    const user = await seed();
+    logged();
+    const { deps, state } = harness(SELL_BALANCES);
+    fail(state);
+    await chatSwap(deps, user.id, SELL);
+
+    const told = (await eventTypes(user.id)).filter((type) => type === "swap_failed" || type === "chat_swap_refused");
+    expect(told).toEqual(["swap_failed"]);
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: tradeStatus, detail, chatCardId: CARD });
+    expect(await status(user.id)).toEqual({ state: "refused", error: "swap_failed" });
+
+    await chatSwap(deps, user.id, SELL);
+    expect(deps.rfq.request).toHaveBeenCalledTimes(1);
+    expect(await refusals(user.id)).toEqual([]);
+  });
+
+  it("reads an approval with no receipt as busy, not as a failed swap", async () => {
+    const user = await seed();
+    const { deps, state } = harness(SELL_BALANCES);
+    state.allowance = 0n;
+    state.receipts.set(hashOf(1), null);
+    await chatSwap(deps, user.id, SELL);
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "rejected", detail: "approve_pending" });
+    expect(await eventTypes(user.id)).toEqual(["chat_swap_refused"]);
+    expect(await status(user.id)).toEqual({ state: "refused", error: "busy" });
+  });
+
+  it.each([
+    ["with no reason", undefined, "http_429"],
+    ["with a reason", "too_many_rfqs", "too_many_rfqs"],
+  ] as const)("reads a Textile 429 %s as busy", async (_label, reason, detail) => {
+    const user = await seed();
+    const { deps, state } = harness(SELL_BALANCES);
+    vi.mocked(deps.rfq.request).mockRejectedValueOnce(new TextileError(429, reason, "slow down"));
+    await chatSwap(deps, user.id, SELL);
+
+    expect(await refusals(user.id)).toEqual(["busy"]);
+    expect(await status(user.id)).toEqual({ state: "refused", error: "busy" });
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "no_quote", detail, chatCardId: CARD });
+    expect(state.sent).toEqual([]);
   });
 
   it("does not touch an open intent when auto-convert stays on", async () => {

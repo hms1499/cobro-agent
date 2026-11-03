@@ -474,9 +474,11 @@ export async function requestQuote(
     });
   } catch (error) {
     // Textile errors (insufficient_funds, 429, 5xx, network) and Para errors alike: wait and retry (spec §12).
-    if (!(error instanceof TextileError)) console.error(`RFQ for ${ctx.userId} failed:`, error);
-    const reason = error instanceof TextileError ? (error.reason ?? `http_${error.status}`) : "error";
-    return { status: "no_quote", reason, retryAfterMs: RETRY_AFTER_ERROR_MS };
+    if (!(error instanceof TextileError)) {
+      console.error(`RFQ for ${ctx.userId} failed:`, error);
+      return { status: "no_quote", reason: "error", retryAfterMs: RETRY_AFTER_ERROR_MS };
+    }
+    return { status: "no_quote", reason: error.reason ?? `http_${error.status}`, retryAfterMs: RETRY_AFTER_ERROR_MS, httpStatus: error.status };
   }
 }
 

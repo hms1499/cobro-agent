@@ -202,7 +202,7 @@ async function startSwap(tap: Tap): Promise<void> {
   }
 }
 
-/** The steps in the lock, in the order of spec §5. Returns what to refuse with, or null when the swap was sent. */
+/** The steps in the lock, in the order of spec §5. Returns what to refuse with, or null when no refusal is due. */
 async function swapLocked(tap: Tap, ctx: TreasuryContext): Promise<ChatSwapError | null> {
   const { deps, userId } = tap;
   const { from, to, amount, cardId, seenTurnsOff } = tap.input;
@@ -231,7 +231,8 @@ async function swapLocked(tap: Tap, ctx: TreasuryContext): Promise<ChatSwapError
       status: "no_quote",
       detail: outcome.reason,
     });
-    return "no_quote";
+    // Spec §5.2: Textile's limit on outstanding RFQs reads as busy, because trying again shortly can work.
+    return outcome.httpStatus === 429 ? "busy" : "no_quote";
   }
 
   const q = outcome.quote;
@@ -282,7 +283,10 @@ function errorOf({ outcome, detail }: RunResult): ChatSwapError | null {
   if (outcome === "converted") return null;
   // A swap with no receipt yet is settled by reconciliation; status reads it from the trade.
   if (outcome === "pending_tx") return detail === "swap" ? null : "busy";
-  return outcome === "expired" ? "expired" : "swap_failed";
+  if (outcome === "expired") return "expired";
+  // A failed swap or approval: the executor's swap_failed event already says so, and "a swap wasn't sent" would be
+  // untrue for a reverted one. Status reads swap_failed from the trade.
+  return null;
 }
 
 function refuse({ deps, userId, input }: Tap, error: ChatSwapError): Promise<void> {
@@ -304,8 +308,9 @@ async function refuseUnlessEnded(tap: Tap, error: ChatSwapError): Promise<void> 
 }
 
 /**
- * Signing, the RPC or the database failed. With the swap stored, it may land: the quote stays and reconciliation
- * settles it, and status reads it from the trade. Without one, nothing can land, so Textile is told. Only a
+ * Signing, the RPC or the database failed. With the swap stored, it may still land: the quote stays, and no refusal
+ * is logged, because "a swap wasn't sent" could sit in History beside a swap that fills. Status reads `confirming`
+ * from the trade and reconciliation settles it. With no swap stored, nothing can land, so Textile is told. Only a
  * tag is logged: a failed insert's message carries its parameters.
  */
 async function endUnconfirmed(tap: Tap, error: unknown): Promise<void> {
@@ -325,6 +330,9 @@ async function endUnconfirmed(tap: Tap, error: unknown): Promise<void> {
   }
 }
 
+/** An approval that was mined and reverted, or refused by the node. One with no receipt ("approve_pending") reads as busy. */
+const FAILED_APPROVALS = ["approve_reverted", "approve_rejected"];
+
 /** Spec §5.1: what a card's swap is doing, from Postgres alone, so a reload never loses it. */
 export async function chatSwapStatus(db: Db, userId: string, cardId: string, now: Date): Promise<ChatSwapStatus> {
   if (!CARD_ID.test(cardId)) return { state: "unknown" };
@@ -342,7 +350,9 @@ export async function chatSwapStatus(db: Db, userId: string, cardId: string, now
   }
   const locked = () => holdsWalletLock(db, userId, cardId, now);
   if (trade?.status === "broadcast") return (await locked()) ? { state: "running", stage: "swapping" } : { state: "confirming" };
-  if (trade?.status === "failed") return { state: "refused", error: "swap_failed" };
+  if (trade?.status === "failed" || (trade?.status === "rejected" && trade.detail && FAILED_APPROVALS.includes(trade.detail))) {
+    return { state: "refused", error: "swap_failed" };
+  }
   const refusal = await chatCardEvent(db, userId, "chat_swap_refused", cardId);
   if (refusal) return { state: "refused", error: refusal.data.error as ChatSwapError };
   if (await locked()) return { state: "running", stage: (await hasPendingApproval(db, userId)) ? "preparing" : "price" };

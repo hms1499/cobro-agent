@@ -592,6 +592,40 @@ describe("runTreasuryForUser: less common trade paths", () => {
     expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "no_quote", detail: "http_503" });
   });
 
+  it.each([
+    ["with no reason", undefined, "http_429"],
+    ["with a reason", "too_many_rfqs", "too_many_rfqs"],
+  ] as const)("treats a Textile 429 %s like any other error, and keeps the status out of what it stores", async (_label, reason, detail) => {
+    const user = await freelancer();
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas });
+    vi.mocked(deps.rfq.request).mockRejectedValueOnce(new TextileError(429, reason, "slow down"));
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "no_quote", detail });
+
+    const [trade] = await tradesOf(user.id);
+    expect(trade).toMatchObject({ status: "no_quote", detail });
+    const [intent] = await intentsOf(user.id);
+    expect(intent).toMatchObject({ status: "waiting", attempts: 1, retryAfter: new Date(NOW.getTime() + 600_000) });
+    const [event] = await eventsOf(user.id);
+    expect(event.type).toBe("no_quote");
+    expect(event.data).toEqual({ from: "WARS", to: "USDT", amount: pesos(3_200n).toString(), usdCents: 200, reason: "save_excess", detail, intentId: intent.id });
+  });
+
+  it("carries the HTTP status of a Textile error on the no-quote outcome", async () => {
+    const user = await freelancer();
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas });
+    const ctx = (await loadTreasuryContext(db, user.id))!;
+    const d = { from: "WARS", to: "USDT", amount: pesos(3_200n) } as const;
+
+    vi.mocked(deps.rfq.request).mockRejectedValueOnce(new TextileError(429, undefined, "slow down"));
+    expect(await requestQuote(deps, ctx, deps.signer(ctx), d)).toEqual({ status: "no_quote", reason: "http_429", retryAfterMs: 600_000, httpStatus: 429 });
+
+    // Any other error has no HTTP status to carry.
+    const failing = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.mocked(deps.rfq.request).mockRejectedValueOnce(new Error("para down"));
+    expect(await requestQuote(deps, ctx, deps.signer(ctx), d)).toEqual({ status: "no_quote", reason: "error", retryAfterMs: 600_000 });
+    failing.mockRestore();
+  });
+
   it("skips the approval when the allowance already covers the quote", async () => {
     const user = await freelancer();
     const { deps, state, signed } = harness({ WARS: pesos(3_200n), ...gas });
