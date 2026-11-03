@@ -30,6 +30,7 @@ import {
   planIntent,
   slippageBps,
   type ConvertDecision,
+  type ConvertReason,
   type EngineInput,
   type EngineRules,
   type IntentPlan,
@@ -146,7 +147,10 @@ export function engineRules(rules: RulesRow): EngineRules {
   };
 }
 
-function decisionData(d: ConvertDecision) {
+/** What a firm quote was asked for: the engine's decision, or a chat swap, which the engine never decides. */
+type QuoteDecision = Omit<ConvertDecision, "reason"> & { reason: ConvertReason | "chat" };
+
+function decisionData(d: QuoteDecision) {
   return { from: d.from, to: d.to, amount: d.amount.toString(), usdCents: cents(d.usdWad), reason: d.reason };
 }
 
@@ -354,7 +358,7 @@ async function dryRun(
 }
 
 /** Spec §6.1: bound to this wallet, within the intent, on an allowed contract, on Celo, moving no CELO. */
-function quoteMatches(q: FirmQuote, taker: Address, maxSell: bigint, allowed: readonly Address[]): boolean {
+export function quoteMatches(q: FirmQuote, taker: Address, maxSell: bigint, allowed: readonly Address[]): boolean {
   return (
     isAddressEqual(q.taker, taker) &&
     q.takerPays > 0n &&
@@ -381,10 +385,11 @@ async function trade(
   if (outcome.status === "no_quote") return noQuote(deps, ctx, intent, d, outcome.reason, outcome.retryAfterMs, result);
 
   const q = outcome.quote;
-  const run: QuoteRun = {
+  const run: AgentQuoteRun = {
     deps,
     ctx,
     intent,
+    chatCardId: null,
     d,
     q,
     signer,
@@ -393,7 +398,6 @@ async function trade(
     result,
     attempts: intent.attempts + 1,
     policy: { allowedSpenders: deps.allowedSpenders, personalWallet: ctx.personalWallet, withdrawalAddresses: [] },
-    quotedTrade: quotedTradeRow(ctx, intent, d, q),
   };
   // The quote must be what we asked for: bound to this wallet, within the intent, on an allowed contract.
   if (!quoteMatches(q, ctx.address, d.amount, deps.allowedSpenders)) return rejectOffPolicy(run);
@@ -402,20 +406,19 @@ async function trade(
   const priceRefused = await refuseOnPrice(run, slippage);
   if (priceRefused) return priceRefused;
 
-  await updateIntent(deps.db, intent.id, { status: "executing", attempts: run.attempts, lastSlippageBps: slippage }, deps.now());
-  // Expiry is checked before the approval too, so no gas goes on a quote that is already too old.
-  const stopped =
-    (await discardIfExpired(run, slippage)) ?? (await ensureAllowance(run, slippage)) ?? (await discardIfExpired(run, slippage));
-  if (stopped) return stopped;
-  return sendSwap(run, slippage);
+  await patchIntent(run, { status: "executing", attempts: run.attempts, lastSlippageBps: slippage });
+  return executeQuote(run, slippage);
 }
 
-/** One firm quote on its way from the checks to the swap: what every step of trade() after the RFQ needs. */
-interface QuoteRun {
+/** One firm quote on its way from the checks to the swap: what every step after the RFQ needs. */
+export interface QuoteRun {
   deps: ExecutorDeps;
   ctx: TreasuryContext;
-  intent: FxIntentRow;
-  d: ConvertDecision;
+  /** Null for a chat swap: nothing is left that a later run could execute. */
+  intent: FxIntentRow | null;
+  /** The chat card this swap came from; null for the automatic agent. */
+  chatCardId: string | null;
+  d: QuoteDecision;
   q: FirmQuote;
   signer: TreasurySigner;
   feeToken: GasToken;
@@ -424,14 +427,24 @@ interface QuoteRun {
   /** The intent's attempt count with this run included. */
   attempts: number;
   policy: TreasuryPolicy;
-  /** The fx_trades fields every row written for this quote shares. */
-  quotedTrade: ReturnType<typeof quotedTradeRow>;
+  /** Runs in the transaction that stores the swap, so its writes exist only if the swap is about to be sent. */
+  beforeBroadcast?: (tx: Db) => Promise<void>;
 }
 
-function quotedTradeRow(ctx: TreasuryContext, intent: FxIntentRow, d: ConvertDecision, q: FirmQuote) {
+/** The automatic agent's run: it always has an intent, which the price step reads. */
+type AgentQuoteRun = QuoteRun & { intent: FxIntentRow };
+
+/** A no-op for a run with no intent. */
+async function patchIntent(run: QuoteRun, patch: Parameters<typeof updateIntent>[2]): Promise<void> {
+  if (run.intent) await updateIntent(run.deps.db, run.intent.id, patch, run.deps.now());
+}
+
+/** The fx_trades fields every row written for this quote shares. */
+function quotedTradeRow({ ctx, intent, chatCardId, d, q }: QuoteRun) {
   return {
     userId: ctx.userId,
-    intentId: intent.id,
+    intentId: intent?.id ?? null,
+    chatCardId,
     rfqId: q.rfqId,
     sellAsset: d.from,
     buyAsset: d.to,
@@ -442,7 +455,12 @@ function quotedTradeRow(ctx: TreasuryContext, intent: FxIntentRow, d: ConvertDec
 }
 
 /** Spec §10.4 step 3, with a fresh taker proof each time (Textile accepts one for 60 s). An error becomes a no-quote. */
-async function requestQuote(deps: ExecutorDeps, ctx: TreasuryContext, signer: TreasurySigner, d: ConvertDecision): Promise<RfqOutcome> {
+export async function requestQuote(
+  deps: ExecutorDeps,
+  ctx: TreasuryContext,
+  signer: TreasurySigner,
+  d: Pick<ConvertDecision, "from" | "to" | "amount">,
+): Promise<RfqOutcome> {
   try {
     const nonce = `0x${randomBytes(32).toString("hex")}` as Hex;
     const issuedAt = deps.now().getTime();
@@ -468,21 +486,21 @@ async function cancelQuote({ deps, q }: QuoteRun): Promise<void> {
 }
 
 /** Cancels the quote and records the trade as not taken. */
-async function refuseQuote(run: QuoteRun, status: "rejected" | "expired", detail: string, slippage: number | null): Promise<void> {
+export async function refuseQuote(run: QuoteRun, status: "rejected" | "expired", detail: string, slippage: number | null): Promise<void> {
   await cancelQuote(run);
-  await insertTrade(run.deps.db, { ...run.quotedTrade, status, detail, slippageBps: slippage });
+  await insertTrade(run.deps.db, { ...quotedTradeRow(run), status, detail, slippageBps: slippage });
 }
 
-async function rejectOffPolicy(run: QuoteRun): Promise<RunResult> {
-  const { deps, ctx, intent, d, q } = run;
+export async function rejectOffPolicy(run: QuoteRun): Promise<RunResult> {
+  const { deps, ctx, d, q } = run;
   await refuseQuote(run, "rejected", "policy", null);
-  await updateIntent(deps.db, intent.id, { attempts: run.attempts, retryAfter: new Date(deps.now().getTime() + RETRY_AFTER_ERROR_MS) }, deps.now());
+  await patchIntent(run, { attempts: run.attempts, retryAfter: new Date(deps.now().getTime() + RETRY_AFTER_ERROR_MS) });
   await logEvent(deps.db, ctx.userId, "policy_rejected", { ...decisionData(d), spender: q.spender }, deps.now());
   return run.result("failed", "policy");
 }
 
 /** Spec §10.3: blocks a price past the hard limit, waits on one past the normal limit. Null when the price is accepted. */
-async function refuseOnPrice(run: QuoteRun, slippage: number): Promise<RunResult | null> {
+async function refuseOnPrice(run: AgentQuoteRun, slippage: number): Promise<RunResult | null> {
   const { deps, ctx, intent, d } = run;
   const verdict = acceptQuote({
     slippageBps: slippage,
@@ -494,7 +512,7 @@ async function refuseOnPrice(run: QuoteRun, slippage: number): Promise<RunResult
   });
   if (verdict === "block") {
     await refuseQuote(run, "rejected", "price_blocked", slippage);
-    await updateIntent(deps.db, intent.id, { status: "blocked", attempts: run.attempts, lastSlippageBps: slippage }, deps.now());
+    await patchIntent(run, { status: "blocked", attempts: run.attempts, lastSlippageBps: slippage });
     await logEvent(
       deps.db,
       ctx.userId,
@@ -506,7 +524,7 @@ async function refuseOnPrice(run: QuoteRun, slippage: number): Promise<RunResult
   }
   if (verdict === "wait") {
     await refuseQuote(run, "rejected", "price", slippage);
-    await updateIntent(deps.db, intent.id, { attempts: run.attempts, lastSlippageBps: slippage }, deps.now());
+    await patchIntent(run, { attempts: run.attempts, lastSlippageBps: slippage });
     await logOncePerIntent(deps, ctx.userId, intent.id, "waiting", {
       ...decisionData(d),
       slippageBps: slippage,
@@ -517,9 +535,17 @@ async function refuseOnPrice(run: QuoteRun, slippage: number): Promise<RunResult
   return null;
 }
 
+/** The last steps to the swap. Expiry is checked before the approval too, so no gas goes on a quote that is already too old. */
+export async function executeQuote(run: QuoteRun, slippage: number): Promise<RunResult> {
+  const stopped =
+    (await discardIfExpired(run, slippage)) ?? (await ensureAllowance(run, slippage)) ?? (await discardIfExpired(run, slippage));
+  if (stopped) return stopped;
+  return sendSwap(run, slippage);
+}
+
 /** Spec §10.4 step 5: approve up to what is left of the daily cap; USD₮ needs a reset to 0 first. Null once the spender may take the quote. */
 async function ensureAllowance(run: QuoteRun, slippage: number): Promise<RunResult | null> {
-  const { deps, ctx, intent, d, q, rates } = run;
+  const { deps, ctx, d, q, rates } = run;
   const allowance = await deps.chain.allowance(TOKENS[d.from].address, ctx.address, q.spender);
   if (allowance >= q.takerPays) return null;
   const dailyLeft = dollarsToWad(ctx.rules.dailyMaxUsd) - (await filledUsdWad24h(deps.db, ctx.userId, deps.now()));
@@ -531,12 +557,12 @@ async function ensureAllowance(run: QuoteRun, slippage: number): Promise<RunResu
     if (sent.status !== "success") {
       await refuseQuote(run, "rejected", `approve_${sent.status ?? "pending"}`, slippage);
       if (sent.status === null) {
-        await updateIntent(deps.db, intent.id, { status: "waiting" }, deps.now());
+        await patchIntent(run, { status: "waiting" });
         return run.result("pending_tx", "approve");
       }
       // Refused or reverted: back off as after a refused quote, so a failing approval is not resent (and paid for) every run.
       const retryAfter = new Date(deps.now().getTime() + RETRY_AFTER_ERROR_MS);
-      await updateIntent(deps.db, intent.id, { status: "waiting", retryAfter }, deps.now());
+      await patchIntent(run, { status: "waiting", retryAfter });
       await logEvent(deps.db, ctx.userId, "swap_failed", { ...decisionData(d), detail: `approve_${sent.status}` }, deps.now());
       return run.result("failed", "approve");
     }
@@ -546,10 +572,10 @@ async function ensureAllowance(run: QuoteRun, slippage: number): Promise<RunResu
 
 /** Spec §12: a quote this close to its expiry is discarded, never sent. An allowance already granted stays for the next run. */
 async function discardIfExpired(run: QuoteRun, slippage: number): Promise<RunResult | null> {
-  const { deps, intent, q } = run;
+  const { deps, q } = run;
   if (deps.now().getTime() < q.expiresAt.getTime() - EXPIRY_MARGIN_MS) return null;
   await refuseQuote(run, "expired", "quote_expired", slippage);
-  await updateIntent(deps.db, intent.id, { status: "waiting" }, deps.now());
+  await patchIntent(run, { status: "waiting" });
   return run.result("expired");
 }
 
@@ -567,13 +593,14 @@ async function sendSwap(run: QuoteRun, slippage: number): Promise<RunResult> {
       feeToken: run.feeToken,
     });
     await insertTrade(tx, {
-      ...run.quotedTrade,
+      ...quotedTradeRow(run),
       claimToken: q.claimToken,
       slippageBps: slippage,
       notionalUsdCents: cents(usdWad(d.from, q.takerPays, rates)),
       status: "broadcast",
       swapTxHash: signed.hash,
     });
+    await run.beforeBroadcast?.(tx);
   });
   if (!(await broadcast(deps, signed.hash, signed.raw))) {
     await settleSwap(deps, ctx.userId, signed.hash, "failed", "rejected");
@@ -687,7 +714,7 @@ export async function settleSwap(
       amount: trade.sellAmount,
       buyAmount: trade.buyAmount,
       slippageBps: trade.slippageBps,
-      reason: intent?.reason ?? null,
+      reason: trade.chatCardId ? "chat" : (intent?.reason ?? null),
       ...outcomeData(hash, status, detail),
     };
     if (status === "success") {

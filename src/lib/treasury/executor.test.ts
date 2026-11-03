@@ -13,12 +13,17 @@ import { parseDecimal } from "@/lib/money/decimal";
 import type { TreasuryBalances } from "./balances";
 import {
   engineInput,
+  executeQuote,
+  quoteMatches,
   reconcileWallets,
+  rejectOffPolicy,
+  requestQuote,
   runTreasuries,
   runTreasuryForUser,
   summarizeRuns,
   TxRejectedError,
   type ExecutorDeps,
+  type QuoteRun,
 } from "./executor";
 import { acquireWalletLock, approveProposal, dismissProposal, loadTreasuryContext } from "./repo";
 
@@ -109,6 +114,8 @@ function harness(balances: Partial<TreasuryBalances>, over: { dryRun?: boolean; 
   };
   return { deps, state, signed };
 }
+
+type Harness = ReturnType<typeof harness>;
 
 async function freelancer(reserveAmount = "0.00", approvalMode: ApprovalMode = "auto") {
   const user = await seedFreelancer(db);
@@ -982,5 +989,184 @@ describe("runTreasuryForUser: approvals", () => {
 
     // A further refill needs a new approval.
     expect((await runTreasuryForUser(deps, user.id)).outcome).toBe("awaiting_approval");
+  });
+});
+
+describe("executeQuote: a chat swap, with no intent", () => {
+  const CARD = "11111111-1111-4111-8111-111111111111";
+
+  /** What the chat path hands the executor: a firm quote for this wallet, no intent and a card id. */
+  async function chatRun(deps: ExecutorDeps, userId: string, over: Partial<QuoteRun> = {}): Promise<QuoteRun> {
+    const ctx = (await loadTreasuryContext(db, userId))!;
+    const signer = deps.signer(ctx);
+    const d = { kind: "convert", from: "WARS", to: "USDT", amount: pesos(3_200n), usdWad: 2n * 10n ** 18n, reason: "chat" } as const;
+    const outcome = await requestQuote(deps, ctx, signer, d);
+    if (outcome.status !== "quoted") throw new Error("expected a quote");
+    return {
+      deps,
+      ctx,
+      intent: null,
+      chatCardId: CARD,
+      d,
+      q: outcome.quote,
+      signer,
+      feeToken: "USDT",
+      rates: RATES,
+      result: (status, detail) => (detail ? { userId, outcome: status, detail } : { userId, outcome: status }),
+      attempts: 1,
+      policy: { allowedSpenders: deps.allowedSpenders, personalWallet: ctx.personalWallet, withdrawalAddresses: [] },
+      ...over,
+    };
+  }
+
+  it("runs a quote with no intent and stores the card id on the trade", async () => {
+    const user = await freelancer();
+    const { deps, signed } = harness({ WARS: pesos(3_200n), ...gas });
+
+    expect(await executeQuote(await chatRun(deps, user.id), 50)).toEqual({ userId: user.id, outcome: "converted" });
+
+    expect(signed).toHaveLength(2); // the approval, then the swap
+    expect((await tradesOf(user.id))[0]).toMatchObject({
+      intentId: null,
+      chatCardId: CARD,
+      rfqId: "rfq_1",
+      claimToken: "claim_1",
+      status: "filled",
+      slippageBps: 50,
+      notionalUsdCents: 200,
+      swapTxHash: hashOf(2),
+    });
+    expect(await intentsOf(user.id)).toEqual([]);
+    expect(deps.rfq.submit).toHaveBeenCalledWith("rfq_1", "claim_1", hashOf(2));
+  });
+
+  it("calls beforeBroadcast in the transaction that stores the swap, before sendRaw", async () => {
+    const user = await freelancer();
+    const { deps, state } = harness({ WARS: pesos(3_200n), ...gas });
+    const seen = vi.fn();
+    const beforeBroadcast = async (tx: Db) => {
+      seen({
+        swapStored: (await tx.select().from(treasuryTxs).where(eq(treasuryTxs.hash, hashOf(2)))).length,
+        tradeStored: (await tx.select().from(fxTrades).where(eq(fxTrades.chatCardId, CARD))).length,
+        sent: [...state.sent],
+      });
+    };
+
+    await executeQuote(await chatRun(deps, user.id, { beforeBroadcast }), 50);
+
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(seen).toHaveBeenCalledWith({ swapStored: 1, tradeStored: 1, sent: [rawOf(1)] }); // the approval only
+    expect(state.sent).toEqual([rawOf(1), rawOf(2)]);
+  });
+
+  it("stores and sends no swap when beforeBroadcast fails", async () => {
+    const user = await freelancer();
+    const { deps, state } = harness({ WARS: pesos(3_200n), ...gas });
+    const beforeBroadcast = async () => {
+      throw new Error("consent write failed");
+    };
+
+    await expect(executeQuote(await chatRun(deps, user.id, { beforeBroadcast }), 50)).rejects.toThrow("consent write failed");
+
+    expect(state.sent).toEqual([rawOf(1)]); // the approval only
+    expect(await txByHash(hashOf(2))).toBeUndefined();
+    expect(await tradesOf(user.id)).toEqual([]);
+  });
+
+  it.each([
+    ["the approval reverts", "failed", "approve", "rejected", "approve_reverted", (state: Harness["state"]) => state.receipts.set(hashOf(1), "reverted")],
+    ["the approval is refused", "failed", "approve", "rejected", "approve_rejected", (state: Harness["state"]) => state.refused.add(rawOf(1))],
+    ["the approval has no receipt yet", "pending_tx", "approve", "rejected", "approve_pending", (state: Harness["state"]) => state.receipts.set(hashOf(1), null)],
+  ] as const)("does not call beforeBroadcast when %s", async (_label, outcome, detail, status, tradeDetail, arrange) => {
+    const user = await freelancer();
+    const { deps, state, signed } = harness({ WARS: pesos(3_200n), ...gas });
+    arrange(state);
+    const beforeBroadcast = vi.fn(async () => {});
+
+    expect(await executeQuote(await chatRun(deps, user.id, { beforeBroadcast }), 50)).toEqual({ userId: user.id, outcome, detail });
+
+    expect(beforeBroadcast).not.toHaveBeenCalled();
+    expect(signed).toHaveLength(1); // the approval only
+    expect(deps.rfq.cancel).toHaveBeenCalledWith("rfq_1", "claim_1");
+    expect((await tradesOf(user.id))[0]).toMatchObject({ intentId: null, chatCardId: CARD, status, detail: tradeDetail, slippageBps: 50 });
+    expect(await intentsOf(user.id)).toEqual([]);
+  });
+
+  it("does not call beforeBroadcast when the quote expires before the approval or while it is mined", async () => {
+    const early = await freelancer();
+    const near = harness({ WARS: pesos(3_200n), ...gas }, { outcome: quoted({ expiresAt: new Date(NOW.getTime() + 3_000) }) });
+    const notEarly = vi.fn(async () => {});
+    expect(await executeQuote(await chatRun(near.deps, early.id, { beforeBroadcast: notEarly }), 50)).toEqual({ userId: early.id, outcome: "expired" });
+    expect(notEarly).not.toHaveBeenCalled();
+    expect(near.signed).toHaveLength(0);
+    expect((await tradesOf(early.id))[0]).toMatchObject({ intentId: null, chatCardId: CARD, status: "expired", detail: "quote_expired" });
+
+    await resetDb(db);
+    const late = await freelancer();
+    const slow = harness({ WARS: pesos(3_200n), ...gas });
+    slow.deps.now = () => (slow.signed.length > 0 ? new Date(NOW.getTime() + 58_000) : NOW);
+    const notLate = vi.fn(async () => {});
+    expect(await executeQuote(await chatRun(slow.deps, late.id, { beforeBroadcast: notLate }), 50)).toEqual({ userId: late.id, outcome: "expired" });
+    expect(notLate).not.toHaveBeenCalled();
+    expect(slow.signed).toHaveLength(1); // the approval only
+    expect(await intentsOf(late.id)).toEqual([]);
+  });
+
+  it("logs converted with reason chat when a chat trade settles, including by reconciliation", async () => {
+    const user = await freelancer();
+    const { deps, state } = harness({ WARS: pesos(3_200n), ...gas });
+    state.receipts.set(hashOf(2), null);
+
+    expect(await executeQuote(await chatRun(deps, user.id), 50)).toEqual({ userId: user.id, outcome: "pending_tx", detail: "swap" });
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "broadcast", chatCardId: CARD });
+    expect(await eventTypes(user.id)).toEqual([]);
+
+    state.receipts.set(hashOf(2), "success");
+    expect(await reconcileWallets(deps)).toEqual({ settled: 1, stillPending: 0, errors: 0 });
+
+    expect((await tradesOf(user.id))[0]).toMatchObject({ status: "filled", chatCardId: CARD });
+    expect((await eventsOf(user.id)).map((e) => [e.type, e.data.reason, e.data.txHash])).toEqual([["converted", "chat", hashOf(2)]]);
+    expect(deps.rfq.submit).toHaveBeenCalledWith("rfq_1", "claim_1", hashOf(2));
+  });
+
+  it("logs converted with reason chat when the receipt arrives at once", async () => {
+    const user = await freelancer();
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas });
+    await executeQuote(await chatRun(deps, user.id), 50);
+    expect((await eventsOf(user.id)).map((e) => [e.type, e.data.reason])).toEqual([["converted", "chat"]]);
+  });
+
+  it("leaves a failed chat swap with no open intent", async () => {
+    const reverted = await freelancer();
+    const one = harness({ WARS: pesos(3_200n), ...gas });
+    one.state.receipts.set(hashOf(2), "reverted");
+    expect(await executeQuote(await chatRun(one.deps, reverted.id), 50)).toEqual({ userId: reverted.id, outcome: "failed", detail: "swap_reverted" });
+    expect((await tradesOf(reverted.id))[0]).toMatchObject({ status: "failed", chatCardId: CARD, detail: "reverted" });
+    expect((await eventsOf(reverted.id)).map((e) => [e.type, e.data.reason])).toEqual([["swap_failed", "chat"]]);
+    expect(await intentsOf(reverted.id)).toEqual([]);
+
+    await resetDb(db);
+    const refused = await freelancer();
+    const two = harness({ WARS: pesos(3_200n), ...gas });
+    two.state.refused.add(rawOf(2));
+    expect(await executeQuote(await chatRun(two.deps, refused.id), 50)).toEqual({ userId: refused.id, outcome: "failed", detail: "swap_rejected" });
+    expect((await tradesOf(refused.id))[0]).toMatchObject({ status: "failed", chatCardId: CARD, detail: "rejected" });
+    expect(two.deps.rfq.cancel).toHaveBeenCalledWith("rfq_1", "claim_1");
+    expect((await eventsOf(refused.id)).map((e) => [e.type, e.data.reason])).toEqual([["swap_failed", "chat"]]);
+    expect(await intentsOf(refused.id)).toEqual([]);
+  });
+
+  it("refuses a quote off policy with no intent, and names the reason chat", async () => {
+    const user = await freelancer();
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas }, { outcome: quoted({ spender: STRANGER }) });
+    const run = await chatRun(deps, user.id);
+
+    expect(quoteMatches(run.q, TREASURY, pesos(3_200n), deps.allowedSpenders)).toBe(false);
+    expect(await rejectOffPolicy(run)).toEqual({ userId: user.id, outcome: "failed", detail: "policy" });
+
+    expect((await tradesOf(user.id))[0]).toMatchObject({ intentId: null, chatCardId: CARD, status: "rejected", detail: "policy" });
+    expect((await eventsOf(user.id)).map((e) => [e.type, e.data.reason, e.data.spender])).toEqual([["policy_rejected", "chat", STRANGER]]);
+    expect(deps.rfq.cancel).toHaveBeenCalledWith("rfq_1", "claim_1");
+    expect(await intentsOf(user.id)).toEqual([]);
   });
 });
