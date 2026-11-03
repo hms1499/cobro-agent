@@ -4,7 +4,7 @@ import type { ReferenceRates } from "@/lib/fx/rates";
 import type { PayAsset } from "@/lib/money/currencies";
 import { spendableBalances, type TreasuryBalances } from "./balances";
 import { decide, MIN_NOTIONAL_WAD, type EngineRules } from "./engine";
-import { atomicForUsdWad, dollarsToWad, usdWad } from "./value";
+import { atomicForUsdWad, dollarsToWad, LOCAL_ASSET, usdWad } from "./value";
 
 /** Spec §4.2: every direction chat may swap directly. Anything else is explained as two steps. */
 export const DIRECT_PAIRS: readonly (readonly [PayAsset, PayAsset])[] = [
@@ -77,9 +77,13 @@ interface UndoInput {
  */
 export function swapWouldBeUndone({ balances, rules, rates, from, to, sold, bought }: UndoInput): boolean {
   const after = { ...balances, [from]: balances[from] - sold, [to]: balances[to] + bought };
-  // decide() returns only its first candidate: a wFiat this swap does not touch must not hide the reversal.
-  for (const asset of ["WARS", "WBRL"] as const) if (asset !== from && asset !== to) after[asset] = 0n;
+  const local = rules.localCurrency === "USD" ? null : LOCAL_ASSET[rules.localCurrency];
+  // decide() returns only its first candidate: a non-local wFiat this swap does not touch must not hide the reversal.
+  for (const asset of ["WARS", "WBRL"] as const) if (asset !== from && asset !== to && asset !== local) after[asset] = 0n;
   // No spent cap: a used-up daily limit only delays the reversal until tomorrow.
   const decision = decide({ balances: spendableBalances(after, pickGasToken(after)), rules, rates, filledUsdWad24h: 0n });
-  return decision.kind === "convert" && (decision.from === to || decision.to === from);
+  if (decision.kind !== "convert") return false;
+  const inverse = decision.from === to && decision.to === from;
+  // A hub_route moves USA₮ to USD₮ first; the refill of what was sold follows on the next run.
+  return inverse || (decision.reason === "hub_route" && from === local);
 }

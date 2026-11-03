@@ -35,7 +35,7 @@ describe("swapWouldBeUndone", () => {
     ["ARS home, reserve wARS → USD₮, refill on", arsHome, held({ WARS: pesos(60_000n), USDT: dollars(10n) }), "WARS", "USDT", pesos(30_000n), dollars(18n), true],
     ["ARS home, USD₮ → wARS above the reserve", arsHome, held({ WARS: pesos(50_000n), USDT: dollars(100n) }), "USDT", "WARS", dollars(100n), pesos(160_000n), true],
     ["ARS home, USD₮ → wBRL", arsHome, held({ WARS: pesos(50_000n), USDT: dollars(100n) }), "USDT", "WBRL", dollars(100n), reais(500n), true],
-    ["USD₮ → USA₮ with the reserve covered", arsHome, held({ WARS: pesos(100_000n), USDT: dollars(100n) }), "USDT", "USAT", dollars(50n), dollars(50n), false],
+    ["USD₮ → USA₮ with the reserve covered", arsHome, held({ WARS: pesos(50_000n), USDT: dollars(100n) }), "USDT", "USAT", dollars(50n), dollars(50n), false],
   ] as const)("%s", (_name, rules, balances, from, to, sold, bought, expected) => {
     expect(undone(balances, rules, from, to, sold, bought)).toBe(expected);
   });
@@ -54,6 +54,33 @@ describe("swapWouldBeUndone", () => {
   it("is not hidden by an unrelated wBRL balance", () => {
     const balances = held({ WARS: pesos(60_000n), USDT: dollars(10n), WBRL: reais(500n) });
     expect(undone(balances, arsHome, "WARS", "USDT", pesos(30_000n), dollars(18n))).toBe(true);
+  });
+
+  it("keeps the local reserve: USAT → USD₮ with the ARS reserve covered is not undone", () => {
+    const balances = held({ WARS: pesos(50_000n), USDT: dollars(50n), USAT: dollars(50n) });
+    expect(undone(balances, arsHome, "USAT", "USDT", dollars(50n), dollars(50n))).toBe(false);
+  });
+
+  it("is not fooled by an unrelated wARS excess: USD₮ → USA₮ while WARS holds more than the reserve", () => {
+    const balances = held({ WARS: pesos(100_000n), USDT: dollars(100n) });
+    expect(undone(balances, arsHome, "USDT", "USAT", dollars(50n), dollars(50n))).toBe(false);
+  });
+
+  it("does not call a refill of wARS an undo of USAT → USD₮", () => {
+    const balances = held({ WARS: pesos(30_000n), USDT: dollars(10n), USAT: dollars(50n) });
+    expect(undone(balances, arsHome, "USAT", "USDT", dollars(50n), dollars(50n))).toBe(false);
+  });
+
+  it("counts a hub_route refill of the local token just sold as undone", () => {
+    // Sold reserve wARS for US$1; after the gas holdback that is under US$1, so the agent routes USA₮ first.
+    const balances = held({ WARS: pesos(60_000n), USAT: dollars(50n) });
+    expect(undone(balances, arsHome, "WARS", "USDT", pesos(30_000n), dollars(1n))).toBe(true);
+  });
+
+  it("applies the gas holdback: US$1.02 of USD₮ with no other gas token leaves nothing to refill with", () => {
+    const balances = held({ WARS: pesos(60_000n) });
+    expect(undone(balances, arsHome, "WARS", "USDT", pesos(30_000n), 1_020_000n)).toBe(false);
+    expect(undone(balances, arsHome, "WARS", "USDT", pesos(30_000n), 1_060_000n)).toBe(true);
   });
 });
 
