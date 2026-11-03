@@ -62,6 +62,7 @@ const REASONS: Record<string, MessageKey> = {
   save_other: "event.why.save_other",
   top_up: "event.why.top_up",
   hub_route: "event.why.hub_route",
+  chat: "event.why.chat",
 };
 // Fiat amounts in copy come from the constants that define them, through formatMoney.
 const DRIP_TEXT = formatMoney(formatCents(DRIP_AMOUNT_ATOMIC / 10_000n), "USD"); // USDC has 6 decimals
@@ -92,7 +93,9 @@ export function describeEvent(
       | "withdraw_failed"
       | "paused"
       | "resumed"
-      | "payment_reconciled",
+      | "payment_reconciled"
+      | "auto_convert_off"
+      | "auto_convert_on",
   ): EventView => ({
     tone,
     title: t(`event.${key}.title`),
@@ -187,6 +190,12 @@ export function describeEvent(
       return simple("info", "resumed");
     case "payment_reconciled":
       return simple("success", "payment_reconciled");
+    case "auto_convert_off":
+      return simple("info", "auto_convert_off");
+    case "auto_convert_on":
+      return simple("info", "auto_convert_on");
+    case "chat_swap_refused":
+      return { tone: "warning", title: t("event.chat_swap_refused.title"), why: t("event.chat_swap_refused.why"), txHash: null };
     case "home_currency_changed":
       return {
         tone: "info",

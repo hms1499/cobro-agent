@@ -70,9 +70,19 @@ describe("buildTreasuryView", () => {
   });
 });
 
+describe("agentState auto-convert", () => {
+  it("reports auto_off after off and paused, before dry run", () => {
+    const base = { globalEnabled: true, dryRun: false, userEnabled: true, awaitingApproval: false };
+    expect(agentState({ ...base, autoPaused: true })).toBe("auto_off");
+    expect(agentState({ ...base, autoPaused: true, userEnabled: false })).toBe("paused");
+    expect(agentState({ ...base, autoPaused: true, globalEnabled: false })).toBe("off");
+    expect(agentState({ ...base, autoPaused: true, dryRun: true })).toBe("auto_off");
+  });
+});
+
 describe("agentState", () => {
   it("shows the most restrictive switch, then dry run, then a waiting proposal", () => {
-    const base = { globalEnabled: true, dryRun: false, userEnabled: true, awaitingApproval: false };
+    const base = { globalEnabled: true, dryRun: false, userEnabled: true, awaitingApproval: false, autoPaused: false };
     expect(agentState({ ...base, globalEnabled: false, awaitingApproval: true })).toBe("off");
     expect(agentState({ ...base, userEnabled: false, awaitingApproval: true })).toBe("paused");
     expect(agentState({ ...base, dryRun: true, awaitingApproval: true })).toBe("dry_run");

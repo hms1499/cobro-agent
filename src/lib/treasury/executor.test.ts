@@ -714,6 +714,21 @@ describe("reconcileWallets", () => {
   });
 });
 
+describe("auto-convert off", () => {
+  it("does nothing while auto-convert is off, and still settles pending transactions", async () => {
+    const user = await freelancer();
+    await db.update(rules).set({ autoPausedAt: NOW }).where(eq(rules.userId, user.id));
+    const { deps, state } = harness({ WARS: pesos(3200n) });
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "disabled" });
+    expect(deps.rfq.request).not.toHaveBeenCalled();
+    await db.insert(treasuryTxs).values({ userId: user.id, kind: "approve", nonce: 1, hash: hashOf(44), raw: "0x44", feeToken: "USDT" });
+    state.receipts.set(hashOf(44), "success");
+    expect(await reconcileWallets(deps)).toEqual({ settled: 1, stillPending: 0, errors: 0 });
+    expect((await txByHash(hashOf(44))).status).toBe("success");
+    expect(deps.rfq.request).not.toHaveBeenCalled();
+  });
+});
+
 describe("engineInput", () => {
   it("feeds the engine spendable balances, with the gas reserve held back", async () => {
     const user = await freelancer("16000.00");

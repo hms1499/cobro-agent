@@ -73,7 +73,7 @@ export async function listTreasuryUsers(db: Db): Promise<string[]> {
     .select({ userId: rules.userId })
     .from(rules)
     .innerJoin(treasuryWallets, eq(treasuryWallets.userId, rules.userId))
-    .where(and(eq(rules.enabled, true), eq(treasuryWallets.status, "ready")))
+    .where(and(eq(rules.enabled, true), isNull(rules.autoPausedAt), eq(treasuryWallets.status, "ready")))
     .orderBy(asc(rules.userId));
   return rows.map((row) => row.userId);
 }

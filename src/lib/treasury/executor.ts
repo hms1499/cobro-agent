@@ -209,7 +209,7 @@ export async function runTreasuryForUser(deps: ExecutorDeps, userId: string): Pr
   const result = (outcome: RunOutcome, detail?: string): RunResult => (detail ? { userId, outcome, detail } : { userId, outcome });
   if (!deps.flags.enabled) return result("disabled");
   const ctx = await loadTreasuryContext(deps.db, userId);
-  if (!ctx || !ctx.rules.enabled) return result("disabled");
+  if (!ctx || !ctx.rules.enabled || ctx.rules.autoPausedAt) return result("disabled");
   const holder = crypto.randomUUID();
   if (!(await acquireWalletLock(deps.db, ctx.walletId, holder, deps.now()))) return result("locked");
   try {

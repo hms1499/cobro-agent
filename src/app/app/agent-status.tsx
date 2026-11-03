@@ -18,6 +18,7 @@ const CHIPS: Record<AgentState, { icon: typeof Pause; className: string }> = {
   dry_run: { icon: Flask, className: "text-muted-foreground" },
   awaiting: { icon: Hand, className: "text-warning" },
   paused: { icon: Pause, className: "text-muted-foreground" },
+  auto_off: { icon: Pause, className: "text-warning" },
   off: { icon: Pause, className: "text-muted-foreground" },
 };
 
@@ -33,6 +34,7 @@ export async function AgentStatus({ user }: { user: AppUser }) {
     dryRun: env.TREASURY_DRY_RUN,
     userEnabled: row.enabled,
     awaitingApproval: proposal !== null,
+    autoPaused: row.autoPausedAt !== null,
   });
   const { icon: Icon, className } = CHIPS[state];
   return (

@@ -86,12 +86,13 @@ export async function loadTreasuryView(user: AppUser): Promise<{ view: TreasuryV
   return { view: buildTreasuryView({ balances, rates, rules: row, payments, withdrawnUsdWad: withdrawn }), rates };
 }
 
-export type AgentState = "off" | "paused" | "awaiting" | "dry_run" | "active";
+export type AgentState = "off" | "paused" | "auto_off" | "awaiting" | "dry_run" | "active";
 
 /** Spec §17.1 principle 4: Active / Paused / Dry run is always visible ("off" = the global switch); a proposal waits on the freelancer. */
-export function agentState(input: { globalEnabled: boolean; dryRun: boolean; userEnabled: boolean; awaitingApproval: boolean }): AgentState {
+export function agentState(input: { globalEnabled: boolean; dryRun: boolean; userEnabled: boolean; awaitingApproval: boolean; autoPaused: boolean }): AgentState {
   if (!input.globalEnabled) return "off";
   if (!input.userEnabled) return "paused";
+  if (input.autoPaused) return "auto_off";
   // Test mode stays visible even while a proposal waits.
   if (input.dryRun) return "dry_run";
   return input.awaitingApproval ? "awaiting" : "active";

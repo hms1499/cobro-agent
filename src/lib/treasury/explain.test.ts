@@ -24,6 +24,22 @@ describe("moneyText and percentText", () => {
   });
 });
 
+describe("describeEvent chat events", () => {
+  it("says a converted swap came from chat", () => {
+    const view = describeEvent({ type: "converted", data: { from: "WARS", to: "USDT", amount: "3200000000000000000000", reason: "chat" } }, ctx);
+    expect(view.why).toContain("You asked for this swap in chat");
+  });
+
+  it("explains the auto-convert events and a refused chat swap", () => {
+    expect(describeEvent({ type: "auto_convert_off", data: {} }, ctx)).toMatchObject({ tone: "info", title: "Auto-convert turned off" });
+    expect(describeEvent({ type: "auto_convert_on", data: {} }, ctx)).toMatchObject({ tone: "info", title: "Auto-convert turned on" });
+    expect(describeEvent({ type: "chat_swap_refused", data: { error: "x" } }, ctx)).toMatchObject({
+      title: "A swap wasn't sent",
+      why: "Nothing was sent.",
+    });
+  });
+});
+
 describe("describeEvent", () => {
   it("explains a conversion with its reason and price", () => {
     const view = describeEvent(

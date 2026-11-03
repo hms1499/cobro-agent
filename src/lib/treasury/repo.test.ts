@@ -70,6 +70,8 @@ describe("treasury context", () => {
     const paused = await seedFreelancer(db);
     await db.update(rules).set({ enabled: false }).where(eq(rules.userId, paused.id));
     await seedFreelancer(db, { treasuryAddress: null });
+    const autoOff = await seedFreelancer(db);
+    await db.update(rules).set({ autoPausedAt: new Date() }).where(eq(rules.userId, autoOff.id));
 
     expect(await loadTreasuryContext(db, user.id)).toMatchObject({
       userId: user.id,
