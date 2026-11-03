@@ -172,7 +172,11 @@ export async function chatSwap(deps: ExecutorDeps, userId: string, input: ChatSw
   try {
     await startSwap(tap);
   } catch (error) {
-    await endUnconfirmed(tap, error);
+    // Failed before this tap took the lock (startSwap catches everything after), so it holds no quote and stored no swap.
+    console.error(`Chat swap for ${userId} failed before the lock:`, safeErrorTag(error));
+    await refuseUnlessEnded(tap, "unconfirmed").catch((second) =>
+      console.error(`Recording the end of a chat swap for ${userId} failed:`, safeErrorTag(second)),
+    );
   }
 }
 
@@ -193,7 +197,7 @@ async function startSwap(tap: Tap): Promise<void> {
     const error = await swapLocked(tap, ctx);
     if (error) await refuse(tap, error);
   } catch (error) {
-    // Inside the lock, so status never sees the lock gone with no answer yet.
+    // This run holds the lock, so it must answer, and before the release: status never sees the lock gone with no answer yet.
     await endUnconfirmed(tap, error);
   } finally {
     await releaseWalletLock(deps.db, ctx.walletId, input.cardId).catch((error) =>
@@ -302,8 +306,14 @@ async function cardEnded({ deps, userId, input }: Tap): Promise<boolean> {
   );
 }
 
-/** Before the lock: a replayed card that already ended must not add "a swap wasn't sent" to its history. */
+/**
+ * For a tap that does not hold the lock. If this card's own run holds it, that run may still swap and will report the
+ * outcome: a refusal here would make status say nothing was sent while money moves. A replayed card that already
+ * ended must not add "a swap wasn't sent" to its history either.
+ */
 async function refuseUnlessEnded(tap: Tap, error: ChatSwapError): Promise<void> {
+  const { deps, userId, input } = tap;
+  if (await holdsWalletLock(deps.db, userId, input.cardId, deps.now())) return;
   if (!(await cardEnded(tap))) await refuse(tap, error);
 }
 

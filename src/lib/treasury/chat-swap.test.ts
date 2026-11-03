@@ -274,6 +274,95 @@ describe("chatSwap", () => {
     expect((await status(user.id)).state).toBe("success");
   });
 
+  /** Runs a second tap on the same card during the first run's RFQ, and checks the first run is not disturbed. */
+  async function secondTapDuringRfq(userId: string, deps: ExecutorDeps, secondTap: () => Promise<void>) {
+    let during: ChatSwapStatus | null = null;
+    let refusedDuring: unknown[] = [];
+    vi.mocked(deps.rfq.request).mockImplementationOnce(async () => {
+      await secondTap();
+      during = await status(userId);
+      refusedDuring = await refusals(userId);
+      return quoted();
+    });
+    await chatSwap(deps, userId, SELL);
+
+    expect(during).toEqual({ state: "running", stage: "price" });
+    expect(refusedDuring).toEqual([]);
+    expect(await refusals(userId)).toEqual([]);
+    expect(deps.rfq.request).toHaveBeenCalledTimes(1);
+    const trades = await tradesOf(userId);
+    expect(trades).toHaveLength(1);
+    expect(trades[0].status).toBe("filled");
+    expect((await status(userId)).state).toBe("success");
+  }
+
+  it("records no refusal when the agent is paused and the running card is tapped again", async () => {
+    const user = await seed();
+    const { deps } = harness(SELL_BALANCES);
+    await secondTapDuringRfq(user.id, deps, async () => {
+      await setRules(user.id, { enabled: false });
+      await chatSwap(deps, user.id, SELL);
+    });
+  });
+
+  it.each([
+    ["global off", { enabled: false, dryRun: false }],
+    ["dry run", { enabled: true, dryRun: true }],
+  ] as const)("records no refusal when the running card is tapped again under %s", async (_label, flags) => {
+    const user = await seed();
+    const { deps } = harness(SELL_BALANCES);
+    await secondTapDuringRfq(user.id, deps, () => chatSwap({ ...deps, flags }, user.id, SELL));
+  });
+
+  /** Throws on the first call only: the tap fails at taking the lock, and the database still answers afterwards. */
+  const nowThrowingOnce = () => {
+    let thrown = false;
+    return () => {
+      if (thrown) return NOW;
+      thrown = true;
+      throw new Error("query failed, said 0xSECRET");
+    };
+  };
+
+  it("records no refusal when a second tap on the running card throws before the lock", async () => {
+    const user = await seed();
+    const errors = logged();
+    const { deps } = harness(SELL_BALANCES);
+    await secondTapDuringRfq(user.id, deps, () => chatSwap({ ...deps, now: nowThrowingOnce() }, user.id, SELL));
+    expect(errors).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(errors.mock.calls)).not.toContain("0xSECRET");
+  });
+
+  it("refuses with unconfirmed when a lone tap throws before the lock, and sends no RFQ", async () => {
+    const user = await seed();
+    logged();
+    const { deps } = harness(SELL_BALANCES);
+    await expect(chatSwap({ ...deps, now: nowThrowingOnce() }, user.id, SELL)).resolves.toBeUndefined();
+    expect(await refusals(user.id)).toEqual(["unconfirmed"]);
+    expect(deps.rfq.request).not.toHaveBeenCalled();
+    expect(deps.rfq.cancel).not.toHaveBeenCalled();
+  });
+
+  it("adds no refusal when a replay of a finished card throws before the lock", async () => {
+    const user = await seed();
+    logged();
+    const { deps } = harness(SELL_BALANCES);
+    await chatSwap(deps, user.id, SELL);
+    await chatSwap({ ...deps, now: nowThrowingOnce() }, user.id, SELL);
+    expect(await refusals(user.id)).toEqual([]);
+    expect((await status(user.id)).state).toBe("success");
+  });
+
+  it("does not throw when a tap fails before the lock and the refusal cannot be written", async () => {
+    const user = await seed();
+    logged();
+    const { deps } = harness(SELL_BALANCES);
+    await withFailingEvent("chat_swap_refused", async () => {
+      await expect(chatSwap({ ...deps, now: nowThrowingOnce() }, user.id, SELL)).resolves.toBeUndefined();
+    });
+    expect(await refusals(user.id)).toEqual([]);
+  });
+
   it("answers busy while an earlier transaction is still pending", async () => {
     const user = await seed();
     await recordTreasuryTx(db, { userId: user.id, kind: "withdraw", nonce: 1, hash: hashOf(99), raw: rawOf(1), feeToken: "USDT" });
