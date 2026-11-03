@@ -59,10 +59,10 @@ The states and what each one allows are **(user)**. The labels are **(user)**: "
 | ARS home: USD₮ → wBRL | Turns off. The agent would sell it as `save_other`. |
 | USD₮ → USA₮ with the reserve covered | Stays on. |
 
-**The check (builder's call on details):** one pure function next to `decide()`. It projects the balances after the swap and runs `decide()`, and the swap counts as undone when the resulting conversion sells what was bought or buys what was sold. Two traps:
+**The check (builder's call on details):** one pure function next to `decide()`. It projects the balances after the swap and runs `decide()`, and the swap counts as undone when the resulting conversion is its exact inverse, or is a `hub_route` starting a refill of the local token the swap just sold. Two traps:
 
 - Run it with `filledUsdWad24h` at 0, or a used-up daily cap hides a reversal that happens tomorrow.
-- Zero the wFiat balances the swap does not touch. `decide()` returns only its first candidate, so an unrelated `save_other` could hide the reversal.
+- Zero the non-local wFiat balances the swap does not touch, and keep the local token's. `decide()` returns only its first candidate, so an unrelated `save_other` could hide the reversal, while a zeroed local token would invent a refill.
 
 A proposal counts as undoing, because the freelancer would be asked to reverse what they just chose.
 
