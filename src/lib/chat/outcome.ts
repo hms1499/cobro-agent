@@ -1,5 +1,8 @@
-import type { MessageKey } from "@/i18n";
+import { t, type MessageKey } from "@/i18n";
+import { formatMoney } from "@/lib/money/format";
 import type { ChatSwapError } from "@/lib/treasury/chat-swap";
+import { MIN_NOTIONAL_WAD } from "@/lib/treasury/engine";
+import { usdWadToDollars } from "@/lib/treasury/value";
 
 export type OutcomeAction = "retry" | "full_balance" | "price_rules" | "daily_rules" | "add_funds" | "none";
 
@@ -31,6 +34,13 @@ const OUTCOMES: Record<ChatSwapError, { message: MessageKey; action: OutcomeActi
 
 export function outcomeView(error: ChatSwapError): { message: MessageKey; action: OutcomeAction } {
   return OUTCOMES[error];
+}
+
+const MINIMUM_TEXT = formatMoney(usdWadToDollars(MIN_NOTIONAL_WAD), "USD");
+
+/** The sentence the freelancer reads, with the amount it names filled in. */
+export function outcomeText(error: ChatSwapError): string {
+  return t(OUTCOMES[error].message, { amount: MINIMUM_TEXT });
 }
 
 /** For an event or a reply whose stored error is not a known value. */

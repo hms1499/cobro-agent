@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { en } from "@/i18n/en";
 import type { ChatSwapError } from "@/lib/treasury/chat-swap";
-import { outcomeView } from "./outcome";
+import { formatMoney } from "@/lib/money/format";
+import { outcomeText, outcomeView } from "./outcome";
 
 const ERRORS: ChatSwapError[] = [
   "paused", "disabled", "dry_run", "not_ready", "unsupported_pair", "below_minimum", "insufficient", "daily_limit",
@@ -25,5 +26,19 @@ describe("outcomeView", () => {
     for (const error of ERRORS) expect(en[outcomeView(error).message]).toBeTruthy();
     expect(en[outcomeView("unconfirmed").message]).toBe("We couldn't confirm this swap. Check History before trying again.");
     expect(en[outcomeView("busy").message]).toBe("Another transaction is finishing.");
+  });
+
+  it("names the button a changed swap is retried with, and promises no card that is not there yet", () => {
+    expect(outcomeText("changed")).toContain(en["common.retry"]);
+    expect(outcomeText("changed")).not.toContain("refreshed card");
+  });
+
+  it("states the minimum through formatMoney, with no amount in the copy itself", () => {
+    expect(en["chat.error.below_minimum"]).not.toContain("US$");
+    expect(outcomeText("below_minimum")).toBe(`The smallest swap is ${formatMoney("1.00", "USD")}.`);
+  });
+
+  it("leaves no placeholder in any sentence", () => {
+    for (const error of ERRORS) expect(outcomeText(error)).not.toContain("{");
   });
 });

@@ -1,7 +1,7 @@
 // src/lib/treasury/explain.ts
 import { t, type MessageKey } from "@/i18n";
 import { TOKENS } from "@/lib/chain/tokens";
-import { isChatSwapError, outcomeView } from "@/lib/chat/outcome";
+import { isChatSwapError, outcomeText } from "@/lib/chat/outcome";
 import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import type { AgentEventType, FxIntentRow } from "@/lib/db/schema";
 import type { ReferenceRates } from "@/lib/fx/rates";
@@ -9,6 +9,7 @@ import { formatDecimal } from "@/lib/money/decimal";
 import { isHomeCurrency, isLocalCurrency, isPayAsset, type HomeCurrency, type PayAsset } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 import { formatMoney } from "@/lib/money/format";
+import type { ChatSwapError } from "./chat-swap";
 import type { Decision, IdleReason } from "./engine";
 import { MIN_NOTIONAL_WAD } from "./engine";
 import { DRIP_AMOUNT_ATOMIC } from "./gas";
@@ -68,6 +69,8 @@ const REASONS: Record<string, MessageKey> = {
 // Fiat amounts in copy come from the constants that define them, through formatMoney.
 const DRIP_TEXT = formatMoney(formatCents(DRIP_AMOUNT_ATOMIC / 10_000n), "USD"); // USDC has 6 decimals
 const MINIMUM_TEXT = formatMoney(usdWadToDollars(MIN_NOTIONAL_WAD), "USD");
+/** Sentences that speak from the chat: History has no "Try again" button, and "Check History" is where its reader already is. */
+const CHAT_ONLY: readonly ChatSwapError[] = ["changed", "unconfirmed"];
 const reasonText = (reason: unknown) =>
   t(REASONS[String(reason)] ?? "event.why.generic");
 
@@ -199,8 +202,8 @@ export function describeEvent(
       return {
         tone: "warning",
         title: t("event.chat_swap_refused.title"),
-        // An event whose stored error is not a known value keeps the generic sentence.
-        why: isChatSwapError(d.error) ? t(outcomeView(d.error).message) : t("event.chat_swap_refused.why"),
+        // An event whose stored error is not a known value keeps the generic sentence, and so do the ones in CHAT_ONLY.
+        why: isChatSwapError(d.error) && !CHAT_ONLY.includes(d.error) ? outcomeText(d.error) : t("event.chat_swap_refused.why"),
         txHash: null,
       };
     case "home_currency_changed":

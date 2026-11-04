@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
-import { outcomeView } from "@/lib/chat/outcome";
+import { outcomeText } from "@/lib/chat/outcome";
 import type { ChatReply } from "@/lib/chat/reply";
 import { formatDateTime } from "@/lib/invoices/dates";
 import { ASSET_DENOMINATION, type PayAsset } from "@/lib/money/currencies";
@@ -29,7 +29,7 @@ export function fiat(asset: PayAsset, atomic: string): string {
 
 /** The line shown beside the field when an edit was answered with something other than a new card. */
 function editRefusal(reply: ChatReply): string {
-  if (reply.kind === "refused") return t(outcomeView(reply.error).message);
+  if (reply.kind === "refused") return outcomeText(reply.error);
   if (reply.kind === "bad_amount") return t("chat.badAmount");
   if (reply.kind === "paused") return t("chat.paused");
   return t("chat.error.generic");

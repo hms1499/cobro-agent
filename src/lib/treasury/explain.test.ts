@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { parseDecimal } from "@/lib/money/decimal";
+import { formatMoney } from "@/lib/money/format";
 import { describeDecision, describeEvent, describeProposal, eventAssets, moneyText, percentText } from "./explain";
 
 const rates: ReferenceRates = { perUsd: { ARS: parseDecimal("1600", 18), BRL: parseDecimal("5", 18) }, fetchedAt: 0 };
@@ -38,6 +39,14 @@ describe("describeEvent chat events", () => {
       why: "Nothing was sent.",
     });
     expect(describeEvent({ type: "chat_swap_refused", data: { error: "price" } }, ctx).why).toBe("The price moved past your limit.");
+  });
+
+  it.each(["changed", "unconfirmed"])("keeps the plain sentence for %s: History has no Try again, and is where History points", (error) => {
+    expect(describeEvent({ type: "chat_swap_refused", data: { error } }, ctx).why).toBe("Nothing was sent.");
+  });
+
+  it("states the minimum in a refused swap with the amount filled in", () => {
+    expect(describeEvent({ type: "chat_swap_refused", data: { error: "below_minimum" } }, ctx).why).toBe(`The smallest swap is ${formatMoney("1.00", "USD")}.`);
   });
 });
 

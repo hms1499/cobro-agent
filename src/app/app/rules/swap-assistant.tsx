@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import { chooseRequest, refusedActions, twoStepRequest, type RefusedAction } from "@/lib/chat/next-step";
-import { outcomeView } from "@/lib/chat/outcome";
+import { outcomeText } from "@/lib/chat/outcome";
 import type { CardRequest, ChatReply } from "@/lib/chat/reply";
 import { POLL_MS, pollDecision, resumeCardId, swapKeyStore, type PollDecision } from "@/lib/chat/swap-progress";
 import { formatDateTime } from "@/lib/invoices/dates";
@@ -414,7 +414,7 @@ function ReplyView({
       const actions = refusedActions(reply, { usdHome });
       return (
         <div className="flex flex-col gap-2">
-          <Problem>{t(outcomeView(reply.error).message)}</Problem>
+          <Problem>{outcomeText(reply.error)}</Problem>
           {reply.error === "daily_limit" && reply.nextDailyAt && (
             <p className="text-sm text-muted-foreground">{t("chat.dailyAt", { when: formatDateTime(new Date(reply.nextDailyAt)) })}</p>
           )}
