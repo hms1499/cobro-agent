@@ -1,6 +1,7 @@
 // src/lib/treasury/explain.ts
 import { t, type MessageKey } from "@/i18n";
 import { TOKENS } from "@/lib/chain/tokens";
+import { isChatSwapError, outcomeView } from "@/lib/chat/outcome";
 import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import type { AgentEventType, FxIntentRow } from "@/lib/db/schema";
 import type { ReferenceRates } from "@/lib/fx/rates";
@@ -195,7 +196,13 @@ export function describeEvent(
     case "auto_convert_on":
       return simple("info", "auto_convert_on");
     case "chat_swap_refused":
-      return { tone: "warning", title: t("event.chat_swap_refused.title"), why: t("event.chat_swap_refused.why"), txHash: null };
+      return {
+        tone: "warning",
+        title: t("event.chat_swap_refused.title"),
+        // An event whose stored error is not a known value keeps the generic sentence.
+        why: isChatSwapError(d.error) ? t(outcomeView(d.error).message) : t("event.chat_swap_refused.why"),
+        txHash: null,
+      };
     case "home_currency_changed":
       return {
         tone: "info",

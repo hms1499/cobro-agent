@@ -90,7 +90,7 @@ export interface ChatSwapInput {
 }
 
 /** Lowercase, as crypto.randomUUID writes it: the card id is compared as text in event data, and reaches uuid columns. */
-const CARD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+export const CARD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** Spec §5: the card, from Textile's unlocked estimate. It only reads; the tap checks everything again. */
 export async function previewChatSwap(

@@ -37,6 +37,7 @@ describe("describeEvent chat events", () => {
       title: "A swap wasn't sent",
       why: "Nothing was sent.",
     });
+    expect(describeEvent({ type: "chat_swap_refused", data: { error: "price" } }, ctx).why).toBe("The price moved past your limit.");
   });
 });
 
