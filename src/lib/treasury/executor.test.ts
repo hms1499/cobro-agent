@@ -6,7 +6,7 @@ import { TOKENS } from "@/lib/chain/tokens";
 import { TEXTILE_REACTOR, type GasToken } from "@/lib/chain/treasury-tx";
 import type { Db } from "@/lib/db/client";
 import { agentEvents, fxIntents, fxTrades, rules, treasuryTxs, treasuryWallets, type ApprovalMode } from "@/lib/db/schema";
-import { createTestDb, resetDb, seedFreelancer, TEST_TREASURY } from "@/lib/db/testing";
+import { createTestDb, resetDb, seedFreelancer, TEST_TREASURY, withGapBeforeLock } from "@/lib/db/testing";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { TextileError, type FirmQuote, type RfqOutcome } from "@/lib/fx/rfq";
 import { parseDecimal } from "@/lib/money/decimal";
@@ -25,7 +25,7 @@ import {
   type ExecutorDeps,
   type QuoteRun,
 } from "./executor";
-import { acquireWalletLock, approveProposal, dismissProposal, loadTreasuryContext } from "./repo";
+import { acquireWalletLock, approveProposal, dismissProposal, loadTreasuryContext, walletLockHolder } from "./repo";
 
 let db: Db;
 beforeAll(async () => {
@@ -767,6 +767,48 @@ describe("auto-convert off", () => {
     expect(await reconcileWallets(deps)).toEqual({ settled: 1, stillPending: 0, errors: 0 });
     expect((await txByHash(hashOf(44))).status).toBe("success");
     expect(deps.rfq.request).not.toHaveBeenCalled();
+  });
+});
+
+describe("rules that change between the first read and the lock", () => {
+  const changeInGap = (deps: ExecutorDeps, userId: string, fields: Partial<typeof rules.$inferInsert>) => {
+    deps.db = withGapBeforeLock(db, () => db.update(rules).set(fields).where(eq(rules.userId, userId)));
+  };
+
+  it.each([
+    ["auto-convert is turned off", { autoPausedAt: NOW }],
+    ["the agent is paused", { enabled: false }],
+  ] as const)("does nothing when %s in the gap, and releases the lock", async (_label, fields) => {
+    const user = await freelancer();
+    const { deps, state } = harness({ WARS: pesos(3_200n), ...gas });
+    changeInGap(deps, user.id, fields);
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "disabled" });
+    expect(deps.rfq.request).not.toHaveBeenCalled();
+    expect(deps.signTx).not.toHaveBeenCalled();
+    expect(state.sent).toEqual([]);
+    expect(await intentsOf(user.id)).toEqual([]);
+    expect(await eventTypes(user.id)).toEqual([]);
+    const ctx = await loadTreasuryContext(db, user.id);
+    expect(await walletLockHolder(db, ctx!.walletId)).toBeNull();
+  });
+
+  it("does nothing when the wallet stops being ready in the gap, and releases the lock", async () => {
+    const user = await freelancer();
+    const walletId = (await loadTreasuryContext(db, user.id))!.walletId;
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas });
+    deps.db = withGapBeforeLock(db, () => db.update(treasuryWallets).set({ status: "creating" }).where(eq(treasuryWallets.userId, user.id)));
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "disabled" });
+    expect(deps.rfq.request).not.toHaveBeenCalled();
+    expect(await walletLockHolder(db, walletId)).toBeNull();
+  });
+
+  it("runs on the rules as they stand once locked", async () => {
+    const user = await freelancer();
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas });
+    // The quote is 50 bps worse than the reference: fine by the first read, past this limit.
+    changeInGap(deps, user.id, { maxSlippageBps: 10 });
+    expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "waiting", detail: "price" });
+    expect(deps.signTx).not.toHaveBeenCalled();
   });
 });
 

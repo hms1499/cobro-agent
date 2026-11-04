@@ -185,23 +185,25 @@ async function startSwap(tap: Tap): Promise<void> {
   const { deps, userId, input } = tap;
   const off = !deps.flags.enabled ? "disabled" : deps.flags.dryRun ? "dry_run" : null;
   if (off) return refuseUnlessEnded(tap, off);
-  const ctx = await loadTreasuryContext(deps.db, userId);
-  if (!ctx) return refuseUnlessEnded(tap, "not_ready");
-  if (!ctx.rules.enabled) return refuseUnlessEnded(tap, "paused");
-  if (!(await acquireWalletLock(deps.db, ctx.walletId, input.cardId, deps.now()))) {
+  const first = await loadTreasuryContext(deps.db, userId);
+  if (!first) return refuseUnlessEnded(tap, "not_ready");
+  if (!first.rules.enabled) return refuseUnlessEnded(tap, "paused");
+  if (!(await acquireWalletLock(deps.db, first.walletId, input.cardId, deps.now()))) {
     // Held by this same card: a double tap while the first run trades. That run reports the outcome.
-    if ((await walletLockHolder(deps.db, ctx.walletId)) !== input.cardId) await refuseUnlessEnded(tap, "busy");
+    if ((await walletLockHolder(deps.db, first.walletId)) !== input.cardId) await refuseUnlessEnded(tap, "busy");
     return;
   }
   try {
     if (await cardEnded(tap)) return;
-    const error = await swapLocked(tap, ctx);
+    // Read again now the lock is held: Paused, the limits and auto-convert may have changed since the read above.
+    const ctx = await loadTreasuryContext(deps.db, userId);
+    const error = !ctx ? "not_ready" : !ctx.rules.enabled ? "paused" : await swapLocked(tap, ctx);
     if (error) await refuse(tap, error);
   } catch (error) {
     // This run holds the lock, so it must answer, and before the release: status never sees the lock gone with no answer yet.
     await endUnconfirmed(tap, error);
   } finally {
-    await releaseWalletLock(deps.db, ctx.walletId, input.cardId).catch((error) =>
+    await releaseWalletLock(deps.db, first.walletId, input.cardId).catch((error) =>
       console.error(`Releasing the wallet lock of ${userId} failed:`, safeErrorTag(error)),
     );
   }

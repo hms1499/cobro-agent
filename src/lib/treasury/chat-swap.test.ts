@@ -5,8 +5,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { TOKENS } from "@/lib/chain/tokens";
 import { TEXTILE_REACTOR, type GasToken } from "@/lib/chain/treasury-tx";
 import type { Db } from "@/lib/db/client";
-import { agentEvents, fxIntents, fxTrades, rules, treasuryTxs } from "@/lib/db/schema";
-import { createTestDb, resetDb, seedFreelancer, TEST_TREASURY } from "@/lib/db/testing";
+import { agentEvents, fxIntents, fxTrades, rules, treasuryTxs, treasuryWallets } from "@/lib/db/schema";
+import { createTestDb, resetDb, seedFreelancer, TEST_TREASURY, withGapBeforeLock } from "@/lib/db/testing";
 import type { ReferenceRates } from "@/lib/fx/rates";
 import { TextileError, type FirmQuote, type RfqOutcome, type RfqPreview } from "@/lib/fx/rfq";
 import { parseDecimal } from "@/lib/money/decimal";
@@ -239,6 +239,65 @@ describe("chatSwap", () => {
     const [event] = (await eventsOf(user.id)).filter((e) => e.type === "chat_swap_refused");
     expect(event.data).toEqual({ cardId: CARD, error, from: "WARS", to: "USDT", amount: pesos(3_200n).toString() });
     expect(await status(user.id)).toEqual({ state: "refused", error });
+  });
+
+  describe("when the row changes between the first read and the lock", () => {
+    const changeInGap = (deps: ExecutorDeps, userId: string, fields: Partial<typeof rules.$inferInsert>) => {
+      deps.db = withGapBeforeLock(db, () => setRules(userId, fields));
+    };
+
+    it("refuses paused when the agent is paused in the gap, sends no RFQ and releases the lock", async () => {
+      const user = await seed();
+      const { deps, state } = harness(SELL_BALANCES);
+      changeInGap(deps, user.id, { enabled: false });
+      await chatSwap(deps, user.id, SELL);
+      expect(await refusals(user.id)).toEqual(["paused"]);
+      expect(await status(user.id)).toEqual({ state: "refused", error: "paused" });
+      expect(deps.rfq.request).not.toHaveBeenCalled();
+      expect(state.sent).toEqual([]);
+      expect(await walletHolder(user.id)).toBeNull();
+    });
+
+    it("refuses not_ready when the wallet stops being ready in the gap, and releases the lock", async () => {
+      const user = await seed();
+      const walletId = await walletOf(user.id);
+      const { deps } = harness(SELL_BALANCES);
+      deps.db = withGapBeforeLock(db, () => db.update(treasuryWallets).set({ status: "creating" }).where(eq(treasuryWallets.userId, user.id)));
+      await chatSwap(deps, user.id, SELL);
+      expect(await refusals(user.id)).toEqual(["not_ready"]);
+      expect(deps.rfq.request).not.toHaveBeenCalled();
+      expect(await walletLockHolder(db, walletId)).toBeNull();
+    });
+
+    it("sees auto-convert turned back on: a card that did not warn trades nothing", async () => {
+      const user = await seed();
+      await setRules(user.id, { autoPausedAt: NOW });
+      const { deps, state } = harness(BUY_BALANCES, buyQuote());
+      changeInGap(deps, user.id, { autoPausedAt: null });
+      await chatSwap(deps, user.id, { ...BUY, seenTurnsOff: false });
+      expect(await refusals(user.id)).toEqual(["changed"]);
+      expect(state.sent).toEqual([]);
+      expect(await tradesOf(user.id)).toMatchObject([{ status: "rejected", detail: "changed" }]);
+    });
+
+    it("sees auto-convert turned off: the swap goes ahead with no second off event", async () => {
+      const user = await seed();
+      const { deps, state } = harness(BUY_BALANCES, buyQuote());
+      changeInGap(deps, user.id, { autoPausedAt: NOW });
+      await chatSwap(deps, user.id, { ...BUY, seenTurnsOff: false });
+      expect(await refusals(user.id)).toEqual([]);
+      expect(state.sent).toHaveLength(1);
+      expect(await eventTypes(user.id)).not.toContain("auto_convert_off");
+    });
+
+    it("uses the limits as they stand once locked", async () => {
+      const user = await seed();
+      const { deps, state } = harness(SELL_BALANCES);
+      changeInGap(deps, user.id, { maxSlippageBps: 10 });
+      await chatSwap(deps, user.id, SELL);
+      expect(await refusals(user.id)).toEqual(["price"]);
+      expect(state.sent).toEqual([]);
+    });
   });
 
   it("refuses not_ready when the wallet is not ready", async () => {

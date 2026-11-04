@@ -213,14 +213,19 @@ export async function ensureFeeToken(
 export async function runTreasuryForUser(deps: ExecutorDeps, userId: string): Promise<RunResult> {
   const result = (outcome: RunOutcome, detail?: string): RunResult => (detail ? { userId, outcome, detail } : { userId, outcome });
   if (!deps.flags.enabled) return result("disabled");
-  const ctx = await loadTreasuryContext(deps.db, userId);
-  if (!ctx || !ctx.rules.enabled || ctx.rules.autoPausedAt) return result("disabled");
+  const allowed = (ctx: TreasuryContext | null): ctx is TreasuryContext => ctx !== null && ctx.rules.enabled && !ctx.rules.autoPausedAt;
+  const first = await loadTreasuryContext(deps.db, userId);
+  if (!allowed(first)) return result("disabled");
   const holder = runHolder();
-  if (!(await acquireWalletLock(deps.db, ctx.walletId, holder, deps.now()))) return result("locked");
+  if (!(await acquireWalletLock(deps.db, first.walletId, holder, deps.now()))) return result("locked");
   try {
+    // Read again now the lock is held: a chat swap that turned auto-convert off may have finished since the read above,
+    // and this run would otherwise reverse it.
+    const ctx = await loadTreasuryContext(deps.db, userId);
+    if (!allowed(ctx)) return result("disabled");
     return await runLocked(deps, ctx, result);
   } finally {
-    await releaseWalletLock(deps.db, ctx.walletId, holder);
+    await releaseWalletLock(deps.db, first.walletId, holder);
   }
 }
 
