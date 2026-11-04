@@ -58,7 +58,7 @@ describe("chatReply", () => {
   it("maps a refused preview onto the reply, with the pair", async () => {
     const preview = async () => ({ refused: "daily_limit" as const, availableSellAtomic: null, nextDailyAt: "2026-11-05T00:00:00.000Z" });
     expect(await chatReply("swap 25 usdt to wars", io({ preview }))).toEqual({
-      kind: "refused", error: "daily_limit", availableSellAtomic: null, nextDailyAt: "2026-11-05T00:00:00.000Z", from: "USDT", to: "WARS",
+      kind: "refused", error: "daily_limit", availableSellAtomic: null, nextDailyAt: "2026-11-05T00:00:00.000Z", from: "USDT", to: "WARS", wantedAtomic: "25000000",
     });
   });
 
@@ -66,8 +66,18 @@ describe("chatReply", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const secret = new Error("rpc https://node/secret-key failed");
     const reply = await chatReply("swap 25 usdt to wars", io({ balances: async () => { throw secret; } }));
-    expect(reply).toMatchObject({ kind: "refused", error: "no_quote", from: "USDT", to: "WARS" });
+    expect(reply).toMatchObject({ kind: "refused", error: "no_quote", from: "USDT", to: "WARS", wantedAtomic: "25000000" });
     expect(JSON.stringify(spy.mock.calls)).not.toContain("secret-key");
+    spy.mockRestore();
+  });
+});
+
+describe("a failed read", () => {
+  const down = io({ balances: async () => { throw new Error("rpc down"); }, displayBalances: async () => { throw new Error("rpc down"); } });
+  it("names no pair for a balance question or a swap without a source", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(await chatReply("what do i have?", down)).toMatchObject({ kind: "refused", from: null, to: null, wantedAtomic: null });
+    expect(await chatReply("swap 25 to wars", down)).toMatchObject({ kind: "refused", from: null, to: "WARS", wantedAtomic: null });
     spy.mockRestore();
   });
 });
@@ -99,7 +109,7 @@ describe("cardReply", () => {
   it("answers no_quote when the preview throws", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const preview = async () => { throw new Error("boom"); };
-    expect(await cardReply({ from: "USDT", to: "WARS", amountText: null, wantedAtomic: null }, io({ preview }))).toMatchObject({ kind: "refused", error: "no_quote" });
+    expect(await cardReply({ from: "USDT", to: "WARS", amountText: null, wantedAtomic: null }, io({ preview }))).toMatchObject({ kind: "refused", error: "no_quote", from: "USDT", to: "WARS", wantedAtomic: null });
     spy.mockRestore();
   });
 });

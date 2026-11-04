@@ -3,13 +3,13 @@
 import { after } from "next/server";
 import { requireUser } from "@/lib/auth/current-user";
 import { interpretWithGroq } from "@/lib/chat/groq";
+import { chatGate, startChatSwapRequest } from "@/lib/chat/gate";
 import { allowGroqCall } from "@/lib/chat/rate-limit";
 import { cardReply, chatReply, type CardRequest, type ChatReply, type ReplyIo } from "@/lib/chat/reply";
 import { parseServerEnv } from "@/lib/config/server";
 import { isPayAsset, PAY_ASSETS, type PayAsset } from "@/lib/money/currencies";
 import { CARD_ID, chatSwap, chatSwapStatus, previewChatSwap, type ChatSwapError, type ChatSwapStatus } from "@/lib/treasury/chat-swap";
 import { liveChatDeps, liveExecutorDeps, readDisplayBalances } from "@/lib/treasury/live";
-import { loadTreasuryContext } from "@/lib/treasury/repo";
 import { tokenFiatAmount } from "@/lib/treasury/value";
 import type { Address } from "viem";
 
@@ -17,18 +17,6 @@ import type { Address } from "viem";
 async function displayed(address: Address): Promise<Record<PayAsset, string>> {
   const balances = await readDisplayBalances(address);
   return Object.fromEntries(PAY_ASSETS.map((a) => [a, tokenFiatAmount(a, balances[a]).amount])) as Record<PayAsset, string>;
-}
-
-/**
- * Spec §3.3, shared by the message and the card action: nothing is answered while the treasury is switched off or the
- * agent is paused. TREASURY_DRY_RUN is not checked here: chat still answers and shows the card, and only a tap refuses.
- */
-async function gate(userId: string): Promise<{ address: Address } | { reply: ChatReply }> {
-  const deps = liveChatDeps();
-  if (!deps.flags.enabled) return { reply: { kind: "paused" } };
-  const ctx = await loadTreasuryContext(deps.db, userId);
-  if (!ctx || !ctx.rules.enabled) return { reply: { kind: "paused" } };
-  return { address: ctx.address };
 }
 
 function replyIo(userId: string, address: Address, text: string | null): ReplyIo {
@@ -55,7 +43,7 @@ function replyIo(userId: string, address: Address, text: string | null): ReplyIo
 export async function sendChatMessage(text: string): Promise<ChatReply> {
   const user = await requireUser();
   if (typeof text !== "string") return { kind: "help" };
-  const open = await gate(user.id);
+  const open = await chatGate(liveChatDeps(), user.id);
   if ("reply" in open) return open.reply;
   return chatReply(text, replyIo(user.id, open.address, text));
 }
@@ -64,7 +52,7 @@ export async function sendChatMessage(text: string): Promise<ChatReply> {
 export async function previewCardAction(input: CardRequest): Promise<ChatReply> {
   const user = await requireUser();
   if (!input || !isPayAsset(input.from) || !isPayAsset(input.to)) return { kind: "help" };
-  const open = await gate(user.id);
+  const open = await chatGate(liveChatDeps(), user.id);
   if ("reply" in open) return open.reply;
   return cardReply(
     { from: input.from, to: input.to, amountText: input.amountText ?? null, wantedAtomic: input.wantedAtomic ?? null },
@@ -84,33 +72,8 @@ export async function startChatSwap(input: {
   seenTurnsOff: boolean;
 }): Promise<{ started: boolean; error?: ChatSwapError }> {
   const user = await requireUser();
-  if (
-    !input ||
-    !isPayAsset(input.from) ||
-    !isPayAsset(input.to) ||
-    typeof input.amountAtomic !== "string" ||
-    !/^\d{1,78}$/.test(input.amountAtomic) ||
-    typeof input.cardId !== "string" ||
-    !CARD_ID.test(input.cardId) ||
-    typeof input.seenTurnsOff !== "boolean"
-  ) {
-    return { started: false, error: "changed" };
-  }
   const deps = liveExecutorDeps();
-  if (!deps.flags.enabled) return { started: false, error: "disabled" };
-  if (deps.flags.dryRun) return { started: false, error: "dry_run" };
-  const ctx = await loadTreasuryContext(deps.db, user.id);
-  if (!ctx) return { started: false, error: "not_ready" };
-  if (!ctx.rules.enabled) return { started: false, error: "paused" };
-  const parsed = {
-    from: input.from,
-    to: input.to,
-    amount: BigInt(input.amountAtomic),
-    cardId: input.cardId,
-    seenTurnsOff: input.seenTurnsOff,
-  };
-  after(() => chatSwap(deps, user.id, parsed));
-  return { started: true };
+  return startChatSwapRequest(deps, user.id, input, (parsed) => after(() => chatSwap(deps, user.id, parsed)));
 }
 
 /** Spec §5.1: where a card's swap stands, from Postgres. Another user's card id reads as unknown. */

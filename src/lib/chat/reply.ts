@@ -19,8 +19,10 @@ export type ChatReply =
       error: ChatSwapError;
       availableSellAtomic: string | null;
       nextDailyAt: string | null;
-      from: PayAsset;
-      to: PayAsset;
+      /** The pair and amount to retry with. Null when the message named none (a failed read): no card retry then. */
+      from: PayAsset | null;
+      to: PayAsset | null;
+      wantedAtomic: string | null;
     }
   | { kind: "choose"; to: PayAsset; wanted: string | null; options: { from: PayAsset; atomic: string }[] }
   | { kind: "two_step"; from: PayAsset; to: PayAsset }
@@ -48,9 +50,23 @@ export interface ReplyIo {
 }
 
 /** A read that failed must not reach the client as an exception. Only a tag is logged, never a message. */
-function failed(from: PayAsset, to: PayAsset, error: unknown): ChatReply {
+function failed(pair: { from: PayAsset | null; to: PayAsset | null }, wanted: bigint | null, error: unknown): ChatReply {
   console.error("Chat reply read failed:", safeErrorTag(error));
-  return { kind: "refused", error: "no_quote", availableSellAtomic: null, nextDailyAt: null, from, to };
+  return {
+    kind: "refused",
+    error: "no_quote",
+    availableSellAtomic: null,
+    nextDailyAt: null,
+    ...pair,
+    wantedAtomic: wanted === null ? null : wanted.toString(),
+  };
+}
+
+/** The typed amount of a command, for a retry, when the source token is known and the text reads. */
+function typedWanted(command: ChatCommand): bigint | null {
+  if (command.kind !== "swap" || !command.from || command.amount === null) return null;
+  const parsed = parseFiatInput(command.amount);
+  return parsed.ok ? parseDecimal(parsed.value, TOKENS[command.from].decimals) : null;
 }
 
 async function previewReply(io: ReplyIo, input: Preview): Promise<ChatReply> {
@@ -63,6 +79,7 @@ async function previewReply(io: ReplyIo, input: Preview): Promise<ChatReply> {
       nextDailyAt: result.nextDailyAt,
       from: input.from,
       to: input.to,
+      wantedAtomic: input.wanted === null ? null : input.wanted.toString(),
     };
   }
   return { kind: "card", card: result };
@@ -74,7 +91,6 @@ export async function chatReply(text: string, io: ReplyIo): Promise<ChatReply> {
   let command = parseCommand(text);
   if (command.kind === "unknown") command = (await io.interpret(text)) ?? command;
   if (command.kind === "unknown") return { kind: "help" };
-  const target = command.kind === "swap" ? command.to : "USDT";
   try {
     if (command.kind === "balance") return { kind: "balances", balances: await io.displayBalances() };
     const resolved = resolveCommand(command, { balances: await io.balances(), rates: await io.rates() });
@@ -89,7 +105,8 @@ export async function chatReply(text: string, io: ReplyIo): Promise<ChatReply> {
         return resolved;
     }
   } catch (error) {
-    return failed(command.kind === "swap" && command.from ? command.from : "USDT", target, error);
+    const pair = command.kind === "swap" ? { from: command.from, to: command.to } : { from: null, to: null };
+    return failed(pair, typedWanted(command), error);
   }
 }
 
@@ -123,6 +140,6 @@ export async function cardReply(input: CardRequest, io: ReplyIo): Promise<ChatRe
   try {
     return await previewReply(io, { from, to, wanted });
   } catch (error) {
-    return failed(from, to, error);
+    return failed({ from, to }, wanted, error);
   }
 }
