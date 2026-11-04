@@ -64,7 +64,19 @@ function Problem({ children }: { children: ReactNode }) {
  * Spec §6: the Swap assistant. Messages live in this component only. The one thing kept is a swap in progress
  * (spec §5.1): its card id is in the database and in localStorage, and the page polls it until it ends.
  */
-export function SwapAssistant({ activeCardId, paused }: { activeCardId: string | null; paused: boolean }) {
+export function SwapAssistant({
+  activeCardId,
+  paused,
+  usdHome,
+  walletAddress,
+}: {
+  activeCardId: string | null;
+  paused: boolean;
+  /** A dollars freelancer has no rules form to link to. */
+  usdHome: boolean;
+  /** For "How to add funds"; shown behind Details. */
+  walletAddress: string | null;
+}) {
   const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
   const [text, setText] = useState("");
@@ -103,19 +115,19 @@ export function SwapAssistant({ activeCardId, paused }: { activeCardId: string |
     if (!runningCardId) return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
-    // The 30 s "unknown" clock starts when the polling does: at the tap, or when a reload picks the swap up.
-    let lastActiveAt = Date.now();
+    // The 30 s clock counts consecutive missed answers from the first miss, not wall time (a locked phone is not a miss).
+    let firstMissAt: number | null = null;
     const tick = async () => {
-      let status: (ChatSwapStatus & { balances?: Balances }) | null = null;
+      let status: (ChatSwapStatus & { balances?: Balances; nextDailyAt?: string }) | null = null;
       try {
         status = await readChatSwap(runningCardId);
       } catch {
         status = null;
       }
       if (stopped) return;
-      const decision = pollDecision(status, { lastActiveAt, now: Date.now() });
+      const decision = pollDecision(status, { firstMissAt, now: Date.now() });
       if (decision.kind === "continue") {
-        lastActiveAt = decision.lastActiveAt;
+        firstMissAt = decision.firstMissAt;
         setRunning((r) => (r && r.cardId === runningCardId ? { ...r, show: decision.show } : r));
         timer = setTimeout(tick, POLL_MS);
         return;
@@ -133,10 +145,11 @@ export function SwapAssistant({ activeCardId, paused }: { activeCardId: string |
           kind: "refused",
           error: terminal.error,
           availableSellAtomic: null,
-          nextDailyAt: null,
+          nextDailyAt: status?.nextDailyAt ?? null,
           from: card?.from ?? null,
           to: card?.to ?? null,
           wantedAtomic: card?.amountAtomic ?? null,
+          ...(status?.balances ? { balances: status.balances } : {}),
         });
       }
       setRunning(null);
@@ -179,6 +192,8 @@ export function SwapAssistant({ activeCardId, paused }: { activeCardId: string |
   async function swap(card: CardData) {
     if (busy || running) return;
     setBusy(true);
+    // From the tap on, the card is the running one: a late preview of an edit can no longer replace it.
+    setItems((list) => list.map((i) => (i.kind === "reply" && i.reply.kind === "card" && i.reply.card.cardId === card.cardId ? { ...i, cardState: "running" as const } : i)));
     try {
       const result = await startChatSwap({
         from: card.from,
@@ -218,21 +233,19 @@ export function SwapAssistant({ activeCardId, paused }: { activeCardId: string |
   function setCardState(id: number, cardState: CardState) {
     setItems((list) => list.map((i) => (i.id === id && i.kind === "reply" ? { ...i, cardState } : i)));
   }
-  function replaceReply(id: number, reply: ChatReply) {
-    setItems((list) => list.map((i) => (i.id === id && i.kind === "reply" ? { ...i, reply, cardState: "open" } : i)));
-  }
-
-  if (paused) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold">{t("chat.title")}</h2>
-          <p role="status">{t("chat.paused")}</p>
-        </CardContent>
-      </Card>
+  /** An answer to an edit applies only while its card is still the open one it was asked from. */
+  function replaceReply(id: number, reply: ChatReply, fromCardId: string) {
+    setItems((list) =>
+      list.map((i) =>
+        i.id === id && i.kind === "reply" && i.cardState === "open" && i.reply.kind === "card" && i.reply.card.cardId === fromCardId
+          ? { ...i, reply }
+          : i,
+      ),
     );
   }
 
+  // Paused hides the cards and the form, but never a swap still running or an outcome not yet shown (spec §5.1).
+  const visible = paused ? items.filter((i) => i.kind === "success" || (i.kind === "reply" && i.reply.kind === "refused")) : items;
   const cardOpen = items.some((i) => i.kind === "reply" && i.reply.kind === "card" && i.cardState === "open") || running !== null;
   const locked = busy || running !== null;
   const step = running ? stepText(running.show) : null;
@@ -242,12 +255,14 @@ export function SwapAssistant({ activeCardId, paused }: { activeCardId: string |
       <CardContent className="flex flex-col gap-4">
         <h2 className="text-lg font-semibold">{t("chat.title")}</h2>
         <div aria-live="polite" className="flex flex-col gap-4">
-          {items.length === 0 && !running && <p className="text-muted-foreground">{t("chat.intro")}</p>}
-          {items.map((item) => (
+          {items.length === 0 && !running && !paused && <p className="text-muted-foreground">{t("chat.intro")}</p>}
+          {visible.map((item) => (
             <ItemView
               key={item.id}
               item={item}
               locked={locked}
+              usdHome={usdHome}
+              walletAddress={walletAddress}
               running={running}
               step={step}
               onCard={askCard}
@@ -257,7 +272,7 @@ export function SwapAssistant({ activeCardId, paused }: { activeCardId: string |
               onSave={() => ask(t("chat.saveInDollars"), "save in dollars", true)}
             />
           ))}
-          {running && !running.card && (
+          {running && (!running.card || paused) && (
             <p role="status" className="flex min-h-11 items-center gap-2 font-medium">
               <CircleNotch aria-hidden="true" className="size-4 animate-spin motion-reduce:animate-none" />
               {t("chat.inProgress")}
@@ -265,6 +280,9 @@ export function SwapAssistant({ activeCardId, paused }: { activeCardId: string |
             </p>
           )}
         </div>
+        {paused ? (
+          <p role="status">{t("chat.paused")}</p>
+        ) : (
         <form
           noValidate
           className="flex flex-col gap-3"
@@ -303,6 +321,7 @@ export function SwapAssistant({ activeCardId, paused }: { activeCardId: string |
             </Button>
           </div>
         </form>
+        )}
       </CardContent>
     </Card>
   );
@@ -317,6 +336,8 @@ function stepText(show: Running["show"]): string {
 function ItemView({
   item,
   locked,
+  usdHome,
+  walletAddress,
   running,
   step,
   onCard,
@@ -327,12 +348,14 @@ function ItemView({
 }: {
   item: Item;
   locked: boolean;
+  usdHome: boolean;
+  walletAddress: string | null;
   running: Running | null;
   step: string | null;
   onCard: (request: CardRequest) => void;
   onSwap: (card: CardData) => void;
   onCardState: (id: number, state: CardState) => void;
-  onReplace: (id: number, reply: ChatReply) => void;
+  onReplace: (id: number, reply: ChatReply, fromCardId: string) => void;
   onSave: () => void;
 }) {
   if (item.kind === "user") {
@@ -355,13 +378,15 @@ function ItemView({
         card={reply.card}
         state={isRunning ? "running" : item.cardState}
         step={isRunning ? step : null}
+        locked={locked}
+        usdHome={usdHome}
         onSwap={onSwap}
         onCancel={() => onCardState(item.id, "cancelled")}
-        onReply={(next) => onReplace(item.id, next)}
+        onReply={(next, fromCardId) => onReplace(item.id, next, fromCardId)}
       />
     );
   }
-  return <ReplyView reply={reply} locked={locked} onCard={onCard} />;
+  return <ReplyView reply={reply} locked={locked} usdHome={usdHome} walletAddress={walletAddress} onCard={onCard} />;
 }
 
 function RetryButton({ request, locked, onCard }: { request: CardRequest; locked: boolean; onCard: (request: CardRequest) => void }) {
@@ -372,23 +397,45 @@ function RetryButton({ request, locked, onCard }: { request: CardRequest; locked
   );
 }
 
-function ReplyView({ reply, locked, onCard }: { reply: Exclude<ChatReply, { kind: "card" }>; locked: boolean; onCard: (request: CardRequest) => void }) {
+function ReplyView({
+  reply,
+  locked,
+  usdHome,
+  walletAddress,
+  onCard,
+}: {
+  reply: Exclude<ChatReply, { kind: "card" }>;
+  locked: boolean;
+  usdHome: boolean;
+  walletAddress: string | null;
+  onCard: (request: CardRequest) => void;
+}) {
   switch (reply.kind) {
     case "refused": {
-      const actions = refusedActions(reply);
+      const actions = refusedActions(reply, { usdHome });
       return (
         <div className="flex flex-col gap-2">
           <Problem>{t(outcomeView(reply.error).message)}</Problem>
           {reply.error === "daily_limit" && reply.nextDailyAt && (
             <p className="text-sm text-muted-foreground">{t("chat.dailyAt", { when: formatDateTime(new Date(reply.nextDailyAt)) })}</p>
           )}
+          {reply.error === "insufficient" && reply.balances && (
+            <div className="flex flex-col gap-1 text-sm">
+              {reply.from ? (
+                <p className="tabular-nums">{t("chat.available", { amount: balanceText(reply.from, reply.balances[reply.from]) })}</p>
+              ) : (
+                <BalanceList balances={reply.balances} />
+              )}
+            </div>
+          )}
           {actions.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {actions.map((action) => (
                 <RefusedButton key={action.kind + (action.kind === "link" ? action.label : "")} action={action} locked={locked} onCard={onCard} />
               ))}
             </div>
           )}
+          {actions.some((a) => a.kind === "add_funds") && <AddFunds address={walletAddress} />}
         </div>
       );
     }
@@ -449,7 +496,28 @@ function ReplyView({ reply, locked, onCard }: { reply: Exclude<ChatReply, { kind
   }
 }
 
+function AddFunds({ address }: { address: string | null }) {
+  return (
+    <details className="text-sm">
+      <summary className="hover-tint -mx-2 min-h-11 w-fit cursor-pointer rounded-md px-2 py-2 text-primary">{t("chat.addFunds")}</summary>
+      <ol className="ml-5 flex list-decimal flex-col gap-1">
+        <li>{t("chat.addFundsStep1")}</li>
+        <li>{t("chat.addFundsStep2")}</li>
+        <li>{t("chat.addFundsStep3")}</li>
+      </ol>
+      {address && (
+        <details className="mt-2">
+          <summary className="hover-tint -mx-2 min-h-11 w-fit cursor-pointer rounded-md px-2 py-2 text-primary">{t("common.details")}</summary>
+          <p className="text-muted-foreground">{t("chat.addFundsAddress")}</p>
+          <p className="font-mono text-xs break-all">{address}</p>
+        </details>
+      )}
+    </details>
+  );
+}
+
 function RefusedButton({ action, locked, onCard }: { action: RefusedAction; locked: boolean; onCard: (request: CardRequest) => void }) {
+  if (action.kind === "add_funds") return null;
   if (action.kind === "link") {
     return (
       <Link href={action.href} className={linkClass}>

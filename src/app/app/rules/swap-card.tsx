@@ -6,7 +6,9 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
+import { outcomeView } from "@/lib/chat/outcome";
 import type { ChatReply } from "@/lib/chat/reply";
+import { formatDateTime } from "@/lib/invoices/dates";
 import { ASSET_DENOMINATION, type PayAsset } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 import { formatTokenAmount } from "@/lib/money/format";
@@ -25,6 +27,14 @@ export function fiat(asset: PayAsset, atomic: string): string {
   return displayAmount(amount, currency, null, null).primary;
 }
 
+/** The line shown beside the field when an edit was answered with something other than a new card. */
+function editRefusal(reply: ChatReply): string {
+  if (reply.kind === "refused") return t(outcomeView(reply.error).message);
+  if (reply.kind === "bad_amount") return t("chat.badAmount");
+  if (reply.kind === "paused") return t("chat.paused");
+  return t("chat.error.generic");
+}
+
 export type CardState = "open" | "running" | "cancelled" | "replaced";
 
 /**
@@ -35,17 +45,24 @@ export function SwapCard({
   card,
   state,
   step,
+  locked,
+  usdHome,
   onSwap,
   onCancel,
   onReply,
 }: {
   card: Card;
   state: CardState;
+  /** True from the tap on (and while a message is being answered): the field, Swap and Cancel are all off. */
+  locked: boolean;
+  /** A dollars freelancer has no rules form, so the limit sentence carries no link to it. */
+  usdHome: boolean;
   /** Plain-words step shown while the swap runs. */
   step: string | null;
   onSwap: (card: Card) => void;
   onCancel: () => void;
-  onReply: (reply: ChatReply) => void;
+  /** `cardId` is the card the edit started from, so the screen can drop an answer for a card no longer open. */
+  onReply: (reply: ChatReply, cardId: string) => void;
 }) {
   const shown = tokenFiatAmount(card.from, BigInt(card.amountAtomic)).amount;
   const [text, setText] = useState(shown);
@@ -70,7 +87,15 @@ export function SwapCard({
     [],
   );
 
+  function cancel() {
+    // A pending edit must not bring the card back.
+    seq.current += 1;
+    if (timer.current) clearTimeout(timer.current);
+    onCancel();
+  }
+
   function edit(value: string) {
+    if (locked) return;
     setText(value);
     seq.current += 1;
     const mine = seq.current;
@@ -97,8 +122,10 @@ export function SwapCard({
       if (mine !== seq.current) return;
       setUpdating(false);
       if (!reply) setError(t("chat.error.generic"));
-      else if (reply.kind === "bad_amount") setError(t("chat.badAmount"));
-      else onReply(reply);
+      else if (reply.kind === "card") onReply(reply, card.cardId);
+      // A refusal (below the minimum while typing "5" on the way to "5000", a passing no_quote) stays beside the field;
+      // the card and the typed text stay, and Swap stays off until the amount reads again.
+      else setError(editRefusal(reply));
     }, EDIT_PAUSE_MS);
   }
 
@@ -106,6 +133,7 @@ export function SwapCard({
   if (state === "replaced") return <p className="text-muted-foreground">{t("chat.card.replaced")}</p>;
 
   const running = state === "running";
+  const off = running || locked;
   const typed = parseFiatInput(text);
   // "25" and "25.00" are the same amount; only a different one needs a new card.
   const dirty = !typed.ok || typed.value !== shown;
@@ -123,7 +151,7 @@ export function SwapCard({
           inputMode="decimal"
           autoComplete="off"
           value={text}
-          disabled={running}
+          disabled={off}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${inputId}-error` : undefined}
           onChange={(event) => edit(event.target.value)}
@@ -146,10 +174,16 @@ export function SwapCard({
       </p>
       {card.limited === "daily" && (
         <p className="text-sm text-muted-foreground">
-          {t("chat.card.limitedDaily")}{" "}
-          <Link href="/app/rules/edit" className={link}>
-            {t("chat.card.changeLimit")}
-          </Link>
+          {t("chat.card.limitedDaily")}
+          {card.nextDailyAt && <> {t("chat.dailyAt", { when: formatDateTime(new Date(card.nextDailyAt)) })}</>}
+          {!usdHome && (
+            <>
+              {" "}
+              <Link href="/app/rules/edit" className={link}>
+                {t("chat.card.changeLimit")}
+              </Link>
+            </>
+          )}
         </p>
       )}
       {card.limited === "balance" && <p className="text-sm text-muted-foreground">{t("chat.card.limitedBalance")}</p>}
@@ -171,10 +205,10 @@ export function SwapCard({
         </p>
       ) : (
         <div className="flex flex-wrap gap-3">
-          <Button type="button" size="lg" className="min-h-11" disabled={updating || dirty || error !== null} onClick={() => onSwap(card)}>
+          <Button type="button" size="lg" className="min-h-11" disabled={off || updating || dirty || error !== null} onClick={() => onSwap(card)}>
             {t("chat.swapAction")}
           </Button>
-          <Button type="button" variant="ghost" size="lg" className="min-h-11" onClick={onCancel}>
+          <Button type="button" variant="ghost" size="lg" className="min-h-11" disabled={off} onClick={cancel}>
             {t("chat.card.cancel")}
           </Button>
         </div>

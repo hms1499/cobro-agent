@@ -64,7 +64,12 @@ async function Rules() {
           </Suspense>
         </div>
         <div className="min-w-0 lg:col-start-1 lg:row-span-2 lg:row-start-1">
-          <SwapAssistant activeCardId={activeCardId} paused={!row.enabled} />
+          <SwapAssistant
+            activeCardId={activeCardId}
+            paused={!row.enabled}
+            usdHome={row.localCurrency === "USD"}
+            walletAddress={user.treasuryAddress}
+          />
         </div>
         <div className="flex flex-col gap-6 lg:col-start-2 lg:row-start-2">
           <RulesSummary row={row} />

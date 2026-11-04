@@ -39,6 +39,7 @@ import { approvalGroup, GROUP_REASONS, modeNeedsApproval, waitStartedAt } from "
 import { claimDrip, DRIP_AMOUNT_ATOMIC, type Dripper } from "./gas";
 import {
   acquireWalletLock,
+  runHolder,
   cancelIntent,
   dismissedRecently,
   filledUsdWad24h,
@@ -214,7 +215,7 @@ export async function runTreasuryForUser(deps: ExecutorDeps, userId: string): Pr
   if (!deps.flags.enabled) return result("disabled");
   const ctx = await loadTreasuryContext(deps.db, userId);
   if (!ctx || !ctx.rules.enabled || ctx.rules.autoPausedAt) return result("disabled");
-  const holder = crypto.randomUUID();
+  const holder = runHolder();
   if (!(await acquireWalletLock(deps.db, ctx.walletId, holder, deps.now()))) return result("locked");
   try {
     return await runLocked(deps, ctx, result);
@@ -836,7 +837,7 @@ export async function reconcileWallets(
     try {
       const ctx = await loadTreasuryContext(deps.db, userId);
       if (!ctx) continue;
-      const holder = crypto.randomUUID();
+      const holder = runHolder();
       if (!(await acquireWalletLock(deps.db, ctx.walletId, holder, deps.now()))) continue;
       try {
         const { settled, stillPending } = await reconcilePending(deps, ctx);

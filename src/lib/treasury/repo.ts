@@ -45,6 +45,25 @@ export async function walletLockHolder(db: Db, walletId: string): Promise<string
   return row?.holder ?? null;
 }
 
+/**
+ * A lock holder for the automatic agent or a withdrawal: a random UUID whose version digit is 8. A chat swap holds the
+ * lock under its card id (a version 4 UUID), so a page can tell a card from any other holder.
+ */
+export function runHolder(): string {
+  const id = crypto.randomUUID();
+  return `${id.slice(0, 14)}8${id.slice(15)}`;
+}
+
+/** The holder of this user's live lock when it is a chat card id; null for nobody, an expired lock or another holder. */
+export async function liveCardLockHolder(db: Db, userId: string, now: Date): Promise<string | null> {
+  const [row] = await db
+    .select({ holder: walletLocks.holder })
+    .from(walletLocks)
+    .innerJoin(treasuryWallets, eq(treasuryWallets.id, walletLocks.walletId))
+    .where(and(eq(treasuryWallets.userId, userId), gt(walletLocks.lockedUntil, now)));
+  return row && row.holder[14] === "4" ? row.holder : null;
+}
+
 /** Whether `holder` still holds the lock on this user's wallet. */
 export async function holdsWalletLock(db: Db, userId: string, holder: string, now: Date): Promise<boolean> {
   const [row] = await db

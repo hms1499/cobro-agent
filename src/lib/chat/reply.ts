@@ -23,6 +23,8 @@ export type ChatReply =
       from: PayAsset | null;
       to: PayAsset | null;
       wantedAtomic: string | null;
+      /** What the freelancer has, for "not enough balance" (spec §5.2). Screen amounts, not token units. */
+      balances?: Record<PayAsset, string>;
     }
   | { kind: "choose"; to: PayAsset; wanted: string | null; options: { from: PayAsset; atomic: string }[] }
   | { kind: "two_step"; from: PayAsset; to: PayAsset }
@@ -72,7 +74,10 @@ function typedWanted(command: ChatCommand): bigint | null {
 async function previewReply(io: ReplyIo, input: Preview): Promise<ChatReply> {
   const result = await io.preview(input);
   if ("refused" in result) {
+    // The balance is a courtesy: a failed read must not hide the refusal.
+    const balances = result.refused === "insufficient" ? await io.displayBalances().catch(() => undefined) : undefined;
     return {
+      ...(balances ? { balances } : {}),
       kind: "refused",
       error: result.refused,
       availableSellAtomic: result.availableSellAtomic,

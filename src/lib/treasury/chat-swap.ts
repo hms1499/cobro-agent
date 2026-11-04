@@ -28,6 +28,7 @@ import {
   filledUsdWad24h,
   hasPendingApproval,
   holdsWalletLock,
+  liveCardLockHolder,
   insertTrade,
   loadTreasuryContext,
   logEvent,
@@ -369,13 +370,17 @@ export async function chatSwapStatus(db: Db, userId: string, cardId: string, now
   return { state: "unknown" };
 }
 
-/** The card of a chat swap still waiting for its receipt, so the page can pick it up after a reload. */
-export async function activeChatCardId(db: Db, userId: string): Promise<string | null> {
+/**
+ * The card of a chat swap in progress, so the page can pick it up after a reload on any browser (spec §5.1): one
+ * waiting for its receipt, or one holding the wallet lock before it is broadcast. A lock held by the automatic agent
+ * or a withdrawal (not a card id) or an expired lock names nothing.
+ */
+export async function activeChatCardId(db: Db, userId: string, now: Date = new Date()): Promise<string | null> {
   const [row] = await db
     .select({ cardId: fxTrades.chatCardId })
     .from(fxTrades)
     .where(and(eq(fxTrades.userId, userId), eq(fxTrades.status, "broadcast"), isNotNull(fxTrades.chatCardId)))
     .orderBy(desc(fxTrades.createdAt))
     .limit(1);
-  return row?.cardId ?? null;
+  return row?.cardId ?? (await liveCardLockHolder(db, userId, now));
 }

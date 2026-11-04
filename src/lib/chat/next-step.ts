@@ -10,15 +10,18 @@ export type RefusedAction =
   | { kind: "retry"; request: CardRequest }
   | { kind: "full_balance"; request: CardRequest }
   | { kind: "smaller"; request: CardRequest; atomic: string; from: PayAsset }
-  | { kind: "link"; label: MessageKey; href: string };
+  | { kind: "link"; label: MessageKey; href: string }
+  /** Plain steps and the wallet address behind a disclosure; the screen draws it. */
+  | { kind: "add_funds" };
 
 const isPositive = (atomic: string | null): atomic is string => atomic !== null && /^\d+$/.test(atomic) && BigInt(atomic) > 0n;
 
 /**
  * The next steps for a refused reply. "Try again" keeps the pair and the typed amount. With either side of the pair
- * unknown (a failed read of a message that named none) no card can be asked for, so only links remain.
+ * unknown (a failed read of a message that named none) no card can be asked for, so only links remain. A dollars
+ * freelancer has no rules form (/app/rules/edit sends them back), so the links to it are left out.
  */
-export function refusedActions(reply: Refused): RefusedAction[] {
+export function refusedActions(reply: Refused, opts: { usdHome: boolean }): RefusedAction[] {
   const { from, to } = reply;
   const action = outcomeView(reply.error).action;
   const actions: RefusedAction[] = [];
@@ -38,12 +41,17 @@ export function refusedActions(reply: Refused): RefusedAction[] {
     const full = request(null);
     if (full) actions.push({ kind: "full_balance", request: full });
   } else if (action === "price_rules") {
-    actions.push({ kind: "link", label: "chat.priceRules", href: "/app/rules/edit" });
+    // Spec §5.2: "Try again" and the link to the price limit.
+    const retry = request(reply.wantedAtomic);
+    if (retry) actions.push({ kind: "retry", request: retry });
+    if (!opts.usdHome) actions.push({ kind: "link", label: "chat.priceRules", href: "/app/rules/edit" });
   } else if (action === "daily_rules") {
-    actions.push({ kind: "link", label: "chat.dailyRules", href: "/app/rules/edit" });
+    if (!opts.usdHome) actions.push({ kind: "link", label: "chat.dailyRules", href: "/app/rules/edit" });
   } else if (action === "add_funds") {
-    actions.push({ kind: "link", label: "chat.addFunds", href: "/app/settings" });
+    actions.push({ kind: "add_funds" });
   }
+  // The swap may still land, so the freelancer checks History before anything else.
+  if (reply.error === "unconfirmed") actions.push({ kind: "link", label: "chat.viewHistory", href: "/app/rules/history" });
   return actions;
 }
 

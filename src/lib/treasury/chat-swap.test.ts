@@ -26,6 +26,8 @@ import {
   loadTreasuryContext,
   nextDailyCapacityAt,
   recordTreasuryTx,
+  releaseWalletLock,
+  runHolder,
   setAutoConvertOn,
   walletLockHolder,
 } from "./repo";
@@ -1062,6 +1064,24 @@ describe("activeChatCardId", () => {
     await chatSwap(deps, user.id, SELL);
     expect(await activeChatCardId(db, user.id)).toBe(CARD);
     expect(await activeChatCardId(db, stranger.id)).toBeNull();
+  });
+
+  it("names the card holding the wallet lock before anything is broadcast", async () => {
+    const user = await seed();
+    const stranger = await seed();
+    await acquireWalletLock(db, await walletOf(user.id), CARD, NOW);
+    expect(await activeChatCardId(db, user.id, NOW)).toBe(CARD);
+    expect(await activeChatCardId(db, stranger.id, NOW)).toBeNull();
+  });
+
+  it("names nothing for a lock held by the agent or a withdrawal, or for an expired lock", async () => {
+    const user = await seed();
+    const wallet = await walletOf(user.id);
+    await acquireWalletLock(db, wallet, runHolder(), NOW);
+    expect(await activeChatCardId(db, user.id, NOW)).toBeNull();
+    await releaseWalletLock(db, wallet, (await walletLockHolder(db, wallet)) as string);
+    await acquireWalletLock(db, wallet, CARD, NOW);
+    expect(await activeChatCardId(db, user.id, new Date(NOW.getTime() + 60 * 60 * 1000))).toBeNull();
   });
 });
 

@@ -6,34 +6,41 @@ const ID = "0a1b2c3d-0000-4000-8000-0123456789ab";
 const success: ChatSwapStatus = { state: "success", soldAtomic: "1", boughtAtomic: "2", from: "USDT", to: "WARS", txHash: "0xabc", turnedOff: false };
 
 describe("pollDecision", () => {
-  const ctx = { lastActiveAt: 1_000, now: 4_000 };
-
-  it("keeps polling while the swap runs, and restarts the unknown clock", () => {
-    expect(pollDecision({ state: "running", stage: "price" }, ctx)).toEqual({ kind: "continue", show: "price", lastActiveAt: 4_000 });
-    expect(pollDecision({ state: "confirming" }, ctx)).toEqual({ kind: "continue", show: "confirming", lastActiveAt: 4_000 });
+  it("keeps polling while the swap runs, and clears the miss clock", () => {
+    expect(pollDecision({ state: "running", stage: "price" }, { firstMissAt: 500, now: 4_000 })).toEqual({ kind: "continue", show: "price", firstMissAt: null });
+    expect(pollDecision({ state: "confirming" }, { firstMissAt: null, now: 4_000 })).toEqual({ kind: "continue", show: "confirming", firstMissAt: null });
   });
 
   it("stops on a terminal status and clears the stored id", () => {
-    expect(pollDecision(success, ctx)).toMatchObject({ kind: "stop", clearKey: true, terminal: { kind: "success" } });
-    expect(pollDecision({ state: "refused", error: "swap_failed" }, ctx)).toEqual({
+    expect(pollDecision(success, { firstMissAt: null, now: 1 })).toMatchObject({ kind: "stop", clearKey: true, terminal: { kind: "success" } });
+    expect(pollDecision({ state: "refused", error: "swap_failed" }, { firstMissAt: null, now: 1 })).toEqual({
       kind: "stop",
       clearKey: true,
       terminal: { kind: "refused", error: "swap_failed" },
     });
   });
 
-  it("waits through an unknown answer, then reads it as unconfirmed after 30 s", () => {
-    expect(pollDecision({ state: "unknown" }, { lastActiveAt: 1_000, now: 1_000 + UNKNOWN_GRACE_MS })).toMatchObject({ kind: "continue", show: "waiting", lastActiveAt: 1_000 });
-    expect(pollDecision({ state: "unknown" }, { lastActiveAt: 1_000, now: 1_001 + UNKNOWN_GRACE_MS })).toEqual({
+  it("waits through unknown answers, then reads them as unconfirmed after 30 s of misses", () => {
+    const first = pollDecision({ state: "unknown" }, { firstMissAt: null, now: 10_000 });
+    expect(first).toEqual({ kind: "continue", show: "waiting", firstMissAt: 10_000 });
+    expect(pollDecision({ state: "unknown" }, { firstMissAt: 10_000, now: 10_000 + UNKNOWN_GRACE_MS })).toMatchObject({ kind: "continue" });
+    expect(pollDecision({ state: "unknown" }, { firstMissAt: 10_000, now: 10_001 + UNKNOWN_GRACE_MS })).toEqual({
       kind: "stop",
       clearKey: true,
       terminal: { kind: "refused", error: "unconfirmed" },
     });
   });
 
-  it("treats a rejected read like unknown, so one failed poll never ends a running swap", () => {
-    expect(pollDecision(null, ctx)).toMatchObject({ kind: "continue", show: "waiting" });
-    expect(pollDecision(null, { lastActiveAt: 0, now: UNKNOWN_GRACE_MS + 1 })).toMatchObject({ kind: "stop" });
+  it("does not count time spent asleep: the first rejected read after a long gap only starts the clock", () => {
+    // Running at t=0, the phone locks for two minutes, the first read on waking is rejected.
+    const wake = pollDecision(null, { firstMissAt: null, now: 120_000 });
+    expect(wake).toEqual({ kind: "continue", show: "waiting", firstMissAt: 120_000 });
+    // The next read answers: the result arrives.
+    expect(pollDecision(success, { firstMissAt: 120_000, now: 123_000 })).toMatchObject({ kind: "stop", terminal: { kind: "success" } });
+  });
+
+  it("treats a rejected read like unknown", () => {
+    expect(pollDecision(null, { firstMissAt: 0, now: UNKNOWN_GRACE_MS + 1 })).toMatchObject({ kind: "stop" });
   });
 });
 

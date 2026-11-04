@@ -10,6 +10,7 @@ import { parseServerEnv } from "@/lib/config/server";
 import { isPayAsset, PAY_ASSETS, type PayAsset } from "@/lib/money/currencies";
 import { CARD_ID, chatSwap, chatSwapStatus, previewChatSwap, type ChatSwapError, type ChatSwapStatus } from "@/lib/treasury/chat-swap";
 import { liveChatDeps, liveExecutorDeps, readDisplayBalances } from "@/lib/treasury/live";
+import { nextDailyCapacityAt } from "@/lib/treasury/repo";
 import { tokenFiatAmount } from "@/lib/treasury/value";
 import type { Address } from "viem";
 
@@ -77,13 +78,22 @@ export async function startChatSwap(input: {
 }
 
 /** Spec §5.1: where a card's swap stands, from Postgres. Another user's card id reads as unknown. */
-export async function readChatSwap(cardId: string): Promise<ChatSwapStatus & { balances?: Record<PayAsset, string> }> {
+export async function readChatSwap(
+  cardId: string,
+): Promise<ChatSwapStatus & { balances?: Record<PayAsset, string>; nextDailyAt?: string }> {
   const user = await requireUser();
   if (typeof cardId !== "string" || !CARD_ID.test(cardId)) return { state: "unknown" };
-  const status = await chatSwapStatus(liveChatDeps().db, user.id, cardId, new Date());
+  const db = liveChatDeps().db;
+  const status = await chatSwapStatus(db, user.id, cardId, new Date());
+  let result: ChatSwapStatus & { balances?: Record<PayAsset, string>; nextDailyAt?: string } = status;
+  if (status.state === "refused" && status.error === "daily_limit") {
+    // "When more is available" (spec §5.2); a failed read must not hide the outcome.
+    const next = await nextDailyCapacityAt(db, user.id, new Date()).catch(() => null);
+    if (next) result = { ...status, nextDailyAt: next.toISOString() };
+  }
   const wantsBalances = status.state === "success" || (status.state === "refused" && status.error === "insufficient");
-  if (!wantsBalances || !user.treasuryAddress) return status;
+  if (!wantsBalances || !user.treasuryAddress) return result;
   // The balances are a courtesy: a failed read must not hide the outcome.
   const balances = await displayed(user.treasuryAddress as Address).catch(() => null);
-  return balances ? { ...status, balances } : status;
+  return balances ? { ...result, balances } : result;
 }
