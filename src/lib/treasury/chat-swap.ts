@@ -101,14 +101,22 @@ function ratesOrNull(deps: Pick<ExecutorDeps, "rates">, userId: string) {
   });
 }
 
+export interface PreviewRefusal {
+  refused: ChatSwapError;
+  availableSellAtomic: string | null;
+  nextDailyAt: string | null;
+  /** Set on "insufficient" when what is available is worth under the minimum swap: adding funds is the only next step. */
+  balanceBelowMinimum?: true;
+}
+
 /** Spec §5: the card, from Textile's unlocked estimate. It only reads; the tap checks everything again. */
 export async function previewChatSwap(
   deps: ChatPreviewDeps,
   userId: string,
   input: { from: PayAsset; to: PayAsset; wanted: bigint | null },
-): Promise<SwapCard | { refused: ChatSwapError; availableSellAtomic: string | null; nextDailyAt: string | null }> {
+): Promise<SwapCard | PreviewRefusal> {
   const { from, to, wanted } = input;
-  const refused = (error: ChatSwapError, more: { availableSellAtomic?: string | null; nextDailyAt?: string | null } = {}) => ({
+  const refused = (error: ChatSwapError, more: Partial<Omit<PreviewRefusal, "refused">> = {}): PreviewRefusal => ({
     refused: error,
     availableSellAtomic: null,
     nextDailyAt: null,
@@ -124,14 +132,19 @@ export async function previewChatSwap(
   if (!rates) return refused("no_quote");
   const now = deps.now();
   const nextDailyAt = async () => (await nextDailyCapacityAt(deps.db, userId, now))?.toISOString() ?? null;
+  const available = chatAvailable(from, balances);
   const fit = fitChatAmount({
     from,
     wanted,
-    available: chatAvailable(from, balances),
+    available,
     dailyLeft: dailyLeftWad(ctx.rules.dailyMaxUsd, await filledUsdWad24h(deps.db, userId, now)),
     rates,
   });
-  if ("refused" in fit) return refused(fit.refused, fit.refused === "daily_limit" ? { nextDailyAt: await nextDailyAt() } : {});
+  if ("refused" in fit) {
+    if (fit.refused === "daily_limit") return refused("daily_limit", { nextDailyAt: await nextDailyAt() });
+    if (fit.refused === "insufficient" && usdWad(from, available, rates) < MIN_NOTIONAL_WAD) return refused("insufficient", { balanceBelowMinimum: true });
+    return refused(fit.refused);
+  }
 
   const estimate = await deps
     .preview({ sellToken: TOKENS[from].address, buyToken: TOKENS[to].address, sellAmount: fit.amount, taker: ctx.address })

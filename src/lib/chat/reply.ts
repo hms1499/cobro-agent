@@ -5,7 +5,7 @@ import { isPayAsset, type PayAsset } from "@/lib/money/currencies";
 import { parseDecimal } from "@/lib/money/decimal";
 import { parseFiatInput } from "@/lib/money/input";
 import type { TreasuryBalances } from "@/lib/treasury/balances";
-import type { ChatSwapError, SwapCard } from "@/lib/treasury/chat-swap";
+import type { ChatSwapError, PreviewRefusal, SwapCard } from "@/lib/treasury/chat-swap";
 import { parseCommand, type ChatCommand } from "./parse";
 import { resolveCommand } from "./resolve";
 
@@ -25,6 +25,8 @@ export type ChatReply =
       wantedAtomic: string | null;
       /** What the freelancer has, for "not enough balance" (spec §5.2). Screen amounts, not token units. */
       balances?: Record<PayAsset, string>;
+      /** "Not enough" with what is available worth under the minimum swap: "use full balance" would only be refused again. Unset on tap-time refusals. */
+      balanceBelowMinimum?: true;
     }
   | { kind: "choose"; to: PayAsset; wanted: string | null; options: { from: PayAsset; atomic: string }[] }
   | { kind: "two_step"; from: PayAsset; to: PayAsset; wanted: string | null }
@@ -39,7 +41,7 @@ export type ChatReply =
   | { kind: "read_failed" };
 
 type Preview = { from: PayAsset; to: PayAsset; wanted: bigint | null };
-type PreviewResult = SwapCard | { refused: ChatSwapError; availableSellAtomic: string | null; nextDailyAt: string | null };
+type PreviewResult = SwapCard | PreviewRefusal;
 
 /** What a reply needs from the outside, so the logic runs without a database, a chain or a network. */
 export interface ReplyIo {
@@ -85,6 +87,7 @@ async function previewReply(io: ReplyIo, input: Preview): Promise<ChatReply> {
     const balances = result.refused === "insufficient" ? await io.displayBalances().catch(() => undefined) : undefined;
     return {
       ...(balances ? { balances } : {}),
+      ...(result.balanceBelowMinimum ? { balanceBelowMinimum: true as const } : {}),
       kind: "refused",
       error: result.refused,
       availableSellAtomic: result.availableSellAtomic,

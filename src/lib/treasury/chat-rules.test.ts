@@ -116,8 +116,25 @@ describe("fitChatAmount", () => {
     expect(fit({ dailyLeft: 0n })).toEqual({ refused: "daily_limit" });
   });
 
+  it("says insufficient when a typed amount exceeds a balance worth under US$1", () => {
+    // 0.0177 USD₮ against "25,50".
+    expect(fit({ wanted: 25_500_000n, available: 17_700n })).toEqual({ refused: "insufficient" });
+    // Before the daily limit: no funds is the truer answer.
+    expect(fit({ wanted: 25_500_000n, available: 17_700n, dailyLeft: 0n })).toEqual({ refused: "insufficient" });
+  });
+
+  it("lowers a typed amount to a balance worth at least US$1", () => {
+    expect(fit({ wanted: dollars(300n), available: dollars(1n) })).toEqual({ amount: dollars(1n), limited: "balance" });
+  });
+
+  it("keeps below_minimum for a small typed amount with enough balance, and for no amount with a small balance", () => {
+    expect(fit({ wanted: 500_000n, available: dollars(50n) })).toEqual({ refused: "below_minimum" });
+    expect(fit({ wanted: null, available: 17_700n })).toEqual({ refused: "below_minimum" });
+  });
+
   it("refuses when nothing is available", () => {
     expect(fit({ available: 0n })).toEqual({ refused: "insufficient" });
+    expect(fit({ available: 0n, dailyLeft: 0n })).toEqual({ refused: "insufficient" });
   });
 
   it("keeps a whole-balance amount exact", () => {

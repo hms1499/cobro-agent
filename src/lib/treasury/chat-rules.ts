@@ -45,6 +45,8 @@ export function fitChatAmount(input: {
 }): ChatFit {
   const { from, available, dailyLeft, rates } = input;
   if (available <= 0n) return { refused: "insufficient" };
+  // A typed amount above a balance worth under the minimum is "not enough", not "too small" (and not the daily limit).
+  if (input.wanted !== null && input.wanted > available && usdWad(from, available, rates) < MIN_NOTIONAL_WAD) return { refused: "insufficient" };
   if (dailyLeft < MIN_NOTIONAL_WAD) return { refused: "daily_limit" };
 
   let amount = input.wanted ?? available;

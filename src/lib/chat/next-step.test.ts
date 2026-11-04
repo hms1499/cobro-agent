@@ -38,6 +38,10 @@ describe("refusedActions", () => {
     ]);
   });
 
+  it("offers adding funds, not the full balance, when what is available is under the minimum", () => {
+    expect(refusedActions(refused({ error: "insufficient", balanceBelowMinimum: true }), LOCAL)).toEqual([{ kind: "add_funds" }]);
+  });
+
   it("offers no card retry when either side of the pair is unknown", () => {
     expect(refusedActions(refused({ from: null }), LOCAL)).toEqual([]);
     expect(refusedActions(refused({ to: null, error: "insufficient" }), LOCAL)).toEqual([]);

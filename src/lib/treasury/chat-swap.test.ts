@@ -1147,6 +1147,18 @@ describe("previewChatSwap", () => {
     const empty = harness({ USDT: 1_000_000n });
     expect(await previewChatSwap(empty.deps, user.id, SELL_ASK)).toMatchObject({ refused: "insufficient" });
   });
+
+  it("flags a typed amount over a balance worth under the minimum, and only then", async () => {
+    const user = await seed();
+    const tiny = harness({ USDT: 17_700n });
+    const reply = await previewChatSwap(tiny.deps, user.id, { from: "USDT", to: "WARS", wanted: 25_500_000n });
+    expect(reply).toMatchObject({ refused: "insufficient", balanceBelowMinimum: true });
+    // Enough to sell, but the typed amount is too small: not insufficient, no flag.
+    const ok = harness({ USDT: 50_000_000n });
+    const small = await previewChatSwap(ok.deps, user.id, { from: "USDT", to: "WARS", wanted: 500_000n });
+    expect(small).toMatchObject({ refused: "below_minimum" });
+    expect(small).not.toHaveProperty("balanceBelowMinimum");
+  });
 });
 
 describe("chatSwapStatus", () => {

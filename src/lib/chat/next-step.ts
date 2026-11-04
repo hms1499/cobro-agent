@@ -38,8 +38,12 @@ export function refusedActions(reply: Refused, opts: { usdHome: boolean }): Refu
       actions.push({ kind: "smaller", request: smaller, atomic: reply.availableSellAtomic, from });
     }
   } else if (action === "full_balance") {
-    const full = request(null);
-    if (full) actions.push({ kind: "full_balance", request: full });
+    // A balance under the minimum swap cannot be sold in full: adding funds is the only next step.
+    if (reply.balanceBelowMinimum) actions.push({ kind: "add_funds" });
+    else {
+      const full = request(null);
+      if (full) actions.push({ kind: "full_balance", request: full });
+    }
   } else if (action === "price_rules") {
     // Spec §5.2: "Try again" and the link to the price limit.
     const retry = request(reply.wantedAtomic);
