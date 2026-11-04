@@ -475,10 +475,53 @@ describe("chatSwap", () => {
     expect(poor.deps.rfq.request).not.toHaveBeenCalled();
 
     await setRules(user.id, { dailyMaxUsd: 1 });
+    await countedTrade(user.id, 50);
     const capped = harness(SELL_BALANCES);
     await chatSwap(capped.deps, user.id, { ...SELL, cardId: OTHER_CARD });
     expect(await refusals(user.id)).toEqual(["insufficient", "daily_limit"]);
     expect(capped.deps.rfq.request).not.toHaveBeenCalled();
+  });
+
+  describe("a card over the daily limit at the tap's rate", () => {
+    /** The peso 0.01% stronger than when the card was shown: its 3,200 wARS are now worth a little over US$2. */
+    const MOVED: ReferenceRates = { ...RATES, perUsd: { ...RATES.perUsd, ARS: parseDecimal("1599.84", 18) } };
+
+    it("answers changed while at least the minimum is left, sends no RFQ, and the retry's card fits", async () => {
+      const user = await seed();
+      await setRules(user.id, { dailyMaxUsd: 2 });
+      const { deps, state } = harness(SELL_BALANCES);
+      deps.rates = async () => MOVED;
+      await chatSwap(deps, user.id, SELL);
+
+      expect(await refusals(user.id)).toEqual(["changed"]);
+      expect(deps.rfq.request).not.toHaveBeenCalled();
+      expect(deps.signTx).not.toHaveBeenCalled();
+      expect(state.sent).toEqual([]);
+      expect(await tradesOf(user.id)).toEqual([]);
+
+      const refit = await previewChatSwap(deps, user.id, { from: "WARS", to: "USDT", wanted: SELL.amount });
+      expect(refit).toMatchObject({ limited: "daily", amountAtomic: parseDecimal("3199.68", 18).toString() });
+    });
+
+    it("answers changed with exactly the minimum left", async () => {
+      const user = await seed();
+      await setRules(user.id, { dailyMaxUsd: 1 });
+      const { deps } = harness(SELL_BALANCES);
+      await chatSwap(deps, user.id, SELL);
+      expect(await refusals(user.id)).toEqual(["changed"]);
+      expect(deps.rfq.request).not.toHaveBeenCalled();
+    });
+
+    it("answers daily_limit when under the minimum is left, and sends no RFQ", async () => {
+      const user = await seed();
+      await setRules(user.id, { dailyMaxUsd: 2 });
+      await countedTrade(user.id, 101); // US$0.99 left
+      const { deps, state } = harness(SELL_BALANCES);
+      await chatSwap(deps, user.id, SELL);
+      expect(await refusals(user.id)).toEqual(["daily_limit"]);
+      expect(deps.rfq.request).not.toHaveBeenCalled();
+      expect(state.sent).toEqual([]);
+    });
   });
 
   it("holds back the gas reserve when the sold token also pays for gas", async () => {
@@ -518,7 +561,7 @@ describe("chatSwap", () => {
 
   it("shares the daily limit with automatic swaps", async () => {
     const user = await seed();
-    await countedTrade(user.id, 19_900); // US$199 of the default US$200 is gone
+    await countedTrade(user.id, 19_950); // US$199.50 of the default US$200 is gone
     const refused = harness(SELL_BALANCES);
     await chatSwap(refused.deps, user.id, SELL);
     expect(await refusals(user.id)).toEqual(["daily_limit"]);

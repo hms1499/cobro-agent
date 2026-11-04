@@ -222,7 +222,10 @@ async function swapLocked(tap: Tap, ctx: TreasuryContext): Promise<ChatSwapError
   if (!rates) return "no_quote";
   const usd = usdWad(from, amount, rates);
   if (usd < MIN_NOTIONAL_WAD) return "below_minimum";
-  if (usd > dailyLeftWad(ctx.rules.dailyMaxUsd, await filledUsdWad24h(deps.db, userId, deps.now()))) return "daily_limit";
+  const dailyLeft = dailyLeftWad(ctx.rules.dailyMaxUsd, await filledUsdWad24h(deps.db, userId, deps.now()));
+  // A card lowered to the limit sits exactly on it, so a small rate move lands here. With a swap still possible, the
+  // retry's card fits what is left at today's rate.
+  if (usd > dailyLeft) return dailyLeft >= MIN_NOTIONAL_WAD ? "changed" : "daily_limit";
   const { feeToken, balances } = await ensureFeeToken(deps, ctx, read, { asset: from, amount });
   if (!feeToken) return "needs_gas";
 
