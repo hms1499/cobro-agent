@@ -16,7 +16,7 @@ import type { AppUser } from "@/lib/users/queries";
 import { wouldDoText } from "@/lib/treasury/would-do";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AgentToggle } from "./agent-toggle";
-import { AutoConvertControl } from "./auto-convert-control";
+import { AutoConvertControl, ConfirmEnabled, ConfirmWaiting } from "./auto-convert-control";
 import { loadDecisionText } from "./rules/preview-text";
 
 const CHIPS: Record<AgentState, { icon: typeof Pause; className: string }> = {
@@ -86,12 +86,27 @@ export async function AgentStatus({ user }: { user: AppUser }) {
 /** "Your agent would …" on live balances. Streams on its own so the panel doesn't wait for the balance read; a failure reads as unavailable. */
 function DecisionPreview({ user, row }: { user: AppUser; row: RulesRow }) {
   return (
-    <Suspense fallback={<Skeleton className="h-5 w-full" />}>
+    <Suspense
+      fallback={
+        <>
+          <Skeleton className="h-5 w-full" />
+          <ConfirmWaiting />
+        </>
+      }
+    >
       <DecisionSentence user={user} row={row} />
     </Suspense>
   );
 }
 
 async function DecisionSentence({ user, row }: { user: AppUser; row: RulesRow }) {
-  return <>{wouldDoText(await loadDecisionText(user, row))}</>;
+  // Unavailable copy still enables Confirm: a failed balance read must not strand auto-convert off.
+  return (
+    <>
+      <p role="status" className="w-full text-sm">
+        {wouldDoText(await loadDecisionText(user, row))}
+      </p>
+      <ConfirmEnabled />
+    </>
+  );
 }
