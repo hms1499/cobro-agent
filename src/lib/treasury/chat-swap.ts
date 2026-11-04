@@ -372,7 +372,7 @@ export async function chatSwapStatus(db: Db, userId: string, cardId: string, now
 
 /**
  * The card of a chat swap in progress, so the page can pick it up after a reload on any browser (spec §5.1): one
- * waiting for its receipt, or one holding the wallet lock before it is broadcast. A lock held by the automatic agent
+ * waiting for its receipt, or one still running under the wallet lock before it is broadcast. A lock held by the automatic agent
  * or a withdrawal (not a card id) or an expired lock names nothing.
  */
 export async function activeChatCardId(db: Db, userId: string, now: Date = new Date()): Promise<string | null> {
@@ -382,5 +382,9 @@ export async function activeChatCardId(db: Db, userId: string, now: Date = new D
     .where(and(eq(fxTrades.userId, userId), eq(fxTrades.status, "broadcast"), isNotNull(fxTrades.chatCardId)))
     .orderBy(desc(fxTrades.createdAt))
     .limit(1);
-  return row?.cardId ?? (await liveCardLockHolder(db, userId, now));
+  if (row?.cardId) return row.cardId;
+  const holder = await liveCardLockHolder(db, userId, now);
+  // A card that has ended (filled, failed, refused) can hold the lock a little longer, for example while Textile is told
+  // of the fill. Naming it would show its result a second time after a refresh, so only a card still running counts.
+  return holder && (await chatSwapStatus(db, userId, holder, now)).state === "running" ? holder : null;
 }

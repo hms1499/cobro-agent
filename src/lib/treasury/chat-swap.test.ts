@@ -1074,6 +1074,40 @@ describe("activeChatCardId", () => {
     expect(await activeChatCardId(db, stranger.id, NOW)).toBeNull();
   });
 
+  it("never names a card that has ended but still holds the lock, so its result is not shown twice", async () => {
+    const user = await seed();
+    const wallet = await walletOf(user.id);
+    await acquireWalletLock(db, wallet, CARD, NOW);
+    expect(await activeChatCardId(db, user.id, NOW)).toBe(CARD);
+
+    await db.insert(fxTrades).values({
+      userId: user.id,
+      sellAsset: "WARS",
+      buyAsset: "USDT",
+      sellAmount: "1",
+      buyAmount: "1",
+      swapTxHash: hashOf(1),
+      status: "filled",
+      chatCardId: CARD,
+    });
+    expect(await activeChatCardId(db, user.id, NOW)).toBeNull();
+    await db.delete(fxTrades);
+
+    await db.insert(agentEvents).values({
+      userId: user.id,
+      type: "chat_swap_refused",
+      data: { cardId: CARD, error: "no_quote", from: "WARS", to: "USDT", amount: "1" },
+      createdAt: NOW,
+    });
+    expect(await activeChatCardId(db, user.id, NOW)).toBeNull();
+  });
+
+  it("still names a broadcast trade", async () => {
+    const user = await seed();
+    await db.insert(fxTrades).values({ userId: user.id, sellAsset: "WARS", buyAsset: "USDT", sellAmount: "1", status: "broadcast", chatCardId: CARD });
+    expect(await activeChatCardId(db, user.id, NOW)).toBe(CARD);
+  });
+
   it("names nothing for a lock held by the agent or a withdrawal, or for an expired lock", async () => {
     const user = await seed();
     const wallet = await walletOf(user.id);
