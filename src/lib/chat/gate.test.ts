@@ -42,10 +42,20 @@ describe("chat is refused server-side", () => {
     expect(displayBalances).not.toHaveBeenCalled();
   });
 
-  it("answers paused with no balance read while the treasury is switched off", async () => {
+  it("answers refused/disabled with no balance read while the treasury is switched off", async () => {
     const user = await seedFreelancer(db);
     const { io, displayBalances } = spyIo();
-    expect(await answer({ db, flags: { enabled: false, dryRun: false } }, user.id, "what do i have?", io)).toEqual({ kind: "paused" });
+    expect(await answer({ db, flags: { enabled: false, dryRun: false } }, user.id, "what do i have?", io)).toEqual({
+      kind: "refused", error: "disabled", from: null, to: null, wantedAtomic: null, availableSellAtomic: null, nextDailyAt: null,
+    });
+    expect(displayBalances).not.toHaveBeenCalled();
+  });
+
+  it("answers refused/not_ready with no balance read while there is no ready wallet", async () => {
+    const { io, displayBalances } = spyIo();
+    expect(await answer({ db, flags: on }, "00000000-0000-4000-8000-000000000000", "what do i have?", io)).toEqual({
+      kind: "refused", error: "not_ready", from: null, to: null, wantedAtomic: null, availableSellAtomic: null, nextDailyAt: null,
+    });
     expect(displayBalances).not.toHaveBeenCalled();
   });
 

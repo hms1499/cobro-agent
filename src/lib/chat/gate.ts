@@ -10,15 +10,20 @@ export interface GateDeps {
   flags: { enabled: boolean; dryRun: boolean };
 }
 
+const NO_CARD = { from: null, to: null, wantedAtomic: null, availableSellAtomic: null, nextDailyAt: null } as const;
+
 /**
- * Spec §3.3, shared by the message and the card action: nothing is answered while the treasury is switched off or the
- * agent is paused. TREASURY_DRY_RUN is not checked here: chat still answers and shows the card, and only a tap refuses.
- * A user with no ready wallet reads as paused too: there is nothing to chat about yet.
+ * Spec §3.3, shared by the message and the card action: nothing is answered while the treasury is switched off, the
+ * wallet is not ready or the agent is paused, and each says so truthfully. TREASURY_ENABLED=false answers a refusal
+ * `disabled` and a user with no ready wallet `not_ready`; only a Paused agent answers `paused`, the one case the Resume
+ * button fixes. The null card fields mean no retry shows. TREASURY_DRY_RUN is not checked here: chat still answers and
+ * shows the card, and only a tap refuses.
  */
 export async function chatGate(deps: GateDeps, userId: string): Promise<{ address: Address } | { reply: ChatReply }> {
-  if (!deps.flags.enabled) return { reply: { kind: "paused" } };
+  if (!deps.flags.enabled) return { reply: { kind: "refused", error: "disabled", ...NO_CARD } };
   const ctx = await loadTreasuryContext(deps.db, userId);
-  if (!ctx || !ctx.rules.enabled) return { reply: { kind: "paused" } };
+  if (!ctx) return { reply: { kind: "refused", error: "not_ready", ...NO_CARD } };
+  if (!ctx.rules.enabled) return { reply: { kind: "paused" } };
   return { address: ctx.address };
 }
 
