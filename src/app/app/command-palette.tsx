@@ -29,7 +29,7 @@ const ENTRIES: { id: string; group: Command["group"]; label: MessageKey; keyword
   { id: "open", group: "actions", label: "palette.openInvoices", keywords: "palette.kw.open", href: "/app/invoices?status=open", icon: Clock },
   { id: "overdue", group: "actions", label: "palette.overdueInvoices", keywords: "palette.kw.overdue", href: "/app/invoices?status=overdue", icon: WarningCircle },
   { id: "withdraw", group: "actions", label: "withdraw.title", keywords: "palette.kw.withdraw", href: "/app/withdraw", icon: Wallet },
-  { id: "history", group: "actions", label: "home.recent.agentHistory", keywords: "palette.kw.history", href: "/app/rules#history", icon: ClockCounterClockwise },
+  { id: "history", group: "actions", label: "home.recent.agentHistory", keywords: "palette.kw.history", href: "/app/rules/history", icon: ClockCounterClockwise },
   { id: "addresses", group: "actions", label: "addresses.title", keywords: "palette.kw.addresses", href: "/app/settings/addresses", icon: AddressBook },
 ];
 

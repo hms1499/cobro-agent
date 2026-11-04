@@ -1,9 +1,9 @@
 // src/app/app/activity-feed.tsx
 import { ArrowSquareOut, CheckCircle, Clock, Info, WarningCircle } from "@phosphor-icons/react/ssr";
+import Link from "next/link";
 import { AssetTrail } from "@/components/currency-icon";
 import { EmptyState } from "@/components/empty-state";
 import { ActivityIllustration } from "@/components/illustrations";
-import { ScrollToHash } from "@/components/scroll-to-hash";
 import { t } from "@/i18n";
 import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import { getDb } from "@/lib/db/client";
@@ -21,12 +21,14 @@ export const TONES: Record<EventTone, { icon: typeof Info; className: string }> 
   info: { icon: Info, className: "text-muted-foreground" },
 };
 
-/** The Agent tab's history (spec §4.3): what happened and, under "Why?", why; routine events need no "Why?". */
-export async function ActivityFeed({ user, limit = 40 }: { user: AppUser; limit?: number }) {
+/**
+ * The agent's history (spec §4.3): what happened and, under "Why?", why; routine events need no "Why?".
+ * `viewAll` adds a link to the full list, for the short version on the Agent tab.
+ */
+export async function ActivityFeed({ user, limit = 40, viewAll = false }: { user: AppUser; limit?: number; viewAll?: boolean }) {
   const [events, rates] = await Promise.all([listEvents(getDb(), user.id, limit), getReferenceRatesOrNull()]);
   return (
-    <section id="history" aria-labelledby="activity-heading" className="flex scroll-mt-6 flex-col gap-3">
-      <ScrollToHash id="history" />
+    <section aria-labelledby="activity-heading" className="flex flex-col gap-3">
       <h2 id="activity-heading" className="text-lg font-semibold">
         {t("activity.title")}
       </h2>
@@ -78,6 +80,14 @@ export async function ActivityFeed({ user, limit = 40 }: { user: AppUser; limit?
             );
           })}
         </ul>
+      )}
+      {viewAll && events.length > 0 && (
+        <Link
+          href="/app/rules/history"
+          className="inline-flex min-h-11 w-fit items-center text-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          {t("activity.viewAll")}
+        </Link>
       )}
     </section>
   );
