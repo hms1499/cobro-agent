@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GROQ_MODEL, interpretWithGroq } from "./groq";
 
 function reply(content: string, status = 200): typeof fetch {
@@ -8,6 +8,14 @@ function reply(content: string, status = 200): typeof fetch {
 const run = (content: string) => interpretWithGroq("hi", { apiKey: "k", fetchImpl: reply(content) });
 
 describe("interpretWithGroq", () => {
+  let errorSpy: ReturnType<typeof vi.spyOn>;
+  beforeEach(() => {
+    errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+  afterEach(() => {
+    errorSpy.mockRestore();
+  });
+
   it("sends only the message text, with a JSON response format", async () => {
     let url = "";
     let init: RequestInit | undefined;
@@ -22,11 +30,13 @@ describe("interpretWithGroq", () => {
     const body = JSON.parse(init!.body as string);
     expect(body.model).toBe(GROQ_MODEL);
     expect(body.temperature).toBe(0);
-    expect(body.max_tokens).toBe(100);
+    expect(body.max_tokens).toBe(300);
     expect(body.response_format).toEqual({ type: "json_object" });
     expect(body.messages).toHaveLength(2);
     expect(body.messages[0].role).toBe("system");
     expect(body.messages[1]).toEqual({ role: "user", content: "pasame 20 a pesos" });
+    expect(body.model).toBe("openai/gpt-oss-20b");
+    expect(body.messages[0].content).toContain('"dollars" means USDT unless the user names USAT');
     expect(init!.body as string).not.toMatch(/0x[0-9a-fA-F]{40}/);
     expect(Object.keys(body).sort()).toEqual(["max_tokens", "messages", "model", "response_format", "temperature"]);
   });
@@ -104,5 +114,37 @@ describe("interpretWithGroq", () => {
     expect(out).toBeNull();
     const clean = await run('{"intent":"swap","from":"USDT","to":"WARS","amount":"5"}');
     expect(Object.keys(clean!).sort()).toEqual(["amount", "from", "kind", "to"]);
+  });
+
+  it("logs a 404 with its status only, never the message or the key", async () => {
+    const fetchImpl = (async () =>
+      new Response('{"error":{"code":"model_not_found"}}', { status: 404 })) as typeof fetch;
+    const out = await interpretWithGroq("pasame 20 a pesos", { apiKey: "secret-key", fetchImpl });
+    expect(out).toBeNull();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const logged = JSON.stringify(errorSpy.mock.calls);
+    expect(logged).toContain("404");
+    expect(logged).not.toContain("pasame");
+    expect(logged).not.toContain("secret-key");
+    expect(logged).not.toContain("model_not_found");
+  });
+
+  it("logs a thrown error and a schema miss without content", async () => {
+    const boom = (async () => {
+      throw new TypeError("secret-key pasame 20");
+    }) as typeof fetch;
+    expect(await interpretWithGroq("pasame 20", { apiKey: "secret-key", fetchImpl: boom })).toBeNull();
+    expect(
+      await interpretWithGroq("pasame 20", {
+        apiKey: "secret-key",
+        fetchImpl: reply('{"intent":"swap","from":"USDC","to":"WARS","amount":"5"}'),
+      }),
+    ).toBeNull();
+    expect(errorSpy).toHaveBeenCalledTimes(2);
+    const logged = JSON.stringify(errorSpy.mock.calls);
+    expect(logged).toContain("TypeError");
+    expect(logged).not.toContain("pasame");
+    expect(logged).not.toContain("secret-key");
+    expect(logged).not.toContain("USDC");
   });
 });
