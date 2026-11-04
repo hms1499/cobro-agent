@@ -11,6 +11,7 @@ import type { ReferenceRates } from "@/lib/fx/rates";
 import { TextileError, type FirmQuote, type RfqOutcome } from "@/lib/fx/rfq";
 import { parseDecimal } from "@/lib/money/decimal";
 import type { TreasuryBalances } from "./balances";
+import { activeChatCardId } from "./chat-swap";
 import {
   engineInput,
   executeQuote,
@@ -809,6 +810,43 @@ describe("rules that change between the first read and the lock", () => {
     changeInGap(deps, user.id, { maxSlippageBps: 10 });
     expect(await runTreasuryForUser(deps, user.id)).toEqual({ userId: user.id, outcome: "waiting", detail: "price" });
     expect(deps.signTx).not.toHaveBeenCalled();
+  });
+});
+
+describe("the wallet lock's holder", () => {
+  /** A runHolder() value: a UUID whose version digit is 8. A chat card's id has a 4 there. */
+  const RUN_HOLDER = /^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  const seenDuringRun = async (userId: string) => {
+    const { walletId } = (await loadTreasuryContext(db, userId))!;
+    return { holder: await walletLockHolder(db, walletId), card: await activeChatCardId(db, userId, NOW) };
+  };
+
+  it("runTreasuryForUser locks with a runHolder value, which a page does not read as a card", async () => {
+    const user = await freelancer();
+    const { deps } = harness({ WARS: pesos(3_200n), ...gas });
+    const read = deps.chain.readBalances;
+    let seen: Awaited<ReturnType<typeof seenDuringRun>> | undefined;
+    deps.chain.readBalances = async (owner) => {
+      seen = await seenDuringRun(user.id);
+      return read(owner);
+    };
+    await runTreasuryForUser(deps, user.id);
+    expect(seen?.holder).toMatch(RUN_HOLDER);
+    expect(seen?.card).toBeNull();
+  });
+
+  it("reconcileWallets locks with a runHolder value, which a page does not read as a card", async () => {
+    const user = await freelancer();
+    await db.insert(treasuryTxs).values({ userId: user.id, kind: "approve", nonce: 1, hash: hashOf(44), raw: "0x44", feeToken: "USDT" });
+    const { deps } = harness({});
+    let seen: Awaited<ReturnType<typeof seenDuringRun>> | undefined;
+    deps.chain.receipt = async () => {
+      seen = await seenDuringRun(user.id);
+      return "success";
+    };
+    expect(await reconcileWallets(deps)).toEqual({ settled: 1, stillPending: 0, errors: 0 });
+    expect(seen?.holder).toMatch(RUN_HOLDER);
+    expect(seen?.card).toBeNull();
   });
 });
 

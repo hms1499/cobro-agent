@@ -452,6 +452,56 @@ describe("chatSwap", () => {
     expect(await refusals(user.id)).toEqual([]);
   });
 
+  describe("the database's one trade per card", () => {
+    const rowFor = (userId: string) =>
+      ({ userId, chatCardId: CARD, sellAsset: "WARS", buyAsset: "USDT", sellAmount: "1", status: "no_quote" }) as const;
+    const swapRows = (userId: string) => db.select().from(treasuryTxs).where(eq(treasuryTxs.userId, userId));
+
+    it("refuses a second trade row with the same card id, whoever it belongs to", async () => {
+      const user = await seed();
+      const stranger = await seed();
+      await db.insert(fxTrades).values(rowFor(user.id));
+      await expect(db.insert(fxTrades).values(rowFor(user.id))).rejects.toMatchObject({ cause: { code: "23505" } });
+      await expect(db.insert(fxTrades).values(rowFor(stranger.id))).rejects.toMatchObject({ cause: { code: "23505" } });
+      expect(await tradesOf(user.id)).toHaveLength(1);
+      expect(await tradesOf(stranger.id)).toEqual([]);
+    });
+
+    it("sends nothing when a row for this card appears after the card was checked", async () => {
+      const user = await seed();
+      logged();
+      const { deps, state } = harness(SELL_BALANCES);
+      const sign = deps.signTx;
+      deps.signTx = async (...args) => {
+        await db.insert(fxTrades).values(rowFor(user.id));
+        return sign(...args);
+      };
+      await chatSwap(deps, user.id, SELL);
+
+      expect(deps.rfq.request).toHaveBeenCalledTimes(1);
+      expect(state.sent).toEqual([]);
+      expect(await swapRows(user.id)).toEqual([]);
+      expect(await tradesOf(user.id)).toMatchObject([{ status: "no_quote", swapTxHash: null }]);
+      expect(await refusals(user.id)).toEqual(["unconfirmed"]);
+      expect(await walletHolder(user.id)).toBeNull();
+    });
+
+    it("sends nothing and cancels the quote when another user's trade already has the card id", async () => {
+      const user = await seed();
+      const stranger = await seed();
+      logged();
+      await db.insert(fxTrades).values(rowFor(stranger.id));
+      const { deps, state } = harness(SELL_BALANCES);
+      await chatSwap(deps, user.id, SELL);
+
+      expect(state.sent).toEqual([]);
+      expect(await swapRows(user.id)).toEqual([]);
+      expect(await tradesOf(user.id)).toEqual([]);
+      expect(deps.rfq.cancel).toHaveBeenCalledWith("rfq_1", "claim_1");
+      expect(await refusals(user.id)).toEqual(["unconfirmed"]);
+    });
+  });
+
   it("adds no refusal when a finished card is replayed after the agent is paused or the wallet is busy", async () => {
     const user = await seed();
     const { deps } = harness(SELL_BALANCES);
@@ -539,15 +589,17 @@ describe("chatSwap", () => {
     expect(deps.rfq.request).not.toHaveBeenCalled();
   });
 
-  it("answers no_quote when the rates cannot be read", async () => {
+  it("answers no_quote when the rates cannot be read, logging only the user and a tag", async () => {
     const user = await seed();
+    const errors = logged();
     const { deps } = harness(SELL_BALANCES);
     deps.rates = async () => {
-      throw new Error("rates down");
+      throw new Error("rates down at https://rates/secret-key");
     };
     await chatSwap(deps, user.id, SELL);
     expect(await refusals(user.id)).toEqual(["no_quote"]);
     expect(deps.rfq.request).not.toHaveBeenCalled();
+    expect(errors.mock.calls).toEqual([[`Reference rates for ${user.id} failed:`, "Error"]]);
   });
 
   it("answers needs_gas when no token can pay for gas and the drip does not help", async () => {
@@ -1055,6 +1107,17 @@ describe("previewChatSwap", () => {
       throw new Error("rates down");
     };
     expect(await previewChatSwap(deps, user.id, SELL_ASK)).toEqual(noQuote);
+  });
+
+  it("logs only the user and a tag when the rates cannot be read", async () => {
+    const user = await seed();
+    const errors = logged();
+    const { deps } = harness(SELL_BALANCES);
+    deps.rates = async () => {
+      throw new Error("rates down at https://rates/secret-key");
+    };
+    await previewChatSwap(deps, user.id, SELL_ASK);
+    expect(errors.mock.calls).toEqual([[`Reference rates for ${user.id} failed:`, "Error"]]);
   });
 
   it("sells the exact atomic balance when no amount is given", async () => {

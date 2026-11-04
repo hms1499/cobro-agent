@@ -93,6 +93,14 @@ export interface ChatSwapInput {
 /** Lowercase, as crypto.randomUUID writes it: the card id is compared as text in event data, and reaches uuid columns. */
 export const CARD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+/** The reference rates, or null when they cannot be read, for the caller to answer no_quote. Only a tag is logged. */
+function ratesOrNull(deps: Pick<ExecutorDeps, "rates">, userId: string) {
+  return deps.rates().catch((error) => {
+    console.error(`Reference rates for ${userId} failed:`, safeErrorTag(error));
+    return null;
+  });
+}
+
 /** Spec §5: the card, from Textile's unlocked estimate. It only reads; the tap checks everything again. */
 export async function previewChatSwap(
   deps: ChatPreviewDeps,
@@ -112,7 +120,7 @@ export async function previewChatSwap(
   if (!isDirectPair(from, to)) return refused("unsupported_pair");
 
   const balances = await deps.chain.readBalances(ctx.address);
-  const rates = await deps.rates().catch(() => null);
+  const rates = await ratesOrNull(deps, userId);
   if (!rates) return refused("no_quote");
   const now = deps.now();
   const nextDailyAt = async () => (await nextDailyCapacityAt(deps.db, userId, now))?.toISOString() ?? null;
@@ -218,7 +226,7 @@ async function swapLocked(tap: Tap, ctx: TreasuryContext): Promise<ChatSwapError
 
   const read = await deps.chain.readBalances(ctx.address);
   if (amount > chatAvailable(from, read)) return "insufficient";
-  const rates = await deps.rates().catch(() => null);
+  const rates = await ratesOrNull(deps, userId);
   if (!rates) return "no_quote";
   const usd = usdWad(from, amount, rates);
   if (usd < MIN_NOTIONAL_WAD) return "below_minimum";
