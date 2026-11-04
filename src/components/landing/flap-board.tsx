@@ -6,6 +6,8 @@ import { LANDING_EXAMPLES, type LandingExample } from "@/lib/landing/examples";
 import { flapCells } from "@/lib/landing/flap";
 import { formatMoney } from "@/lib/money/format";
 
+/** The first turn comes soon after load, so the board visibly moves before a visitor reads on. */
+const FIRST_TURN_MS = 1000;
 const CYCLE_MS = 5600;
 const ROW_DELAY_MS = 450;
 const GLYPH_MS = 70;
@@ -25,8 +27,9 @@ const settled = (example: LandingExample) => Object.fromEntries(ROWS.map(({ key 
 
 /**
  * The landing hero's split-flap board (landing spec §3.3): an example payment and how the agent splits
- * it. The first example is rendered settled on the server; the cells turn over every few seconds after
- * hydration, never under reduced motion, and pause while the board is off-screen or the tab is hidden.
+ * it. The first example is rendered settled on the server; the cells first turn over about a second
+ * after hydration and then every few seconds, never under reduced motion, and pause while the board is
+ * off-screen or the tab is hidden.
  */
 export function FlapBoard() {
   const [index, setIndex] = useState(0);
@@ -94,7 +97,10 @@ export function FlapBoard() {
     };
     const sync = () => {
       const run = visible && document.visibilityState === "visible";
-      if (run && !cycle) cycle = setInterval(advance, CYCLE_MS);
+      if (run && !cycle) {
+        cycle = setInterval(advance, CYCLE_MS);
+        later(advance, FIRST_TURN_MS);
+      }
       if (!run && cycle) stop();
     };
 
