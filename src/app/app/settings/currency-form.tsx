@@ -26,6 +26,7 @@ export function CurrencyForm({
   reserve,
   consequences,
   minutes,
+  convertsAlone,
 }: {
   current: HomeCurrency;
   /** The saved reserve, in `current`. */
@@ -33,6 +34,8 @@ export function CurrencyForm({
   /** Per target currency, computed on the server from live balances. */
   consequences: Record<HomeCurrency, SwitchConsequences>;
   minutes: number;
+  /** False while the agent is paused or auto-convert is off: it will not do what the lines below would promise. */
+  convertsAlone: boolean;
 }) {
   const [state, action] = useActionState(changeHomeCurrencyAction, IDLE);
   const [home, setHome] = useState<HomeCurrency>(current);
@@ -99,9 +102,13 @@ export function CurrencyForm({
           <p className="font-medium">{t("settings.currencyConfirmTitle", { currency: t(`currency.${home}` as const) })}</p>
           <ul className="flex list-disc flex-col gap-1 pl-5 text-sm">
             {consequences[home].converts.map((c) => (
-              <li key={c.asset}>{t("settings.currencyConvertLine", { amount: formatMoney(c.amount, c.currency), minutes })}</li>
+              <li key={c.asset}>
+                {convertsAlone
+                  ? t("settings.currencyConvertLine", { amount: formatMoney(c.amount, c.currency), minutes })
+                  : t("settings.currencyStaysLine", { amount: formatMoney(c.amount, c.currency) })}
+              </li>
             ))}
-            {home !== "USD" && <li>{t("settings.currencyBuyLine", { currency: home })}</li>}
+            {home !== "USD" && convertsAlone && <li>{t("settings.currencyBuyLine", { currency: home })}</li>}
             {home === "USD" && consequences.USD.converts.length === 0 && <li>{t("settings.currencyNothing")}</li>}
           </ul>
           <div className="flex flex-col gap-2 sm:flex-row">

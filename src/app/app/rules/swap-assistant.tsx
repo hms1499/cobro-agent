@@ -17,7 +17,6 @@ import { ASSET_DENOMINATION, PAY_ASSETS, type PayAsset } from "@/lib/money/curre
 import { displayAmount } from "@/lib/money/display";
 import { formatTokenAmount } from "@/lib/money/format";
 import type { ChatSwapStatus, SwapCard as CardData } from "@/lib/treasury/chat-swap";
-import { turnAutoConvertOn } from "../actions";
 import { previewCardAction, readChatSwap, sendChatMessage, startChatSwap } from "./chat-actions";
 import { fiat, SwapCard, type CardState } from "./swap-card";
 
@@ -555,11 +554,10 @@ function SuccessView({ item, locked, onSave }: { item: Extract<Item, { kind: "su
       {status.turnedOff && (
         <div className="flex flex-col gap-2 rounded-lg bg-highlight p-3">
           <p>{t("chat.turnedOffNow")}</p>
-          <form action={turnAutoConvertOn}>
-            <Button type="submit" variant="outline" size="lg" className="min-h-11">
-              {t("agent.autoOn")}
-            </Button>
-          </form>
+          {/* One confirmation path: the status panel says what the agent would do before it turns on. */}
+          <a href="#auto-convert" className={linkClass}>
+            {t("agent.autoOn")}
+          </a>
         </div>
       )}
       <details className="text-sm">

@@ -15,6 +15,7 @@ import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import { getDb } from "@/lib/db/client";
 import { getReferenceRatesOrNull } from "@/lib/fx/rates";
 import { HOME_CURRENCIES, type HomeCurrency } from "@/lib/money/currencies";
+import { agentConvertsAlone } from "@/lib/treasury/approvals";
 import { readDisplayBalances } from "@/lib/treasury/live";
 import { getRulesRow } from "@/lib/treasury/request-reads";
 import { switchConsequences, type SwitchConsequences } from "@/lib/users/home-currency";
@@ -121,5 +122,7 @@ async function Currency({ user, current }: { user: AppUser; current: HomeCurrenc
   const consequences = Object.fromEntries(
     HOME_CURRENCIES.map((code) => [code, balances ? switchConsequences(code, balances, rates) : none]),
   ) as Record<HomeCurrency, SwitchConsequences>;
-  return <CurrencyForm current={current} reserve={row?.reserveAmount ?? "0"} consequences={consequences} minutes={CHECK_INTERVAL_MINUTES} />;
+  return <CurrencyForm current={current} reserve={row?.reserveAmount ?? "0"} consequences={consequences} minutes={CHECK_INTERVAL_MINUTES}
+      convertsAlone={row ? agentConvertsAlone(row) : true}
+    />;
 }

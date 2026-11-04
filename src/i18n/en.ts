@@ -201,6 +201,7 @@ export const en = {
   "settings.currencySaved": "Saved.",
   "settings.currencyConfirmTitle": "Change your currency to {currency}?",
   "settings.currencyConvertLine": "{amount} will be converted to dollars by your agent within about {minutes} minutes. Withdraw it first if you want to keep it.",
+  "settings.currencyStaysLine": "{amount} stays as it is while your agent isn't converting on its own.",
   "settings.currencyBuyLine": "Your agent will buy {currency} up to your reserve, asking you first if you chose that on the Agent page.",
   "settings.currencyNothing": "You hold no pesos or reais, so nothing will be converted.",
   "settings.currencyYes": "Yes, change currency",
@@ -691,6 +692,9 @@ export const en = {
   "agent.help.paused": "Your agent, chat and swaps are paused. You can still withdraw.",
   "agent.help.auto_off": "Your agent won't convert anything on its own. New payments stay as they arrive. You can still swap in chat.",
   "agent.autoOn": "Turn auto-convert on",
+  "agent.wouldDo": "Your agent would {what}",
+  "agent.turnOnConfirm": "Yes, turn it on",
+  "agent.turnOnCancel": "Not now",
   "agent.help.off": "The agent is switched off for everyone while we finish testing.",
   "agent.guardrails":
     "It can convert between your currencies on Textile and send money only to your own wallet: at most {perTrade} per conversion and {daily} a day.",

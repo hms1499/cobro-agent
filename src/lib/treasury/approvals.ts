@@ -1,4 +1,4 @@
-import type { ApprovalMode, FxIntentRow } from "@/lib/db/schema";
+import type { ApprovalMode, FxIntentRow, RulesRow } from "@/lib/db/schema";
 import type { ConvertReason } from "./engine";
 
 /** Trade approvals spec §2, in the order the rules page lists them. */
@@ -55,4 +55,9 @@ export function parseProposalForm(fields: Record<string, string>): { intentId: s
 /** What proposed, approved and dismissed events carry, in the same shape as the executor's decision data. */
 export function intentEventData(intent: Pick<FxIntentRow, "fromAsset" | "toAsset" | "amountAtomic" | "reason">) {
   return { from: intent.fromAsset, to: intent.toAsset, amount: intent.amountAtomic, reason: intent.reason };
+}
+
+/** Cobro chat-swap spec §3.1: the agent converts on its own only while it is on and auto-convert has not been turned off. */
+export function agentConvertsAlone(rules: Pick<RulesRow, "enabled" | "autoPausedAt">): boolean {
+  return rules.enabled && rules.autoPausedAt === null;
 }
