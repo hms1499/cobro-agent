@@ -1,9 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
+import type { ReferenceRates } from "@/lib/fx/rates";
+import { RATE_ONE } from "@/lib/money/decimal";
 import type { TreasuryBalances } from "@/lib/treasury/balances";
 import type { SwapCard } from "@/lib/treasury/chat-swap";
+import { twoStepRequest } from "./next-step";
 import { cardReply, chatReply, MAX_CHAT_TEXT, type ReplyIo } from "./reply";
 
 const RATES = { USD: 1, ARS: 1000, BRL: 5 } as never;
+const REAL_RATES: ReferenceRates = { perUsd: { ARS: 1000n * RATE_ONE, BRL: 5n * RATE_ONE }, fetchedAt: 0 };
 const zero = { USAT: 0n, USDT: 0n, WARS: 0n, WBRL: 0n, USDC: 0n } as unknown as TreasuryBalances;
 const card: SwapCard = {
   cardId: "11111111-1111-4111-8111-111111111111",
@@ -73,12 +77,52 @@ describe("chatReply", () => {
 });
 
 describe("a failed read", () => {
-  const down = io({ balances: async () => { throw new Error("rpc down"); }, displayBalances: async () => { throw new Error("rpc down"); } });
-  it("names no pair for a balance question or a swap without a source", async () => {
+  const boom = async () => { throw new Error("rpc https://node/secret-key failed"); };
+  const down = io({ balances: boom, displayBalances: boom });
+
+  it.each([
+    ["a balance question", "what do i have?"],
+    ["save in dollars", "save in dollars"],
+    ["a swap without a source", "swap 25 to wars"],
+  ])("answers %s with the plain failure, never a claim about the market", async (_label, message) => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(await chatReply("what do i have?", down)).toMatchObject({ kind: "refused", from: null, to: null, wantedAtomic: null });
-    expect(await chatReply("swap 25 to wars", down)).toMatchObject({ kind: "refused", from: null, to: "WARS", wantedAtomic: null });
+    const reply = await chatReply(message, down);
+    expect(reply).toEqual({ kind: "read_failed" });
+    expect(JSON.stringify(reply)).not.toContain("secret-key");
+    expect(JSON.stringify(spy.mock.calls)).not.toContain("secret-key");
     spy.mockRestore();
+  });
+
+  it("answers save in dollars with the plain failure when its preview throws", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const held = { ...zero, WBRL: 50n * 10n ** 18n };
+    expect(await chatReply("save in dollars", io({ balances: async () => held, rates: async () => REAL_RATES, preview: boom }))).toEqual({ kind: "read_failed" });
+    spy.mockRestore();
+  });
+
+  it("keeps no_quote and the pair for a swap that named both tokens, so Try again still works", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reply = await chatReply("swap 25 usdt to wars", down);
+    expect(reply).toEqual({
+      kind: "refused", error: "no_quote", availableSellAtomic: null, nextDailyAt: null, from: "USDT", to: "WARS", wantedAtomic: "25000000",
+    });
+    expect(JSON.stringify(reply)).not.toContain("secret-key");
+    spy.mockRestore();
+  });
+});
+
+describe("two steps", () => {
+  it("carries the typed amount, and the first leg's card asks for it in the source token", async () => {
+    const deps = io();
+    const reply = await chatReply("swap 100 wars to wbrl", deps);
+    expect(reply).toEqual({ kind: "two_step", from: "WARS", to: "WBRL", wanted: "100" });
+    expect(deps.preview).not.toHaveBeenCalled();
+    await cardReply(twoStepRequest(reply as Extract<typeof reply, { kind: "two_step" }>), deps);
+    expect(deps.preview).toHaveBeenCalledWith({ from: "WARS", to: "USDT", wanted: 100n * 10n ** 18n });
+  });
+
+  it("refuses an unreadable amount before offering a first leg", async () => {
+    expect(await chatReply("swap 1.500 wars to wbrl", io())).toEqual({ kind: "bad_amount" });
   });
 });
 

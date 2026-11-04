@@ -19,7 +19,7 @@ export type ChatReply =
       error: ChatSwapError;
       availableSellAtomic: string | null;
       nextDailyAt: string | null;
-      /** The pair and amount to retry with. Null when the message named none (a failed read): no card retry then. */
+      /** The pair and amount to retry with. Null when a swap ended after a reload, with no card: no card retry then. */
       from: PayAsset | null;
       to: PayAsset | null;
       wantedAtomic: string | null;
@@ -27,14 +27,16 @@ export type ChatReply =
       balances?: Record<PayAsset, string>;
     }
   | { kind: "choose"; to: PayAsset; wanted: string | null; options: { from: PayAsset; atomic: string }[] }
-  | { kind: "two_step"; from: PayAsset; to: PayAsset }
+  | { kind: "two_step"; from: PayAsset; to: PayAsset; wanted: string | null }
   | { kind: "nothing_to_swap"; to: PayAsset; balances: Record<PayAsset, string> }
   | { kind: "already_dollars" }
   | { kind: "same_token" }
   | { kind: "bad_amount" }
   | { kind: "balances"; balances: Record<PayAsset, string> }
   | { kind: "help" }
-  | { kind: "paused" };
+  | { kind: "paused" }
+  /** A read failed on a message with no whole pair: nothing to retry and nothing known about the market. It carries no detail on purpose. */
+  | { kind: "read_failed" };
 
 type Preview = { from: PayAsset; to: PayAsset; wanted: bigint | null };
 type PreviewResult = SwapCard | { refused: ChatSwapError; availableSellAtomic: string | null; nextDailyAt: string | null };
@@ -51,15 +53,20 @@ export interface ReplyIo {
   interpret(text: string): Promise<ChatCommand | null>;
 }
 
-/** A read that failed must not reach the client as an exception. Only a tag is logged, never a message. */
-function failed(pair: { from: PayAsset | null; to: PayAsset | null }, wanted: bigint | null, error: unknown): ChatReply {
+/**
+ * A read that failed must not reach the client as an exception. Only a tag is logged, never a message. With a whole
+ * pair the reply is no_quote and its retry; without one, "nobody can fill this amount" would be untrue.
+ */
+function failed({ from, to }: { from: PayAsset | null; to: PayAsset | null }, wanted: bigint | null, error: unknown): ChatReply {
   console.error("Chat reply read failed:", safeErrorTag(error));
+  if (!from || !to) return { kind: "read_failed" };
   return {
     kind: "refused",
     error: "no_quote",
     availableSellAtomic: null,
     nextDailyAt: null,
-    ...pair,
+    from,
+    to,
     wantedAtomic: wanted === null ? null : wanted.toString(),
   };
 }

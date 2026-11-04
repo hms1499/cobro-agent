@@ -18,7 +18,7 @@ const isPositive = (atomic: string | null): atomic is string => atomic !== null 
 
 /**
  * The next steps for a refused reply. "Try again" keeps the pair and the typed amount. With either side of the pair
- * unknown (a failed read of a message that named none) no card can be asked for, so only links remain. A dollars
+ * unknown (a swap picked up after a reload, with no card) no card can be asked for, so only links remain. A dollars
  * freelancer has no rules form (/app/rules/edit sends them back), so the links to it are left out.
  */
 export function refusedActions(reply: Refused, opts: { usdHome: boolean }): RefusedAction[] {
@@ -60,7 +60,7 @@ export function chooseRequest(reply: Extract<ChatReply, { kind: "choose" }>, fro
   return { from, to: reply.to, amountText: reply.wanted, wantedAtomic: null };
 }
 
-/** `two_step`: the first leg is the source to USDT, for the whole balance. */
+/** `two_step`: the first leg is the source to USDT, for the amount typed (text, not atomic) or else the whole balance. */
 export function twoStepRequest(reply: Extract<ChatReply, { kind: "two_step" }>): CardRequest {
-  return { from: reply.from, to: "USDT", amountText: null, wantedAtomic: null };
+  return { from: reply.from, to: "USDT", amountText: reply.wanted, wantedAtomic: null };
 }

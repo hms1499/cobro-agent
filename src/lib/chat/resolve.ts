@@ -13,7 +13,7 @@ import type { ChatCommand } from "./parse";
 export type ResolvedCommand =
   | { kind: "card"; from: PayAsset; to: PayAsset; wanted: bigint | null }
   | { kind: "choose"; to: PayAsset; wanted: string | null; options: { from: PayAsset; atomic: string }[] }
-  | { kind: "two_step"; from: PayAsset; to: PayAsset }
+  | { kind: "two_step"; from: PayAsset; to: PayAsset; wanted: string | null }
   | { kind: "nothing_to_swap"; to: PayAsset }
   | { kind: "already_dollars" }
   | { kind: "same_token" }
@@ -43,7 +43,7 @@ function resolveSwap(command: Extract<ChatCommand, { kind: "swap" }>, ctx: Ctx):
 
   if (from) {
     if (from === to) return { kind: "same_token" };
-    if (!isDirectPair(from, to)) return { kind: "two_step", from, to };
+    if (!isDirectPair(from, to)) return { kind: "two_step", from, to, wanted: command.amount };
     return { kind: "card", from, to, wanted: value === null ? null : parseDecimal(value, TOKENS[from].decimals) };
   }
 

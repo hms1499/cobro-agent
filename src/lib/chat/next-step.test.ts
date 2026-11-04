@@ -76,10 +76,19 @@ describe("tap requests", () => {
   });
 
   it("two steps start with the source to USDT, whole balance", () => {
-    expect(twoStepRequest({ kind: "two_step", from: "WARS", to: "WBRL" })).toEqual({
+    expect(twoStepRequest({ kind: "two_step", from: "WARS", to: "WBRL", wanted: null })).toEqual({
       from: "WARS",
       to: "USDT",
       amountText: null,
+      wantedAtomic: null,
+    });
+  });
+
+  it("two steps keep the typed amount for the first leg", () => {
+    expect(twoStepRequest({ kind: "two_step", from: "WARS", to: "WBRL", wanted: "100" })).toEqual({
+      from: "WARS",
+      to: "USDT",
+      amountText: "100",
       wantedAtomic: null,
     });
   });

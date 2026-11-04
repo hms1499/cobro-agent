@@ -56,7 +56,16 @@ describe("resolveCommand swap without a source", () => {
 
 describe("resolveCommand named source", () => {
   it("wARS to wBRL takes two steps", () => {
-    expect(run({ kind: "swap", from: "WARS", to: "WBRL", amount: null }, {})).toEqual({ kind: "two_step", from: "WARS", to: "WBRL" });
+    expect(run({ kind: "swap", from: "WARS", to: "WBRL", amount: null }, {})).toEqual({ kind: "two_step", from: "WARS", to: "WBRL", wanted: null });
+  });
+
+  it("two steps keep the typed amount as raw text", () => {
+    expect(run({ kind: "swap", from: "WARS", to: "WBRL", amount: "100,50" }, {})).toEqual({ kind: "two_step", from: "WARS", to: "WBRL", wanted: "100,50" });
+  });
+
+  it("two steps with an unreadable amount are bad_amount", () => {
+    expect(run({ kind: "swap", from: "WARS", to: "WBRL", amount: "1.500" }, {})).toEqual({ kind: "bad_amount" });
+    expect(run({ kind: "swap", from: "WARS", to: "WBRL", amount: "0" }, {})).toEqual({ kind: "bad_amount" });
   });
 
   it.each([
@@ -64,7 +73,7 @@ describe("resolveCommand named source", () => {
     ["WBRL", "USAT"],
     ["WBRL", "WARS"],
   ] as const)("%s to %s takes two steps", (from, to) => {
-    expect(run({ kind: "swap", from, to, amount: null }, {})).toEqual({ kind: "two_step", from, to });
+    expect(run({ kind: "swap", from, to, amount: null }, {})).toEqual({ kind: "two_step", from, to, wanted: null });
   });
 
   it("same token is refused", () => {

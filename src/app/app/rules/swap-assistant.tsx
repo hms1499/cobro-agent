@@ -490,6 +490,8 @@ function ReplyView({
       return <Problem>{t("chat.badAmount")}</Problem>;
     case "paused":
       return <p role="alert">{t("chat.paused")}</p>;
+    case "read_failed":
+      return <Problem>{t("chat.error.generic")}</Problem>;
     case "help":
       return <p>{t("chat.help")}</p>;
   }
