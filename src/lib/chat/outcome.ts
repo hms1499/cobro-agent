@@ -36,7 +36,7 @@ export function outcomeView(error: ChatSwapError): { message: MessageKey; action
   return OUTCOMES[error];
 }
 
-const MINIMUM_TEXT = formatMoney(usdWadToDollars(MIN_NOTIONAL_WAD), "USD");
+export const MINIMUM_TEXT = formatMoney(usdWadToDollars(MIN_NOTIONAL_WAD), "USD");
 
 /** The sentence the freelancer reads, with the amount it names filled in. */
 export function outcomeText(error: ChatSwapError): string {

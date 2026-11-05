@@ -527,6 +527,7 @@ export const en = {
   "chat.turnsOff": "Swapping turns off auto-convert. New payments stay as they arrive until you turn it back on.",
   "chat.losesProposal": "The suggestion waiting for your answer will be cancelled.",
   "chat.alreadyDollars": "Your money is already in dollars.",
+  "chat.saveBelowMinimum": "Your pesos or reais are worth less than the smallest swap of {amount}, so nothing was swapped.",
   "chat.paused": "Resume your agent to chat and swap",
   "chat.saveInDollars": "Save in dollars",
   "chat.whatDoIHave": "What do I have?",

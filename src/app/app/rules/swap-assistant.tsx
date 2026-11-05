@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { t } from "@/i18n";
 import { chooseRequest, refusedActions, twoStepRequest, type RefusedAction } from "@/lib/chat/next-step";
-import { outcomeText } from "@/lib/chat/outcome";
+import { MINIMUM_TEXT, outcomeText } from "@/lib/chat/outcome";
 import type { CardRequest, ChatReply } from "@/lib/chat/reply";
 import { POLL_MS, pollDecision, resumeCardId, swapKeyStore, type PollDecision } from "@/lib/chat/swap-progress";
 import { formatDateTime } from "@/lib/invoices/dates";
@@ -484,6 +484,13 @@ function ReplyView({
       );
     case "already_dollars":
       return <p>{t("chat.alreadyDollars")}</p>;
+    case "save_below_minimum":
+      return (
+        <div className="flex flex-col gap-2">
+          <p>{t("chat.saveBelowMinimum", { amount: MINIMUM_TEXT })}</p>
+          <BalanceList balances={reply.balances} />
+        </div>
+      );
     case "same_token":
       return <p role="alert">{t("chat.sameToken")}</p>;
     case "bad_amount":

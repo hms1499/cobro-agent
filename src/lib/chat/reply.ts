@@ -32,6 +32,7 @@ export type ChatReply =
   | { kind: "two_step"; from: PayAsset; to: PayAsset; wanted: string | null }
   | { kind: "nothing_to_swap"; to: PayAsset; balances: Record<PayAsset, string> }
   | { kind: "already_dollars" }
+  | { kind: "save_below_minimum"; balances: Record<PayAsset, string> }
   | { kind: "same_token" }
   | { kind: "bad_amount" }
   | { kind: "balances"; balances: Record<PayAsset, string> }
@@ -116,6 +117,8 @@ export async function chatReply(text: string, io: ReplyIo): Promise<ChatReply> {
         return { kind: "balances", balances: await io.displayBalances() };
       case "nothing_to_swap":
         return { kind: "nothing_to_swap", to: resolved.to, balances: await io.displayBalances() };
+      case "save_below_minimum":
+        return { kind: "save_below_minimum", balances: await io.displayBalances() };
       default:
         return resolved;
     }
