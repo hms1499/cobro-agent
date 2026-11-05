@@ -103,8 +103,12 @@ describe("resolveCommand save_in_dollars", () => {
   it("USAT alone is never a save_in_dollars source", () => {
     expect(run(save, { USAT: 50_000_000n })).toEqual({ kind: "already_dollars" });
   });
-  it("holdings under US$1 are not candidates", () => {
-    expect(run(save, { WARS: 500n * 10n ** 18n })).toEqual({ kind: "already_dollars" });
+  it("pesos or reais worth under US$1 are not called dollars", () => {
+    expect(run(save, { WARS: 500n * 10n ** 18n })).toEqual({ kind: "save_below_minimum" });
+    expect(run(save, { WBRL: 10n ** 18n })).toEqual({ kind: "save_below_minimum" });
+  });
+  it("a card for one currency wins over another under US$1", () => {
+    expect(run(save, { WARS: 500n * 10n ** 18n, WBRL: 50n * 10n ** 18n })).toEqual({ kind: "card", from: "WBRL", to: "USDT", wanted: null });
   });
   it("holding only dollars is already_dollars", () => {
     expect(run(save, { USAT: 50_000_000n, USDT: 50_000_000n })).toEqual({ kind: "already_dollars" });

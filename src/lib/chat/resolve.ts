@@ -16,6 +16,8 @@ export type ResolvedCommand =
   | { kind: "two_step"; from: PayAsset; to: PayAsset; wanted: string | null }
   | { kind: "nothing_to_swap"; to: PayAsset }
   | { kind: "already_dollars" }
+  /** Holds pesos or reais, but each is worth under the minimum swap: not "already in dollars", and no card. */
+  | { kind: "save_below_minimum" }
   | { kind: "same_token" }
   | { kind: "bad_amount" }
   | { kind: "balances" }
@@ -74,8 +76,10 @@ export function resolveCommand(command: ChatCommand, ctx: Ctx): ResolvedCommand 
     case "swap":
       return resolveSwap(command, ctx);
     case "save_in_dollars": {
-      const from = (["WARS", "WBRL"] as const).find((a) => candidateAtomic(a, ctx) > 0n);
-      return from ? { kind: "card", from, to: "USDT", wanted: null } : { kind: "already_dollars" };
+      const local = ["WARS", "WBRL"] as const;
+      const from = local.find((a) => candidateAtomic(a, ctx) > 0n);
+      if (from) return { kind: "card", from, to: "USDT", wanted: null };
+      return local.some((a) => chatAvailable(a, ctx.balances) > 0n) ? { kind: "save_below_minimum" } : { kind: "already_dollars" };
     }
     case "balance":
       return { kind: "balances" };

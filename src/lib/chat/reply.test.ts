@@ -53,6 +53,12 @@ describe("chatReply", () => {
     expect(await chatReply("blah", io({ interpret: async () => ({ kind: "unknown" }) }))).toEqual({ kind: "help" });
   });
 
+  it("shows the balances, with no card, when save in dollars finds pesos under the minimum", async () => {
+    const deps = io({ balances: async () => ({ ...zero, WARS: 500n * 10n ** 18n }), rates: async () => REAL_RATES });
+    expect(await chatReply("save in dollars", deps)).toEqual({ kind: "save_below_minimum", balances: shown });
+    expect(deps.preview).not.toHaveBeenCalled();
+  });
+
   it("carries the balances in nothing_to_swap and balances replies", async () => {
     const empty = io({ balances: async () => zero });
     expect(await chatReply("swap to wars", empty)).toEqual({ kind: "nothing_to_swap", to: "WARS", balances: shown });
