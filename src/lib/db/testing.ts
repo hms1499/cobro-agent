@@ -19,6 +19,35 @@ export async function resetDb(db: Db): Promise<void> {
   );
 }
 
+/**
+ * The same database, except that `gap` runs once just before the wallet lock's insert executes: for tests of what a
+ * run does when a row changes between its first read and the lock.
+ */
+export function withGapBeforeLock(db: Db, gap: () => Promise<unknown>): Db {
+  let ran = false;
+  const beforeExecuting = <T extends object>(query: T): T =>
+    new Proxy(query, {
+      get(target, key) {
+        const value: unknown = Reflect.get(target, key);
+        if (typeof value !== "function") return value;
+        if (key !== "then") return (...args: unknown[]) => beforeExecuting(value.apply(target, args));
+        return async (...args: unknown[]) => {
+          if (!ran) {
+            ran = true;
+            await gap();
+          }
+          return value.apply(target, args);
+        };
+      },
+    });
+  return new Proxy(db, {
+    get(target, key) {
+      if (key !== "insert") return Reflect.get(target, key);
+      return (table: Parameters<Db["insert"]>[0]) => (table === schema.walletLocks ? beforeExecuting(target.insert(table)) : target.insert(table));
+    },
+  });
+}
+
 export const TEST_TREASURY = "0x1111111111111111111111111111111111111111";
 
 /** A signed-up, onboarded freelancer with a ready treasury wallet unless told otherwise. */

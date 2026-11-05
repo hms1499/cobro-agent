@@ -79,6 +79,8 @@ export const rules = pgTable("rules", {
   perTradeMaxUsd: integer("per_trade_max_usd").notNull().default(50),
   dailyMaxUsd: integer("daily_max_usd").notNull().default(200),
   enabled: boolean("enabled").notNull().default(true),
+  /** Set while auto-convert is off: the cron skips this user, chat swaps stay allowed. */
+  autoPausedAt: timestamp("auto_paused_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -218,6 +220,8 @@ export const fxTrades = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     intentId: uuid("intent_id").references(() => fxIntents.id, { onDelete: "set null" }),
+    /** The chat card a swap came from; unique so one card sends at most once. */
+    chatCardId: uuid("chat_card_id").unique(),
     rfqId: text("rfq_id"),
     /** Textile's ownership proof for submit/cancel/status; returned once by /rfq/request. */
     claimToken: text("claim_token"),
@@ -325,6 +329,9 @@ export const AGENT_EVENT_TYPES = [
   "approved",
   "dismissed",
   "home_currency_changed",
+  "auto_convert_off",
+  "auto_convert_on",
+  "chat_swap_refused",
 ] as const;
 export type AgentEventType = (typeof AGENT_EVENT_TYPES)[number];
 

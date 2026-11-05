@@ -12,6 +12,7 @@ const DOT: Record<AgentState, string> = {
   awaiting: "bg-warning",
   dry_run: "bg-muted-foreground",
   paused: "bg-muted-foreground",
+  auto_off: "bg-warning",
   off: "bg-muted-foreground",
 };
 
@@ -25,6 +26,7 @@ export async function AgentLine({ user }: { user: AppUser }) {
     dryRun: env.TREASURY_DRY_RUN,
     userEnabled: row.enabled,
     awaitingApproval: proposal !== null,
+    autoPaused: row.autoPausedAt !== null,
   });
   return (
     <Link

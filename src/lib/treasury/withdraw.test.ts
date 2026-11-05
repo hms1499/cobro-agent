@@ -10,7 +10,8 @@ import { createTestDb, resetDb, seedFreelancer, TEST_TREASURY } from "@/lib/db/t
 import { parseDecimal } from "@/lib/money/decimal";
 import type { TreasuryBalances } from "./balances";
 import { TxRejectedError, type ExecutorDeps } from "./executor";
-import { acquireWalletLock } from "./repo";
+import { activeChatCardId } from "./chat-swap";
+import { acquireWalletLock, loadTreasuryContext, walletLockHolder } from "./repo";
 import { insertSavedAddress, removeSavedAddress } from "@/lib/addresses/repo";
 import { parseWithdrawForm, withdraw, withdrawableAmount } from "./withdraw";
 
@@ -124,6 +125,22 @@ describe("withdraw", () => {
     expect(tx).toMatchObject({ toAddress: SAVED, toLabel: "Binance" });
     const [event] = await db.select().from(agentEvents);
     expect(event.data).toMatchObject({ toLabel: "Binance" });
+  });
+
+  it("locks with a runHolder value, which a page does not read as a card", async () => {
+    const user = await freelancerWithWallet();
+    const { walletId } = (await loadTreasuryContext(db, user.id))!;
+    const { deps: d } = deps({ USDT: 2_000_000n });
+    const read = d.chain.readBalances;
+    let seen: { holder: string | null; card: string | null } | undefined;
+    d.chain.readBalances = async (owner) => {
+      seen = { holder: await walletLockHolder(db, walletId), card: await activeChatCardId(db, user.id, NOW) };
+      return read(owner);
+    };
+    expect(await withdraw(d, user.id, { asset: "USDT", amount: 1_000_000n, to: "personal" })).toMatchObject({ ok: true });
+    // A runHolder() value: a UUID whose version digit is 8. A chat card's id has a 4 there.
+    expect(seen?.holder).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(seen?.card).toBeNull();
   });
 
   it("records no label for the personal wallet", async () => {

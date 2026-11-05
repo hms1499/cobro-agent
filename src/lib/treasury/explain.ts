@@ -1,6 +1,7 @@
 // src/lib/treasury/explain.ts
 import { t, type MessageKey } from "@/i18n";
 import { TOKENS } from "@/lib/chain/tokens";
+import { isChatSwapError, outcomeText } from "@/lib/chat/outcome";
 import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
 import type { AgentEventType, FxIntentRow } from "@/lib/db/schema";
 import type { ReferenceRates } from "@/lib/fx/rates";
@@ -8,6 +9,7 @@ import { formatDecimal } from "@/lib/money/decimal";
 import { isHomeCurrency, isLocalCurrency, isPayAsset, type HomeCurrency, type PayAsset } from "@/lib/money/currencies";
 import { displayAmount } from "@/lib/money/display";
 import { formatMoney } from "@/lib/money/format";
+import type { ChatSwapError } from "./chat-swap";
 import type { Decision, IdleReason } from "./engine";
 import { MIN_NOTIONAL_WAD } from "./engine";
 import { DRIP_AMOUNT_ATOMIC } from "./gas";
@@ -62,10 +64,13 @@ const REASONS: Record<string, MessageKey> = {
   save_other: "event.why.save_other",
   top_up: "event.why.top_up",
   hub_route: "event.why.hub_route",
+  chat: "event.why.chat",
 };
 // Fiat amounts in copy come from the constants that define them, through formatMoney.
 const DRIP_TEXT = formatMoney(formatCents(DRIP_AMOUNT_ATOMIC / 10_000n), "USD"); // USDC has 6 decimals
 const MINIMUM_TEXT = formatMoney(usdWadToDollars(MIN_NOTIONAL_WAD), "USD");
+/** Sentences that speak from the chat: History has no "Try again" button, and "Check History" is where its reader already is. */
+const CHAT_ONLY: readonly ChatSwapError[] = ["changed", "unconfirmed"];
 const reasonText = (reason: unknown) =>
   t(REASONS[String(reason)] ?? "event.why.generic");
 
@@ -92,7 +97,9 @@ export function describeEvent(
       | "withdraw_failed"
       | "paused"
       | "resumed"
-      | "payment_reconciled",
+      | "payment_reconciled"
+      | "auto_convert_off"
+      | "auto_convert_on",
   ): EventView => ({
     tone,
     title: t(`event.${key}.title`),
@@ -187,6 +194,18 @@ export function describeEvent(
       return simple("info", "resumed");
     case "payment_reconciled":
       return simple("success", "payment_reconciled");
+    case "auto_convert_off":
+      return simple("info", "auto_convert_off");
+    case "auto_convert_on":
+      return simple("info", "auto_convert_on");
+    case "chat_swap_refused":
+      return {
+        tone: "warning",
+        title: t("event.chat_swap_refused.title"),
+        // An event whose stored error is not a known value keeps the generic sentence, and so do the ones in CHAT_ONLY.
+        why: isChatSwapError(d.error) && !CHAT_ONLY.includes(d.error) ? outcomeText(d.error) : t("event.chat_swap_refused.why"),
+        txHash: null,
+      };
     case "home_currency_changed":
       return {
         tone: "info",

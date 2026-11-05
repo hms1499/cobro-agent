@@ -1,13 +1,19 @@
 "use client";
 
 import { CircleNotch, Pause, Play } from "@phosphor-icons/react/ssr";
+import type { ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { t } from "@/i18n";
 import { setAgentEnabled } from "./actions";
+import { ConfirmTurnOn } from "./auto-convert-control";
 
 /** Outline, not primary: the screen's one primary action stays "New invoice" (MASTER.md "Buttons"). */
-export function AgentToggle({ enabled }: { enabled: boolean }) {
+export function AgentToggle({ enabled, resumePreview }: { enabled: boolean; resumePreview?: ReactNode }) {
+  // Chat-swap spec §3.2: resuming into Running first says what the agent would now do.
+  if (!enabled && resumePreview) {
+    return <ConfirmTurnOn label={t("agent.resume")} preview={resumePreview} action={setAgentEnabled} fields={{ enabled: "true" }} />;
+  }
   return (
     <form action={setAgentEnabled}>
       <input type="hidden" name="enabled" value={enabled ? "false" : "true"} />

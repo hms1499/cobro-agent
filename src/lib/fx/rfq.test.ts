@@ -146,3 +146,62 @@ describe("takerControlTypedData", () => {
     expect(await verifyTypedData({ ...data, address: account.address, signature })).toBe(true);
   });
 });
+
+describe("TextileRfqClient.preview", () => {
+  const live = {
+    data: {
+      status: "preview",
+      sellAmount: "25000000",
+      buyAmount: "41370700327026704974248",
+      feeAmount: "2499",
+      takerPays: "25000000",
+      rateRay: "604232000000000000000004",
+      availableSellAmount: "6607031399",
+    },
+  };
+  const preview = (c: TextileRfqClient) =>
+    c.preview({ sellToken: TOKENS.USDT.address, buyToken: TOKENS.WARS.address, sellAmount: 25_000_000n, taker: TAKER });
+
+  it("posts to /v2/rfq/preview on Celo, with no taker proof", async () => {
+    const fetchMock = fakeFetch(200, live);
+    await preview(client(fetchMock));
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.textilecredit.com/v2/rfq/preview");
+    expect(init?.method).toBe("POST");
+    const body = JSON.parse(init?.body as string);
+    expect(body.chainId).toBe(42220);
+    expect(body.sellAmount).toBe("25000000");
+    expect(body.taker).toBe(TAKER);
+    expect(body.takerProof).toBeUndefined();
+  });
+
+  it("reads a preview", async () => {
+    const result = await preview(client(fakeFetch(200, live)));
+    expect(result).toEqual({
+      status: "preview",
+      sellAmount: 25_000_000n,
+      buyAmount: 41370700327026704974248n,
+      feeAmount: 2499n,
+      takerPays: 25_000_000n,
+      availableSellAmount: 6607031399n,
+    });
+  });
+
+  it("reads a no-quote", async () => {
+    const body = { data: { status: "no_quote", reason: "insufficient_liquidity", availableSellAmount: "1000" } };
+    expect(await preview(client(fakeFetch(200, body)))).toEqual({
+      status: "no_quote",
+      reason: "insufficient_liquidity",
+      availableSellAmount: 1000n,
+    });
+    const bare = await preview(client(fakeFetch(200, { data: { status: "no_quote" } })));
+    expect(bare).toEqual({ status: "no_quote", reason: "no_valid_quote", availableSellAmount: null });
+  });
+
+  it("throws TextileError on an unreadable body", async () => {
+    await expect(preview(client(fakeFetch(200, { data: { status: "weird" } })))).rejects.toMatchObject({
+      name: "TextileError",
+      reason: "malformed_response",
+    });
+  });
+});

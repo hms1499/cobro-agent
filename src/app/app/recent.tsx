@@ -81,7 +81,7 @@ export async function Recent({ user }: { user: AppUser }) {
                 return (
                   <li key={`e-${item.event.id}`}>
                     <ListRow
-                      href="/app/rules#history"
+                      href="/app/rules/history"
                       leading={
                         <span aria-hidden="true" className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
                           <Icon className={`size-4 ${className}`} />
@@ -102,7 +102,7 @@ export async function Recent({ user }: { user: AppUser }) {
               <Link href="/app/invoices" className={footerLink}>
                 {t("home.recent.allInvoices")}
               </Link>
-              <Link href="/app/rules#history" className={footerLink}>
+              <Link href="/app/rules/history" className={footerLink}>
                 {t("home.recent.agentHistory")}
               </Link>
             </div>

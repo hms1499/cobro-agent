@@ -1,4 +1,5 @@
 import { CheckCircle, Flask, Hand, Pause } from "@phosphor-icons/react/ssr";
+import { Suspense } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { t } from "@/i18n";
 import { CHECK_INTERVAL_MINUTES } from "@/lib/cron/schedule";
@@ -10,14 +11,20 @@ import { describeEvent } from "@/lib/treasury/explain";
 import { listEvents } from "@/lib/treasury/repo";
 import { getOpenProposal, getRulesRow } from "@/lib/treasury/request-reads";
 import { agentState, type AgentState } from "@/lib/treasury/view";
+import type { RulesRow } from "@/lib/db/schema";
 import type { AppUser } from "@/lib/users/queries";
+import { wouldDoText } from "@/lib/treasury/would-do";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AgentToggle } from "./agent-toggle";
+import { AutoConvertControl, ConfirmEnabled, ConfirmWaiting } from "./auto-convert-control";
+import { loadDecisionText } from "./rules/preview-text";
 
 const CHIPS: Record<AgentState, { icon: typeof Pause; className: string }> = {
   active: { icon: CheckCircle, className: "text-success" },
   dry_run: { icon: Flask, className: "text-muted-foreground" },
   awaiting: { icon: Hand, className: "text-warning" },
   paused: { icon: Pause, className: "text-muted-foreground" },
+  auto_off: { icon: Pause, className: "text-warning" },
   off: { icon: Pause, className: "text-muted-foreground" },
 };
 
@@ -33,6 +40,7 @@ export async function AgentStatus({ user }: { user: AppUser }) {
     dryRun: env.TREASURY_DRY_RUN,
     userEnabled: row.enabled,
     awaitingApproval: proposal !== null,
+    autoPaused: row.autoPausedAt !== null,
   });
   const { icon: Icon, className } = CHIPS[state];
   return (
@@ -62,10 +70,43 @@ export async function AgentStatus({ user }: { user: AppUser }) {
         </p>
         {state !== "off" && (
           <div className="flex flex-wrap items-center gap-3">
-            <AgentToggle enabled={row.enabled} />
+            {state === "auto_off" && <AutoConvertControl preview={<DecisionPreview user={user} row={row} />} />}
+            <AgentToggle
+              enabled={row.enabled}
+              // Resume returns to the earlier state (spec §3.2): only a resume into Running asks first.
+              resumePreview={!row.enabled && row.autoPausedAt === null ? <DecisionPreview user={user} row={row} /> : undefined}
+            />
           </div>
         )}
       </CardContent>
     </Card>
+  );
+}
+
+/** "Your agent would …" on live balances. Streams on its own so the panel doesn't wait for the balance read; a failure reads as unavailable. */
+function DecisionPreview({ user, row }: { user: AppUser; row: RulesRow }) {
+  return (
+    <Suspense
+      fallback={
+        <>
+          <Skeleton className="h-5 w-full" />
+          <ConfirmWaiting />
+        </>
+      }
+    >
+      <DecisionSentence user={user} row={row} />
+    </Suspense>
+  );
+}
+
+async function DecisionSentence({ user, row }: { user: AppUser; row: RulesRow }) {
+  // Unavailable copy still enables Confirm: a failed balance read must not strand auto-convert off.
+  return (
+    <>
+      <p role="status" className="w-full text-sm">
+        {wouldDoText(await loadDecisionText(user, row))}
+      </p>
+      <ConfirmEnabled />
+    </>
   );
 }

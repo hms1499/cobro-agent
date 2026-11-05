@@ -18,21 +18,28 @@ import { TextileRfqClient } from "@/lib/fx/rfq";
 import { paraTreasurySigner } from "@/lib/signer/treasury-signer";
 import { paraRestClient } from "@/lib/users/para";
 import { erc20Balance, readTreasuryBalances, type ReadBalance, type TreasuryBalances } from "./balances";
+import type { ChatPreviewDeps } from "./chat-swap";
 import { runTreasuryForUser, TxRejectedError, type ExecutorDeps } from "./executor";
 import { operatorDripper, serializedDripper } from "./gas";
 
 /** One run is an RFQ (up to 75 s) plus up to 3 receipt waits; it must fit the 300 s wallet lock, which is never renewed. */
 const RECEIPT_TIMEOUT_MS = 45_000;
-let cached: ExecutorDeps | undefined;
+let cached: (ExecutorDeps & ChatPreviewDeps) | undefined;
 
 /** Real chain, Para, Textile and operator wiring, built once per server instance. */
 export function liveExecutorDeps(): ExecutorDeps {
+  return liveChatDeps();
+}
+
+/** The same wiring, with the Textile preview for chat cards. */
+export function liveChatDeps(): ExecutorDeps & ChatPreviewDeps {
   if (cached) return cached;
   const env = parseServerEnv();
   const code = readPublicEnv().NEXT_PUBLIC_ATTRIBUTION_CODE;
   const client = createCeloPublicClient(env.CELO_RPC_URL);
   const para = paraRestClient();
   const read = erc20Balance(client);
+  const rfq = new TextileRfqClient({ baseUrl: env.TEXTILE_API_URL });
   cached = {
     db: getDb(),
     now: () => new Date(),
@@ -81,7 +88,8 @@ export function liveExecutorDeps(): ExecutorDeps {
     },
     signer: (ctx) => paraTreasurySigner(para, { id: ctx.paraWalletId, address: ctx.address }),
     signTx: (signer, call, feeToken) => signTreasuryTx({ client, signer, attributionCode: code }, call, feeToken),
-    rfq: new TextileRfqClient({ baseUrl: env.TEXTILE_API_URL }),
+    rfq,
+    preview: (input) => rfq.preview(input),
     // The operator key is read only when a wallet actually needs gas; drips go one at a time (one nonce sequence).
     drip: serializedDripper((to, amount) =>
       operatorDripper({

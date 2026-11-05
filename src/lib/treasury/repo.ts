@@ -39,6 +39,41 @@ export async function releaseWalletLock(db: Db, walletId: string, holder: string
   await db.delete(walletLocks).where(and(eq(walletLocks.walletId, walletId), eq(walletLocks.holder, holder)));
 }
 
+/** Who holds the wallet's lock, or null when nobody does. */
+export async function walletLockHolder(db: Db, walletId: string): Promise<string | null> {
+  const [row] = await db.select({ holder: walletLocks.holder }).from(walletLocks).where(eq(walletLocks.walletId, walletId));
+  return row?.holder ?? null;
+}
+
+/**
+ * A lock holder for the automatic agent or a withdrawal: a random UUID whose version digit is 8. A chat swap holds the
+ * lock under its card id (a version 4 UUID), so a page can tell a card from any other holder.
+ */
+export function runHolder(): string {
+  const id = crypto.randomUUID();
+  return `${id.slice(0, 14)}8${id.slice(15)}`;
+}
+
+/** The holder of this user's live lock when it is a chat card id; null for nobody, an expired lock or another holder. */
+export async function liveCardLockHolder(db: Db, userId: string, now: Date): Promise<string | null> {
+  const [row] = await db
+    .select({ holder: walletLocks.holder })
+    .from(walletLocks)
+    .innerJoin(treasuryWallets, eq(treasuryWallets.id, walletLocks.walletId))
+    .where(and(eq(treasuryWallets.userId, userId), gt(walletLocks.lockedUntil, now)));
+  return row && row.holder[14] === "4" ? row.holder : null;
+}
+
+/** Whether `holder` still holds the lock on this user's wallet. */
+export async function holdsWalletLock(db: Db, userId: string, holder: string, now: Date): Promise<boolean> {
+  const [row] = await db
+    .select({ holder: walletLocks.holder })
+    .from(walletLocks)
+    .innerJoin(treasuryWallets, eq(treasuryWallets.id, walletLocks.walletId))
+    .where(and(eq(treasuryWallets.userId, userId), eq(walletLocks.holder, holder), gt(walletLocks.lockedUntil, now)));
+  return row !== undefined;
+}
+
 export interface TreasuryContext {
   userId: string;
   walletId: string;
@@ -73,7 +108,7 @@ export async function listTreasuryUsers(db: Db): Promise<string[]> {
     .select({ userId: rules.userId })
     .from(rules)
     .innerJoin(treasuryWallets, eq(treasuryWallets.userId, rules.userId))
-    .where(and(eq(rules.enabled, true), eq(treasuryWallets.status, "ready")))
+    .where(and(eq(rules.enabled, true), isNull(rules.autoPausedAt), eq(treasuryWallets.status, "ready")))
     .orderBy(asc(rules.userId));
   return rows.map((row) => row.userId);
 }
@@ -98,6 +133,31 @@ export async function cancelIntent(db: Db, id: string, now: Date): Promise<void>
     .update(fxIntents)
     .set({ status: "cancelled", updatedAt: now })
     .where(and(eq(fxIntents.id, id), inArray(fxIntents.status, OPEN_STATUSES)));
+}
+
+/** Turning auto-convert off drops the user's open intent, whatever its status. This is not a dismissal. */
+export async function cancelOpenIntent(db: Db, userId: string, now: Date): Promise<void> {
+  await db
+    .update(fxIntents)
+    .set({ status: "cancelled", updatedAt: now })
+    .where(and(eq(fxIntents.userId, userId), inArray(fxIntents.status, OPEN_STATUSES)));
+}
+
+/** Spec §3.3: the cron and the automatic runs skip this user until auto-convert is turned back on. */
+export async function setAutoConvertOff(db: Db, userId: string, now: Date): Promise<void> {
+  await db.update(rules).set({ autoPausedAt: now, updatedAt: now }).where(eq(rules.userId, userId));
+}
+
+/** Spec §3.2: back to Running. Logged only when it really was off, so a double tap tells nothing twice. */
+export async function setAutoConvertOn(db: Db, userId: string, now: Date): Promise<void> {
+  await db.transaction(async (tx) => {
+    const changed = await tx
+      .update(rules)
+      .set({ autoPausedAt: null, updatedAt: now })
+      .where(and(eq(rules.userId, userId), isNotNull(rules.autoPausedAt)))
+      .returning({ userId: rules.userId });
+    if (changed.length > 0) await logEvent(tx, userId, "auto_convert_on", {}, now);
+  });
 }
 
 /** How a conversion that runs now is approved (trade approvals §5.1 step 4). */
@@ -306,19 +366,41 @@ export async function tradeBySwapHash(db: Db, hash: string): Promise<FxTradeRow 
   return row ?? null;
 }
 
+/** The trade a chat card led to. Scoped to the user: another user's card reads as no trade. */
+export async function tradeByChatCard(db: Db, userId: string, cardId: string): Promise<FxTradeRow | null> {
+  const [row] = await db
+    .select()
+    .from(fxTrades)
+    .where(and(eq(fxTrades.userId, userId), eq(fxTrades.chatCardId, cardId)));
+  return row ?? null;
+}
+
+/** The trades that count against the daily limit: broadcast or filled in the rolling 24 hours. */
+const countedToday = (userId: string, now: Date) =>
+  and(
+    eq(fxTrades.userId, userId),
+    inArray(fxTrades.status, ["broadcast", "filled"]),
+    gt(fxTrades.createdAt, new Date(now.getTime() - DAY_MS)),
+  );
+
 /** Notional of swaps broadcast or filled in the rolling 24 hours, as a USD wad (spec §10.1 dailyMaxUsd). */
 export async function filledUsdWad24h(db: Db, userId: string, now: Date): Promise<bigint> {
   const [row] = await db
     .select({ cents: sql`coalesce(sum(${fxTrades.notionalUsdCents}), 0)`.mapWith(String) })
     .from(fxTrades)
-    .where(
-      and(
-        eq(fxTrades.userId, userId),
-        inArray(fxTrades.status, ["broadcast", "filled"]),
-        gt(fxTrades.createdAt, new Date(now.getTime() - DAY_MS)),
-      ),
-    );
+    .where(countedToday(userId, now));
   return BigInt(row.cents) * 10n ** 16n;
+}
+
+/** When the oldest counted trade leaves the rolling window and frees part of the daily limit; null with none. */
+export async function nextDailyCapacityAt(db: Db, userId: string, now: Date): Promise<Date | null> {
+  const [row] = await db
+    .select({ createdAt: fxTrades.createdAt })
+    .from(fxTrades)
+    .where(countedToday(userId, now))
+    .orderBy(asc(fxTrades.createdAt))
+    .limit(1);
+  return row ? new Date(row.createdAt.getTime() + DAY_MS) : null;
 }
 
 export async function logEvent(
@@ -351,6 +433,17 @@ export async function lastEvent(db: Db, userId: string, type: AgentEventType): P
   return row ?? null;
 }
 
+/** The user's most recent event of `type` that names this chat card. */
+export async function chatCardEvent(db: Db, userId: string, type: AgentEventType, cardId: string): Promise<AgentEventRow | null> {
+  const [row] = await db
+    .select()
+    .from(agentEvents)
+    .where(and(eq(agentEvents.userId, userId), eq(agentEvents.type, type), sql`${agentEvents.data}->>'cardId' = ${cardId}`))
+    .orderBy(desc(agentEvents.createdAt), desc(agentEvents.id))
+    .limit(1);
+  return row ?? null;
+}
+
 export async function recordTreasuryTx(db: Db, row: typeof treasuryTxs.$inferInsert): Promise<void> {
   await db.insert(treasuryTxs).values(row);
 }
@@ -361,6 +454,16 @@ export async function pendingTreasuryTxs(db: Db, userId: string): Promise<Treasu
     .from(treasuryTxs)
     .where(and(eq(treasuryTxs.userId, userId), eq(treasuryTxs.status, "pending")))
     .orderBy(asc(treasuryTxs.nonce));
+}
+
+/** Whether an approval from this wallet is still waiting for its receipt. */
+export async function hasPendingApproval(db: Db, userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: treasuryTxs.id })
+    .from(treasuryTxs)
+    .where(and(eq(treasuryTxs.userId, userId), eq(treasuryTxs.kind, "approve"), eq(treasuryTxs.status, "pending")))
+    .limit(1);
+  return row !== undefined;
 }
 
 /** The users with a treasury transaction still pending, whatever their switches say. */

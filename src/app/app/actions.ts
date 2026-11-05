@@ -10,7 +10,7 @@ import { rules } from "@/lib/db/schema";
 import { formFields } from "@/lib/forms";
 import { intentEventData, parseProposalForm } from "@/lib/treasury/approvals";
 import { runTreasuryAfterApproval } from "@/lib/treasury/live";
-import { approveProposal, cancelProposals, dismissProposal, logEvent } from "@/lib/treasury/repo";
+import { approveProposal, cancelProposals, dismissProposal, logEvent, setAutoConvertOn } from "@/lib/treasury/repo";
 import { paraRestClient } from "@/lib/users/para";
 import { ensureTreasuryWallet } from "@/lib/users/provision";
 
@@ -37,6 +37,13 @@ export async function setAgentEnabled(formData: FormData): Promise<void> {
     if (!enabled) await cancelProposals(tx, user.id, now);
     await logEvent(tx, user.id, enabled ? "resumed" : "paused", {}, now);
   });
+  refresh();
+}
+
+/** Spec §3.2: "Turn auto-convert on". The event is logged only when it really was off. */
+export async function turnAutoConvertOn(): Promise<void> {
+  const user = await requireUser();
+  await setAutoConvertOn(getDb(), user.id, new Date());
   refresh();
 }
 

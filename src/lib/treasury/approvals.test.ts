@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  agentConvertsAlone,
   approvalGroup,
   intentEventData,
   isApprovalMode,
@@ -75,5 +76,15 @@ describe("intentEventData", () => {
       amount: "2100000",
       reason: "top_up",
     });
+  });
+});
+
+describe("agentConvertsAlone", () => {
+  const NOW = new Date("2026-11-04T10:00:00Z");
+  it("is true only when running", () => {
+    expect(agentConvertsAlone({ enabled: true, autoPausedAt: null })).toBe(true);
+    expect(agentConvertsAlone({ enabled: true, autoPausedAt: NOW })).toBe(false);
+    expect(agentConvertsAlone({ enabled: false, autoPausedAt: null })).toBe(false);
+    expect(agentConvertsAlone({ enabled: false, autoPausedAt: NOW })).toBe(false);
   });
 });

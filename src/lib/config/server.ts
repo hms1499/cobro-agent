@@ -49,6 +49,8 @@ const serverEnvSchema = z
     TEXTILE_API_URL: z.preprocess(emptyToUndefined, z.url().default("https://api.textilecredit.com")),
     RESEND_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     EMAIL_FROM: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    /** Optional: free-form chat messages fall back to Groq only when set. */
+    GROQ_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     TREASURY_ENABLED: flag("false"),
     TREASURY_DRY_RUN: flag("true"),
   })

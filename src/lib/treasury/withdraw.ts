@@ -10,7 +10,7 @@ import { parseDecimal } from "@/lib/money/decimal";
 import { parseFiatInput } from "@/lib/money/input";
 import type { TreasuryBalances } from "./balances";
 import { ensureFeeToken, reconcilePending, sendTreasuryTx, settleWithdrawal, type ExecutorDeps } from "./executor";
-import { acquireWalletLock, loadTreasuryContext, releaseWalletLock } from "./repo";
+import { acquireWalletLock, loadTreasuryContext, releaseWalletLock, runHolder } from "./repo";
 import { usdWad } from "./value";
 
 const isGasToken = (asset: string): asset is GasToken => (GAS_TOKENS as readonly string[]).includes(asset);
@@ -86,7 +86,7 @@ export async function withdraw(deps: ExecutorDeps, userId: string, input: Withdr
 async function withdrawUnguarded(deps: ExecutorDeps, userId: string, input: WithdrawInput): Promise<WithdrawResult> {
   const ctx = await loadTreasuryContext(deps.db, userId);
   if (!ctx) return { ok: false, error: "not_ready" };
-  const holder = crypto.randomUUID();
+  const holder = runHolder();
   if (!(await acquireWalletLock(deps.db, ctx.walletId, holder, deps.now()))) return { ok: false, error: "busy" };
   try {
     // Resolved inside the lock first, so a bad destination is refused before any drip or chain work.

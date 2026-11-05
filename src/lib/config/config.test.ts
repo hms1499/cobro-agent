@@ -145,6 +145,14 @@ describe("Plan 2 server variables", () => {
   });
 });
 
+describe("GROQ_API_KEY", () => {
+  it("builds with no GROQ_API_KEY and reads one when set", () => {
+    expect(parseServerEnv({}).GROQ_API_KEY).toBeUndefined();
+    expect(parseServerEnv({ GROQ_API_KEY: "" }).GROQ_API_KEY).toBeUndefined();
+    expect(parseServerEnv({ GROQ_API_KEY: "gsk_x" }).GROQ_API_KEY).toBe("gsk_x");
+  });
+});
+
 describe("Para public variables", () => {
   it("defaults the Para environment to BETA and leaves the key unset", () => {
     const env = parsePublicEnv(validPublic);
